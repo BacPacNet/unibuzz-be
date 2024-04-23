@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import authRoute from './auth.route';
 import docsRoute from './swagger.route';
 import userRoute from './user.route';
+import universityRoute from "./university.route"
 import config from '../../config/config';
 
 const router = express.Router();
@@ -10,6 +11,8 @@ interface IRoute {
   path: string;
   route: Router;
 }
+
+
 
 const defaultIRoute: IRoute[] = [
   {
@@ -20,6 +23,10 @@ const defaultIRoute: IRoute[] = [
     path: '/users',
     route: userRoute,
   },
+  {
+    path:"/university",
+    route:universityRoute
+  }
 ];
 
 const devIRoute: IRoute[] = [
