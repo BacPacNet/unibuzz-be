@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import toJSON from '../toJSON/toJSON';
 import paginate from '../paginate/paginate';
 import { IUserDoc, IUserModel } from './user.interfaces';
-import { roles } from 'src/config/roles';
+import { roles } from '../../config/roles';
 
 const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
   {
