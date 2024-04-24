@@ -52,16 +52,7 @@ if (config.env === 'production') {
 // v1 api routes
 app.use('/v1', routes);
 
-app.get('/test', async(req, res)=>{
-  try{
-    console.log(req);
-    
- await res.status(200).json({test:"test response"})
-  }catch(err){
-    console.log('err', err)
-  }
-  
-})
+
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
