@@ -1,5 +1,5 @@
 import httpStatus from 'http-status';
-import { Request, Response } from 'express';
+import { Request, Response,NextFunction } from 'express';
 // import ApiError from '../errors/ApiError';
 import * as universityService from './university.service';
 import mongoose from 'mongoose';
@@ -13,57 +13,52 @@ export const createUniversity = async (req: Request, res: Response) => {
      university = await universityService.createUniversity(req.body);
      return res.status(httpStatus.CREATED).send(university);
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({message:"Failed to create!"})
   }
- 
   };
 
 
   // update university
-  export const updateUniversity = async(req:Request, res:Response)=>{
+  export const updateUniversity = async(req:Request, res:Response,next:NextFunction)=>{
     const {id} = req.params;
-    // return console.log(id);
-    
     try {
       if(typeof id == "string"){
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'))
+         }
      await universityService.updateUniversity(new mongoose.Types.ObjectId(id),req.body)
-    
      return  res.status(200).json({message:"Updated Successfully"})
       }
     } catch (error:any) {
       // console.log("err",error.message);
        res.status(error.statusCode).json({message:error.message})
-    }
-
-    
+    }   
 }
 
 
 
 
 // delete university
-export const deleteUniversity=async(req:Request, res:Response)=>{
+export const deleteUniversity=async(req:Request, res:Response,next:NextFunction)=>{
   const {id} = req.params;
-  // return console.log(id);
-  
-  try {
+  try {  
     if(typeof id == "string"){
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+       return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'))
+      }
       await universityService.deleteUniversity(new mongoose.Types.ObjectId(id))
-
     }
     return res.status(200).json({message:"deleted"})
   } catch (error) {
-    console.log(error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete');
-    
-  }
-  
+    // console.log(error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'))   
+  }  
 }
 
 
 // get All university
-export const getAllUniversity=async(req:Request, res:Response)=>{
+export const getAllUniversity=async(req:Request, res:Response,next:NextFunction)=>{
   let allUniversity
 
   try {
@@ -72,7 +67,6 @@ export const getAllUniversity=async(req:Request, res:Response)=>{
   } catch (error) {
     console.log(req);
     console.log(error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University');
-  }
-  
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'))
+  } 
 }
