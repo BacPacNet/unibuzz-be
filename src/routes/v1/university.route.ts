@@ -10,6 +10,7 @@ router.post("/create",universityController.createUniversity)
 router.get("/all",universityController.getAllUniversity)
 router.put("/update/:id",universityController.updateUniversity)
 router.delete("/delete/:id",universityController.deleteUniversity)
+router.get("/searched",universityController.searchUniversityByQuery)
 
 
 
@@ -137,11 +138,22 @@ export default router;
  * @swagger
  * /university/all:
  *   get:
- *     summary: Get all universities
+ *     summary: Get a list of universities.
  *     tags: [Universities]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: The page number for pagination (default is 1).
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: The maximum number of universities per page (default is 10).
  *     responses:
  *       '200':
- *         description: OK
+ *         description: A paginated list of universities.
  *         content:
  *           application/json:
  *             schema:
@@ -203,4 +215,29 @@ export default router;
  *         description: deleted
  *       '404':
  *         description: Failed to delete
+ */
+
+
+
+/**
+* @swagger
+ * /university/searched:
+ *   get:
+ *     summary: Search universities by name or country.
+ *     tags: [Universities]
+ *     parameters:
+ *       - in: query
+ *         name: searchTerm
+ *         schema:
+ *           type: string
+ *         description: The search term for filtering universities by name or country.
+ *     responses:
+ *       '200':
+ *         description: A list of universities matching the search term.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/University'
  */

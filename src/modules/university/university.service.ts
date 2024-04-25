@@ -31,8 +31,29 @@ export const createUniversity = async (university:University ) => {
     return await universityModal.findByIdAndDelete(id)
   }
 
-  export const getAllUniversity=async()=>{
-    return await universityModal.find()
+  export const getAllUniversity=async(page:number,limit:number)=>{
+    const Currpage = page ? page :  1
+    const limitpage = limit ? limit : 10;
+    const startIndex = (Currpage - Number(1)) * Number(limitpage)
+
+        // console.log("aa",limitpage,startIndex);
+
+      return await universityModal.find().skip(startIndex).limit(limitpage)
+  }
+
+
+  export const searchUniversityByQuery = async(searchTerm:string)=>{
+
+    const universities = await universityModal.find({
+      $or: [
+          { name: { $regex: searchTerm, $options: 'i' } }, 
+          { country: { $regex: searchTerm, $options: 'i' } }
+      ]
+  });
+
+  return universities;
+
+
   }
 
   
