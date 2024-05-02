@@ -4,12 +4,17 @@ import {Router} from "express"
 const router = Router()
 
 
+router
+.route("/")
+.post(universityController.createUniversity)
+.get(universityController.getAllUniversity)
+
+router
+.route("/:id")
+.delete(universityController.deleteUniversity)
+.put(universityController.updateUniversity)
 
 
-router.post("/create",universityController.createUniversity)
-router.get("/all",universityController.getAllUniversity)
-router.put("/update/:id",universityController.updateUniversity)
-router.delete("/delete/:id",universityController.deleteUniversity)
 router.get("/searched",universityController.searchUniversityByQuery)
 
 
@@ -95,7 +100,7 @@ export default router;
 
 /**
  * @swagger
- * /university/create:
+ * /university:
  *   post:
  *     summary: Create a new university
  *     tags: [Universities]
@@ -136,7 +141,7 @@ export default router;
 
 /**
  * @swagger
- * /university/all:
+ * /university:
  *   get:
  *     summary: Get a list of universities.
  *     tags: [Universities]
@@ -165,7 +170,7 @@ export default router;
 
 /**
  * @swagger
- * /university/update/{id}:
+ * /university/{id}:
  *   put:
  *     summary: Update a university by ID
  *     tags: [Universities]
@@ -199,7 +204,7 @@ export default router;
 
 /**
 * @swagger
- * /university/delete/{id}:
+ * /university/{id}:
  *   delete:
  *     summary: Delete a university by ID
  *     tags: [Universities]
