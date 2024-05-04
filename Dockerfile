@@ -21,9 +21,7 @@ ENV NODE_ENV=production
 
 COPY package.json yarn.lock ecosystem.config.json ./
 
-RUN yarn install concurrently
-
-RUN yarn install --production --pure-lockfile
+RUN yarn install --production=false --pure-lockfile
 
 COPY --from=base /usr/src/app/dist ./dist
 
