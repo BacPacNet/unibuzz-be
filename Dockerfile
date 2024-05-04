@@ -25,4 +25,4 @@ RUN yarn install --production --pure-lockfile
 
 COPY --from=base /usr/src/app/dist ./dist
 
-CMD [ "yarn", "start"]
+CMD [ "yarn", "run", "dev"]
