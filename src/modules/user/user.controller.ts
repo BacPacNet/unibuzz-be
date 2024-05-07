@@ -6,10 +6,12 @@ import ApiError from '../errors/ApiError';
 import pick from '../utils/pick';
 import { IOptions } from '../paginate/paginate';
 import * as userService from './user.service';
+import { userProfileService } from '../userProfile';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
-  res.status(httpStatus.CREATED).send(user);
+  const userProfile = await userProfileService.createUserProfile(user)
+  res.status(httpStatus.CREATED).send({user,userProfile});
 });
 
 export const getUsers = catchAsync(async (req: Request, res: Response) => {
@@ -25,7 +27,8 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
     if (!user) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
-    res.send(user);
+    const userProfile = await userProfileService.getUserProfile(user.id)
+    res.send({user,userProfile});
   }
 });
 

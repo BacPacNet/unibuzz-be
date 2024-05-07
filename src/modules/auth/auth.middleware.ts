@@ -7,8 +7,12 @@ import { IUserDoc } from '../user/user.interfaces';
 
 const verifyCallback =
   (req: Request, resolve: any, reject: any, requiredRights: string[]) =>
+    
   async (err: Error, user: IUserDoc, info: string) => {
+   
     if (err || info || !user) {
+      console.log("aaaa",info);
+      
       return reject(new ApiError(httpStatus.UNAUTHORIZED, 'Please authenticate'));
     }
     req.user = user;
@@ -28,8 +32,12 @@ const verifyCallback =
 const authMiddleware =
   (...requiredRights: string[]) =>
   async (req: Request, res: Response, next: NextFunction) =>
+    
     new Promise<void>((resolve, reject) => {
-      passport.authenticate('jwt', { session: false }, verifyCallback(req, resolve, reject, requiredRights))(req, res, next);
+      passport.authenticate('jwt', { session: false }, (err, user, info) => {
+        // Call verifyCallback with the provided arguments
+        verifyCallback(req, resolve, reject, requiredRights)(err, user, info);
+      })(req, res, next);
     })
       .then(() => next())
       .catch((err) => next(err));
