@@ -10,8 +10,8 @@ import { userProfileService } from '../userProfile';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
-  const userProfile = await userProfileService.createUserProfile(user)
-  res.status(httpStatus.CREATED).send({user,userProfile});
+  const userProfile = await userProfileService.createUserProfile(user);
+  res.status(httpStatus.CREATED).send({ user, userProfile });
 });
 
 export const getUsers = catchAsync(async (req: Request, res: Response) => {
@@ -27,8 +27,8 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
     if (!user) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
-    const userProfile = await userProfileService.getUserProfile(user.id)
-    res.send({user,userProfile});
+    const userProfile = await userProfileService.getUserProfile(user.id);
+    res.send({ user, userProfile });
   }
 });
 

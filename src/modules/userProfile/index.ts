@@ -1,6 +1,5 @@
-import UserProfile from "./userProfile.model";
-import * as userProfileService from "./userProfile.service"
-import * as userProfileController from "./userProfile.controller"
+import UserProfile from './userProfile.model';
+import * as userProfileService from './userProfile.service';
+import * as userProfileController from './userProfile.controller';
 
-
-export {UserProfile, userProfileService,userProfileController}
+export { UserProfile, userProfileService, userProfileController };

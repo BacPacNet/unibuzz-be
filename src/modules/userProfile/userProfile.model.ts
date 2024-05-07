@@ -4,8 +4,8 @@ import { UserProfileDocument } from './userProfile.interface';
 const userProfileSchema = new Schema<UserProfileDocument>({
   users_id: {
     type: Schema.Types.ObjectId,
-    ref: 'User', 
-    required: true
+    ref: 'User',
+    required: true,
   },
   profile_dp: String,
   cover_dp: String,
@@ -22,12 +22,10 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   occupation: String,
   totalFilled: {
     type: Number,
-    default: 0
-  }
+    default: 0,
+  },
 });
 
 const UserProfile = model<UserProfileDocument>('UserProfile', userProfileSchema);
 
-
-
- export default UserProfile;
+export default UserProfile;

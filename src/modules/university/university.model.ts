@@ -10,28 +10,26 @@ const UniversitySchema = new Schema<University>({
   collegePage: { type: String },
   tuitionFee: { type: String },
   undergraduatePrograms: { type: Number },
-  programs: [{
-    program: { type: String, required: true },
-    courses: [{
-      name: { type: String, required: true },
-      degrees: [{
-        degreeTitle: { type: String, required: true },
-        durationYears: { type: Number, required: true },
-        description: { type: String, required: true },
-        requirements: { type: String, required: true },
-      }],
-    }],
-  }],
+  programs: [
+    {
+      program: { type: String, required: true },
+      courses: [
+        {
+          name: { type: String, required: true },
+          degrees: [
+            {
+              degreeTitle: { type: String, required: true },
+              durationYears: { type: Number, required: true },
+              description: { type: String, required: true },
+              requirements: { type: String, required: true },
+            },
+          ],
+        },
+      ],
+    },
+  ],
 });
-
-
-
-
-
 
 const UniversityModel = model<University>('University', UniversitySchema);
 
-export default UniversityModel
-
-
-
+export default UniversityModel;

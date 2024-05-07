@@ -1,5 +1,3 @@
-
-
 interface Degree {
   degreeTitle: string;
   durationYears: number;
@@ -30,11 +28,4 @@ interface University {
   programs: Program[];
 }
 
-
-export {
-    Degree,
-    Course,
-    Program,
-    University,
-   
-  };
+export { Degree, Course, Program, University };

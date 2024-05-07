@@ -1,26 +1,15 @@
-import { universityController } from "../../modules/university"
-import {Router} from "express"
+import { universityController } from '../../modules/university';
+import { Router } from 'express';
 
-const router = Router()
+const router = Router();
 
+router.route('/').post(universityController.createUniversity).get(universityController.getAllUniversity);
 
-router
-.route("/")
-.post(universityController.createUniversity)
-.get(universityController.getAllUniversity)
+router.route('/:id').delete(universityController.deleteUniversity).put(universityController.updateUniversity);
 
-router
-.route("/:id")
-.delete(universityController.deleteUniversity)
-.put(universityController.updateUniversity)
-
-
-router.get("/searched",universityController.searchUniversityByQuery)
-
-
+router.get('/searched', universityController.searchUniversityByQuery);
 
 export default router;
-
 
 /**
  * @swagger
@@ -137,8 +126,6 @@ export default router;
  *               $ref: '#/components/schemas/University'
  */
 
-
-
 /**
  * @swagger
  * /university:
@@ -166,7 +153,6 @@ export default router;
  *               items:
  *                 $ref: '#/components/schemas/University'
  */
-
 
 /**
  * @swagger
@@ -201,9 +187,8 @@ export default router;
  *         description: University not found
  */
 
-
 /**
-* @swagger
+ * @swagger
  * /university/{id}:
  *   delete:
  *     summary: Delete a university by ID
@@ -222,10 +207,8 @@ export default router;
  *         description: Failed to delete
  */
 
-
-
 /**
-* @swagger
+ * @swagger
  * /university/searched:
  *   get:
  *     summary: Search universities by name or country.
