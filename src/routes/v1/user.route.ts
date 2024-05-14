@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
 import { auth } from '../../modules/auth';
-import { userController, userValidation } from '../../modules/user';
+import { userController, userIdAuth, userValidation } from '../../modules/user';
 
 const router: Router = express.Router();
 
@@ -15,6 +15,10 @@ router
   .get(auth('getUsers'), validate(userValidation.getUser), userController.getUser)
   .patch(validate(userValidation.updateUser), userController.updateUser)
   .delete(validate(userValidation.deleteUser), userController.deleteUser);
+
+router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
+
+router.route('/leave/:communityId').put(userIdAuth, userController.leaveCommunity);
 
 export default router;
 

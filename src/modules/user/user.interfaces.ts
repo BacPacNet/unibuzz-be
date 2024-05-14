@@ -2,6 +2,15 @@ import mongoose, { Model, Document } from 'mongoose';
 import { QueryResult } from '../paginate/paginate';
 import { AccessAndRefreshTokens } from '../token/token.interfaces';
 
+interface verifiedInterface {
+  communityId: string;
+  communityName: string;
+}
+interface unverifiedInterface {
+  communityId: string;
+  communityName: string;
+}
+
 export interface IUser {
   firstName: string;
   lastName: string;
@@ -12,6 +21,8 @@ export interface IUser {
   role: string;
   isEmailVerified: boolean;
   createdAt: Date | string;
+  userVerifiedCommunities: verifiedInterface[];
+  userUnVerifiedCommunities: unverifiedInterface[];
 }
 
 export interface IUserDoc extends IUser, Document {

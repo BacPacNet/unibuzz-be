@@ -89,3 +89,43 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
   await user.deleteOne();
   return user;
 };
+
+// join community
+
+export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId: string, communityName: string) => {
+  const user = await getUserById(userId);
+
+  const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+  const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (userVerifiedCommunityIds.includes(cummunityId) || userUnverifiedVerifiedCommunityIds.includes(cummunityId)) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Already Joined!');
+  }
+
+  if (userUnverifiedVerifiedCommunityIds.length >= 1 && user.role != 'admin') {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
+  }
+
+  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
+};
+
+//leave community
+export const leaveCommunity = async (userId: mongoose.Types.ObjectId, cummunityId: string) => {
+  const user = await getUserById(userId);
+
+  const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (!userUnverifiedVerifiedCommunityIds.includes(cummunityId)) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'you are not joined in this community!');
+  }
+
+  await user.updateOne({ $pull: { userUnVerifiedCommunities: { communityId: cummunityId } } });
+};

@@ -4,15 +4,24 @@ import { Request, Response, NextFunction } from 'express';
 import * as universityService from './university.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
+import { communityService } from '../community';
+import { userService } from '../user';
 
 // create university
 export const createUniversity = async (req: Request, res: Response) => {
   let university;
+  let community;
   try {
     university = await universityService.createUniversity(req.body);
+    community = await communityService.createCommunity(university);
+    await userService.joinCommunity(
+      new mongoose.Types.ObjectId('6634c0e646b1f2b7eee2c66a'),
+      community._id.toString(),
+      community?.name
+    );
     return res.status(httpStatus.CREATED).send(university);
   } catch (error) {
-    // console.log(error);
+    console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to create!' });
   }
 };
