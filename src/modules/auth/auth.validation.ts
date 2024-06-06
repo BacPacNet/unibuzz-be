@@ -10,6 +10,8 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   gender: Joi.string().required(),
   dob: Joi.string().required(),
   createdAt: Joi.string(),
+  userVerifiedCommunities: Joi.string(),
+  userUnVerifiedCommunities: Joi.string(),
 };
 
 export const register = {

@@ -11,6 +11,8 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   dob: Joi.string().required(),
   role: Joi.string().required().valid('user', 'admin'),
   createdAt: Joi.string(),
+  userVerifiedCommunities: Joi.string(),
+  userUnVerifiedCommunities: Joi.string(),
 };
 
 export const createUser = {

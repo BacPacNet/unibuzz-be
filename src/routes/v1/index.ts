@@ -4,6 +4,9 @@ import docsRoute from './swagger.route';
 import userRoute from './user.route';
 import universityRoute from './university.route';
 import userProfileRoute from './userProfile.route';
+import communityPostsRoute from './communityPosts.route';
+import communityPostCommentRoute from './communityPostComment.route';
+import communityGroup from './communityGroup.route';
 import config from '../../config/config';
 
 const router = express.Router();
@@ -29,6 +32,18 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/userprofile',
     route: userProfileRoute,
+  },
+  {
+    path: '/communitypost',
+    route: communityPostsRoute,
+  },
+  {
+    path: '/communitypostcomment',
+    route: communityPostCommentRoute,
+  },
+  {
+    path: '/communitygroup',
+    route: communityGroup,
   },
 ];
 

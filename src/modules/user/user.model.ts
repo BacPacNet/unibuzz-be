@@ -61,6 +61,8 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       type: Boolean,
       default: false,
     },
+    userVerifiedCommunities: [{ communityId: String, communityName: String }],
+    userUnVerifiedCommunities: [{ communityId: String, communityName: String }],
   },
   {
     timestamps: true,

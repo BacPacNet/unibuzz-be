@@ -1,9 +1,10 @@
+import { auth } from '../../modules/auth';
 import { universityController } from '../../modules/university';
 import { Router } from 'express';
 
 const router = Router();
 
-router.route('/').post(universityController.createUniversity).get(universityController.getAllUniversity);
+router.route('/').post(auth('getUsers'), universityController.createUniversity).get(universityController.getAllUniversity);
 
 router.route('/:id').delete(universityController.deleteUniversity).put(universityController.updateUniversity);
 

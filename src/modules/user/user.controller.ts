@@ -1,5 +1,5 @@
 import httpStatus from 'http-status';
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import catchAsync from '../utils/catchAsync';
 import ApiError from '../errors/ApiError';
@@ -45,3 +45,36 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
     res.status(httpStatus.NO_CONTENT).send();
   }
 });
+
+export const joinCommunity = async (req: any, res: Response, next: NextFunction) => {
+  const { communityId } = req.params;
+  // console.log(communityId);
+  const { communityName } = req.body;
+
+  try {
+    if (typeof communityId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      await userService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId, communityName);
+      return res.status(200).json({ message: 'joined Successfully' });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const leaveCommunity = async (req: any, res: Response, next: NextFunction) => {
+  const { communityId } = req.params;
+  try {
+    if (typeof communityId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
+      }
+      await userService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+      return res.status(200).json({ message: 'Left the community' });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
