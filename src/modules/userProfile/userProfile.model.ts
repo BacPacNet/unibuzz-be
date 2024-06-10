@@ -7,6 +7,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
     ref: 'User',
     required: true,
   },
+  email: [{ UniversityName: String, UniversityEmail: String }],
   profile_dp: String,
   cover_dp: String,
   bio: String,

@@ -67,7 +67,6 @@ export default router;
  *                 $ref: '#/components/schemas/User'
  */
 
-
 /**
  * @swagger
  * /{userId}:
@@ -169,18 +168,13 @@ export default router;
  *         name: communityId
  *         schema:
  *           type: string
-*         required: true
-*         description: The ID of the community
-*     responses:
-*       200:
-*         description: The user left the community
-*         content:
-*           application/json:
-*             schema:
-*               $ref: '#/components/schemas/User'
-*/
-
-
-
-
-
+ *         required: true
+ *         description: The ID of the community
+ *     responses:
+ *       200:
+ *         description: The user left the community
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ */

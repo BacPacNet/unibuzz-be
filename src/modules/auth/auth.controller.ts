@@ -5,19 +5,24 @@ import { tokenService } from '../token';
 import { userService } from '../user';
 import * as authService from './auth.service';
 import { emailService } from '../email';
+import { userProfileService } from '../userProfile';
+import { userFollowService } from '../userFollow';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
-  console.log(req.body);
+  // console.log(req.body);
   const user = await userService.registerUser(req.body);
+  const userProfile = await userProfileService.createUserProfile(user.id);
   const tokens = await tokenService.generateAuthTokens(user);
-  res.status(httpStatus.CREATED).send({ user, tokens });
+  res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
 });
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const user = await authService.loginUserWithEmailAndPassword(email, password);
+  const userProfile = await userProfileService.getUserProfile(user.id);
+  const Following = await userFollowService.getFollowCounts(user.id);
   const tokens = await tokenService.generateAuthTokens(user);
-  res.send({ user, tokens });
+  res.send({ user, tokens, userProfile, Following });
 });
 
 export const logout = catchAsync(async (req: Request, res: Response) => {

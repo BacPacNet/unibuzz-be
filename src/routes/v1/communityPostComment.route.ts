@@ -16,7 +16,6 @@ router
 
 export default router;
 
-
 /**
  * @swagger
  * tags:
@@ -75,7 +74,6 @@ export default router;
  *             schema:
  *               $ref: '#/components/schemas/Comment'
  */
-
 
 /**
  * @swagger

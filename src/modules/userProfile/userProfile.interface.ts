@@ -1,7 +1,13 @@
 import { Schema } from 'mongoose';
 
+interface userProfileEmail {
+  UniversityName: string;
+  UniversityEmail: string;
+}
+
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
+  email: userProfileEmail[];
   profile_dp?: string;
   cover_dp?: string;
   bio?: string;

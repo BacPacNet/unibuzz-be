@@ -14,14 +14,35 @@ export const getUserProfile = async (id: string) => {
 };
 
 export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: UserProfileDocument) => {
-  let userProfileToUpdate;
+  let userProfileToUpdate: any;
 
   userProfileToUpdate = await UserProfile.findById(id);
 
   if (!userProfileToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found!');
   }
-  Object.assign(userProfileToUpdate, userProfileBody);
+  // console.log(userProfileBody.email);
+  // Check if the updateData contains new email to be added
+  if (userProfileBody.email && userProfileBody.email.length > 0) {
+    for (const newEmailEntry of userProfileBody.email) {
+      // Check if the email already exists
+      const emailExists = userProfileToUpdate.email.some(
+        (existingEmailEntry: any) =>
+          existingEmailEntry.UniversityName === newEmailEntry.UniversityName &&
+          existingEmailEntry.UniversityEmail === newEmailEntry.UniversityEmail
+      );
+
+      if (!emailExists) {
+        userProfileToUpdate.email.push(newEmailEntry);
+      }
+    }
+  }
+
+  // Merge userProfileBody into userProfileToUpdate, excluding email
+  const { email, ...updateData } = userProfileBody;
+  Object.assign(userProfileToUpdate, updateData);
+
+  // Object.assign(userProfileToUpdate, userProfileBody);
   let filledPropertiesCount = Object.entries(userProfileToUpdate.toObject()).filter(
     ([key, value]) =>
       key !== '_id' && key !== '__v' && key !== 'users_id' && key !== 'totalFilled' && value !== null && value !== undefined

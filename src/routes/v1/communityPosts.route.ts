@@ -17,7 +17,6 @@ router.put('/likeunlike/:postId', userIdAuth, communityPostsController.likeUnlik
 
 export default router;
 
-
 /**
  * @swagger
  * tags:
@@ -48,7 +47,6 @@ export default router;
  *               items:
  *                 $ref: '#/components/schemas/CommunityPost'
  */
-
 
 /**
  * @swagger

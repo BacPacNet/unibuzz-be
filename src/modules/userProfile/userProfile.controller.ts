@@ -14,11 +14,14 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
       if (!mongoose.Types.ObjectId.isValid(userProfileId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid User Profile ID'));
       }
-      await userProfileService.updateUserProfile(new mongoose.Types.ObjectId(userProfileId), req.body);
-      return res.status(200).json({ message: 'Updated Successfully' });
+      const updatedUserProfile = await userProfileService.updateUserProfile(
+        new mongoose.Types.ObjectId(userProfileId),
+        req.body
+      );
+      return res.status(200).json({ updatedUserProfile });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
-    res.status(error.statusCode).json({ message: error.message });
+    console.log('err', error.message);
+    return res.status(error.statusCode).json({ message: error.message });
   }
 };

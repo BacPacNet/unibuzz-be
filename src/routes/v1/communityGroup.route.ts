@@ -16,8 +16,6 @@ router
 
 export default router;
 
-
-
 /**
  * @swagger
  * tags:
