@@ -7,7 +7,6 @@ router.route('/:userProfileId').put(userProfileController.updateUserProfile);
 
 export default router;
 
-
 /**
  * @swagger
  * tags:
