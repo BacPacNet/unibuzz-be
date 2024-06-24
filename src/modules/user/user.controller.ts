@@ -56,8 +56,8 @@ export const joinCommunity = async (req: any, res: Response, next: NextFunction)
       if (!mongoose.Types.ObjectId.isValid(communityId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
-      await userService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId, communityName);
-      return res.status(200).json({ message: 'joined Successfully' });
+      let user = await userService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId, communityName);
+      return res.status(200).json({ message: 'joined Successfully', user });
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -71,8 +71,8 @@ export const leaveCommunity = async (req: any, res: Response, next: NextFunction
       if (!mongoose.Types.ObjectId.isValid(communityId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
       }
-      await userService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-      return res.status(200).json({ message: 'Left the community' });
+      let user = await userService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+      return res.status(200).json({ message: 'Left the community', user });
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });

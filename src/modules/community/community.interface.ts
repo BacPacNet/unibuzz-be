@@ -1,6 +1,6 @@
 interface communityInterface {
-  communityCoverUrl: string;
-  communityLogoUrl: string;
+  communityCoverUrl: { imageUrl: String; publicId: String };
+  communityLogoUrl: { imageUrl: String; publicId: String };
   name: string;
   adminId: string;
   numberOfUser: number;

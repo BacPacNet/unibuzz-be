@@ -1,25 +1,26 @@
 import { Schema, model } from 'mongoose';
 import { communityPostCommentsInterface } from './communityPostsComments.interface';
 
-const communityPostCommentsShema = new Schema<communityPostCommentsInterface>({
-  communityId: {
-    type: Schema.Types.ObjectId,
-    ref: 'community',
-    required: true,
+const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
+  {
+    communityId: {
+      type: Schema.Types.ObjectId,
+      ref: 'community',
+      required: true,
+    },
+    commenterId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    imageUrl: { imageUrl: String, publicId: String },
   },
-  commenterId: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  content: {
-    type: String,
-    required: true,
-  },
-  imageUrl: {
-    type: String,
-  },
-});
+  { timestamps: true }
+);
 
 const communityPostCommentsModel = model<communityPostCommentsInterface>(
   'communityPostComments',

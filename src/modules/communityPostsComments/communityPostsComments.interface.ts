@@ -4,7 +4,7 @@ interface communityPostCommentsInterface {
   communityId: Schema.Types.ObjectId;
   commenterId: Schema.Types.ObjectId;
   content: string;
-  imageUrl?: string;
+  imageUrl?: { imageUrl: String; publicId: String };
 }
 
 export { communityPostCommentsInterface };

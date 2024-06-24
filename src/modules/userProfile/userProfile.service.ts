@@ -13,6 +13,12 @@ export const getUserProfile = async (id: string) => {
   return userProfile;
 };
 
+export const getUserProfiles = async (userIds: any) => {
+  return await UserProfile.find({ users_id: { $in: userIds } }).select(
+    'affiliation study_year university_name degree users_id profile_dp '
+  );
+};
+
 export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: UserProfileDocument) => {
   let userProfileToUpdate: any;
 

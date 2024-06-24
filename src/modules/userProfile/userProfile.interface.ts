@@ -8,8 +8,8 @@ interface userProfileEmail {
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
-  profile_dp?: string;
-  cover_dp?: string;
+  profile_dp?: { imageUrl: String; publicId: String };
+  cover_dp?: { imageUrl: String; publicId: String };
   bio?: string;
   phone_number?: string;
   dob?: Date;

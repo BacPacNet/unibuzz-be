@@ -110,7 +110,13 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
   }
 
-  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
+  //  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
+  const updatedUser = await User.findOneAndUpdate(
+    { _id: userId },
+    { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
+    { new: true }
+  );
+  return updatedUser;
 };
 
 //leave community
@@ -118,14 +124,25 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, cummunityI
   const user = await getUserById(userId);
 
   const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+  const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
 
   if (!user) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (userVerifiedCommunityIds.includes(cummunityId)) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'you can leave this community from profile sec!');
   }
 
   if (!userUnverifiedVerifiedCommunityIds.includes(cummunityId)) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'you are not joined in this community!');
   }
 
-  await user.updateOne({ $pull: { userUnVerifiedCommunities: { communityId: cummunityId } } });
+  // await user.updateOne({ $pull: { userUnVerifiedCommunities: { communityId: cummunityId } } });
+  const updatedUser = await User.findOneAndUpdate(
+    { _id: userId },
+    { $pull: { userUnVerifiedCommunities: { communityId: cummunityId } } },
+    { new: true }
+  );
+  return updatedUser;
 };
