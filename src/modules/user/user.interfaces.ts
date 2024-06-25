@@ -18,6 +18,8 @@ export interface IUser {
   password: string;
   gender: string;
   dob: string;
+  country: string;
+  city: string;
   role: string;
   isEmailVerified: boolean;
   createdAt: Date | string;
