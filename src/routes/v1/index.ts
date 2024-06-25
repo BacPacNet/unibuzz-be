@@ -7,6 +7,7 @@ import userProfileRoute from './userProfile.route';
 import communityPostsRoute from './communityPosts.route';
 import communityPostCommentRoute from './communityPostComment.route';
 import communityGroup from './communityGroup.route';
+import community from './community.route';
 import userFollowRoute from './userFollow.route';
 import config from '../../config/config';
 
@@ -33,6 +34,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/userprofile',
     route: userProfileRoute,
+  },
+  {
+    path: '/community',
+    route: community,
   },
   {
     path: '/communitypost',

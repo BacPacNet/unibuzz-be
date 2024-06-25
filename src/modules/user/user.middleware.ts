@@ -21,7 +21,7 @@ export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextF
     const decoded: any = jwt.verify(token, config.jwt.secret);
 
     if (decoded.exp && decoded.exp < Date.now() / 1000) {
-      return next(new ApiError(httpStatus.UNAUTHORIZED, 'Please authenticate'));
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'Expired Token');
     }
 
     req.userId = decoded.sub;

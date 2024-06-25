@@ -2,13 +2,20 @@ import mongoose, { Model, Document } from 'mongoose';
 import { QueryResult } from '../paginate/paginate';
 import { AccessAndRefreshTokens } from '../token/token.interfaces';
 
+interface communityGroupsInterface {
+  communityGroupName: String;
+  communityGroupId: String;
+}
+
 interface verifiedInterface {
   communityId: string;
   communityName: string;
+  communityGroups: communityGroupsInterface[];
 }
 interface unverifiedInterface {
   communityId: string;
   communityName: string;
+  communityGroups: communityGroupsInterface[];
 }
 
 export interface IUser {

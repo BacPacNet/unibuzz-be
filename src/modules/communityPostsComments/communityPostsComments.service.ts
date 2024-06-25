@@ -28,6 +28,8 @@ export const deleteCommunityPostComment = async (id: mongoose.Types.ObjectId) =>
   return await communityPostCommentModel.findByIdAndDelete(id);
 };
 
-export const getAllCommunityPostComment = async (commentId: string) => {
-  return await communityPostCommentModel.find({ communityId: commentId });
+export const getAllCommunityPostComment = async (commentPostId: string) => {
+  // console.log(commentPostId);
+
+  return await communityPostCommentModel.find({ communityId: commentPostId });
 };
