@@ -9,6 +9,8 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   lastName: Joi.string().required(),
   gender: Joi.string().required(),
   dob: Joi.string().required(),
+  country: Joi.string().required(),
+  city: Joi.string().required(),
   role: Joi.string().required().valid('user', 'admin'),
   createdAt: Joi.string(),
   userVerifiedCommunities: Joi.string(),
