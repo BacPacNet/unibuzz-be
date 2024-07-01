@@ -36,9 +36,22 @@ export const getAllUniversity = async (page: number, limit: number) => {
 };
 
 export const searchUniversityByQuery = async (searchTerm: string) => {
-  const universities = await universityModal.find({
-    $or: [{ name: { $regex: searchTerm, $options: 'i' } }, { country: { $regex: searchTerm, $options: 'i' } }],
-  });
+  
+  const searchQuery = [
+    {
+      $search: {
+        index: "college_search_index",
+        text: {
+          query: searchTerm,
+          path: {
+            wildcard: "*"
+          }
+        }
+      }
+    }
+  ];
+
+  const universities = await universityModal.aggregate(searchQuery).exec();
 
   return universities;
 };

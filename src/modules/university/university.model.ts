@@ -30,6 +30,7 @@ const UniversitySchema = new Schema<University>({
   ],
 });
 
-const UniversityModel = model<University>('University', UniversitySchema);
+// const UniversityModel = model<University>('University', UniversitySchema);
+const UniversityModel = model<University>('college', UniversitySchema);
 
 export default UniversityModel;
