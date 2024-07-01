@@ -9,6 +9,7 @@ import communityPostCommentRoute from './communityPostComment.route';
 import communityGroup from './communityGroup.route';
 import community from './community.route';
 import userFollowRoute from './userFollow.route';
+import notificationRoute from './notification.route';
 import config from '../../config/config';
 
 const router = express.Router();
@@ -54,6 +55,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/follow',
     route: userFollowRoute,
+  },
+  {
+    path: '/notification',
+    route: notificationRoute,
   },
 ];
 

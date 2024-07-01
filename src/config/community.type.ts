@@ -1,4 +1,4 @@
 export enum CommunityType {
-  Private = 'private',
-  Public = 'public',
+  Private = 'Private',
+  Public = 'Public',
 }

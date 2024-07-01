@@ -6,6 +6,8 @@ import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
 
 export const createCommunityGroup = async (userID: string, communityId: string, body: any) => {
+  // console.log("bb",body);
+
   const newComment = { ...body, communityId: communityId, adminUserId: userID };
   return await communityGroupModel.create(newComment);
 };
@@ -75,10 +77,17 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string) =
 
     const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
 
+    // changes
+    const userUnverifiedVerifiedCommunityIds =
+      user?.userUnVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
+
+    if (userUnverifiedVerifiedCommunityIds.includes(communityIdStr) && community.communityGroupType == 'private') {
+      throw new ApiError(httpStatus.NOT_FOUND, ' only verified community users can join!');
+    }
     // console.log(userVerifiedCommunityIds);
 
-    if (!userVerifiedCommunityIds.includes(communityIdStr)) {
-      throw new ApiError(httpStatus.NOT_FOUND, ' not part of verified university!');
+    if (!userVerifiedCommunityIds.includes(communityIdStr) && !userUnverifiedVerifiedCommunityIds.includes(communityIdStr)) {
+      throw new ApiError(httpStatus.NOT_FOUND, ' not part of university!');
       // console.log("no");
     }
 
