@@ -4,6 +4,7 @@ import { communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
+import { notificationService } from '../Notification';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -12,7 +13,7 @@ interface extendedRequest extends Request {
 export const CreateCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { communityId } = req.params;
-  // console.log(communityPostId);
+  // console.log("body",req.body);
   let group;
   if (!req.body.title) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'title required!'));
@@ -27,7 +28,11 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response, 
         return next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the Groups!'));
       }
 
-      group = communityGroupService.createCommunityGroup(userID, communityId, req.body);
+      group = await communityGroupService.createCommunityGroup(userID, communityId, req.body);
+
+      if (req.body.selectedUsersId.length >= 1 && group._id) {
+        await notificationService.createManyNotification(group.adminUserId, group._id, req.body.selectedUsersId);
+      }
     }
     return res.status(httpStatus.CREATED).json({ group });
   } catch (error: any) {
@@ -111,6 +116,8 @@ export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Respo
     if (error instanceof ApiError) {
       return res.status(error.statusCode).json({ message: error.message });
     } else {
+      console.log(error);
+
       return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: 'An internal server error occurred' });
     }
   }

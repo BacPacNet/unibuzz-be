@@ -33,7 +33,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
   },
   communityGroupType: {
     type: String,
-    enum: ['private', 'public'],
+    enum: ['Private', 'Public'],
     default: CommunityType.Public,
   },
 });

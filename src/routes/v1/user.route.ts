@@ -18,6 +18,8 @@ router
 
 router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
 
+router.route('/communityUsers/:communityId').get(userIdAuth, userController.findUsersByCommunityId);
+
 router.route('/leave/:communityId').put(userIdAuth, userController.leaveCommunity);
 
 export default router;

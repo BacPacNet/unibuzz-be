@@ -78,3 +78,22 @@ export const leaveCommunity = async (req: any, res: Response, next: NextFunction
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const findUsersByCommunityId = async (req: any, res: Response, next: NextFunction) => {
+  const { communityId } = req.params;
+  const { privacy, name } = req.query;
+  const userID = req.userId;
+  // console.log("priva",userID);
+
+  try {
+    if (typeof communityId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      let user = await userService.findUsersByCommunityId(communityId, privacy, name, userID);
+      return res.status(200).json({ user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
