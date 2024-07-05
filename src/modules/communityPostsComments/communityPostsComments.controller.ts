@@ -70,6 +70,20 @@ export const getAllCommunityPostComments = async (req: Request, res: Response, n
   } catch (error) {
     console.log(req);
     console.log(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get post Comments'));
+  }
+};
+
+export const LikeCommunityPostComments = async (req: extendedRequest, res: Response) => {
+  const { communityPostCommentId } = req.params;
+  // console.log(req.userId);
+
+  try {
+    if (communityPostCommentId && req.userId) {
+      let likeCount = await communityPostCommentsService.likeUnlikeComment(communityPostCommentId, req.userId);
+      return res.status(200).json({ likeCount });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

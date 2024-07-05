@@ -31,7 +31,7 @@ export const createCommunityPost = async (post: communityPostsInterface, adminId
   // }
 
   if (adminCommunity?.adminId != null) {
-    if (String(admin?._id) != adminCommunity?.adminId) {
+    if (admin?._id != adminCommunity?.adminId) {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not admin of the group!');
     }
   }
