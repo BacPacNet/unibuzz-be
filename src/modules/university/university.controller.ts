@@ -4,7 +4,6 @@ import * as universityService from './university.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 
-
 // create university
 export const createUniversity = async (req: Request, res: Response) => {
   let university;

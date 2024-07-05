@@ -12,26 +12,30 @@ export const createCommunity = async (
   coverImg: any,
   logo: any
 ) => {
-
   const coverImage = coverImg[0] ? coverImg[0] : '';
   const logoImage = logo[0] ? logo[0] : '';
   const studentsAndFacultiesDataObject =
     studentsAndFacultiesData && studentsAndFacultiesData.toObject ? studentsAndFacultiesData.toObject() : [];
-  const totalStudents =
-    studentsAndFacultiesData && studentsAndFacultiesDataObject[0]['Total students']
-      ? parseInt(studentsAndFacultiesDataObject[0]['Total students'].replace(/,/g, ''), 10)
-      : 0;
-  const totalFaculty =
-    studentsAndFacultiesData && studentsAndFacultiesDataObject[2]['Total faculty staff']
-      ? parseInt(studentsAndFacultiesDataObject[2]['Total faculty staff'].replace(/,/g, ''), 10)
-      : 0;
+  const mapStudents = studentsAndFacultiesDataObject
+    .map((item: { [key: string]: any }) => {
+      const value = item['Total students'];
+      return typeof value === 'string' ? parseInt(value.replace(/,/g, ''), 10) : value;
+    })
+    .filter((value: any) => typeof value === 'number');
+
+  const mapFaculty = studentsAndFacultiesDataObject
+    .map((item: { [key: string]: any }) => {
+      const value = item['Total faculty staff'];
+      return typeof value === 'string' ? parseInt(value.replace(/,/g, ''), 10) : value;
+    })
+    .filter((value: any) => typeof value === 'number');
 
   const data = {
     name,
     adminId,
     collegeID,
-    numberOfStudent: Number(totalStudents),
-    numberOfFaculty: Number(totalFaculty),
+    numberOfStudent: mapStudents[0] || 0,
+    numberOfFaculty: mapFaculty[0] || 0,
     numberOfUser: 0,
     communityCoverUrl: { imageUrl: coverImage },
     communityLogoUrl: { imageUrl: logoImage },

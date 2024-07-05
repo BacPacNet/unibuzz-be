@@ -1,5 +1,3 @@
-
-
 import { Document } from 'mongoose';
 // Interface for WikiInfoBox
 interface WikiInfoBox {
