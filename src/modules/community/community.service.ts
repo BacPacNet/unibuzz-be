@@ -12,12 +12,9 @@ export const createCommunity = async (
   coverImg: any,
   logo: any
 ) => {
-  // const updatedCommunity = { ...community._doc, adminId: '6634c0e646b1f2b7eee2c66a' };
-  // console.log(coverImg);
 
   const coverImage = coverImg[0] ? coverImg[0] : '';
   const logoImage = logo[0] ? logo[0] : '';
-  // return console.log(coverImage,"logo",logoImage)
   const studentsAndFacultiesDataObject =
     studentsAndFacultiesData && studentsAndFacultiesData.toObject ? studentsAndFacultiesData.toObject() : [];
   const totalStudents =
@@ -39,7 +36,6 @@ export const createCommunity = async (
     communityCoverUrl: { imageUrl: coverImage },
     communityLogoUrl: { imageUrl: logoImage },
   };
-  // return console.log(data);
   return await communityModel.create(data);
 };
 
