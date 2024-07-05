@@ -5,7 +5,7 @@ import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
 
-export const createCommunityGroup = async (userID: string, communityId: string, body: any) => {
+export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
   // console.log("bb",body);
 
   const newComment = { ...body, communityId: communityId, adminUserId: userID };

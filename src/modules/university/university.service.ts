@@ -1,14 +1,18 @@
 import mongoose from 'mongoose';
 import universityModal from './university.model';
-import { University } from './university.interface';
+// import { University } from './university.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 
-export const createUniversity = async (university: University) => {
+export const createUniversity = async (university: any) => {
   return await universityModal.create(university);
 };
 
-export const updateUniversity = async (id: mongoose.Types.ObjectId, university: University) => {
+export const getUniversityById = async (id: any) => {
+  return await universityModal.findById(id);
+};
+
+export const updateUniversity = async (id: mongoose.Types.ObjectId, university: any) => {
   let universityToUpadate;
 
   universityToUpadate = await universityModal.findById(id);
