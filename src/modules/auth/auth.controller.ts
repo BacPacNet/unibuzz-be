@@ -10,8 +10,11 @@ import { userFollowService } from '../userFollow';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
   // console.log(req.body);
-  const user = await userService.registerUser(req.body);
-  const userProfile = await userProfileService.createUserProfile(user._id);
+  const { dob, country, city, ...body } = req.body;
+  // console.log("aaa",dob,country,city,body);
+
+  const user = await userService.registerUser(body);
+  const userProfile = await userProfileService.createUserProfile(user._id, dob, country, city, 23);
   const tokens = await tokenService.generateAuthTokens(user);
   res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
 });

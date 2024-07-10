@@ -8,7 +8,7 @@ const communityPostSchema = new Schema<communityPostsInterface>(
   {
     communityId: { type: String, required: true },
     content: { type: String },
-    imageUrl: { imageUrl: String, publicId: String },
+    imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
     communityPostsType: { type: String, enum: ['Private', 'Public'], default: CommunityType.Public },
   },

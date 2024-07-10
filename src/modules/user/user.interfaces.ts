@@ -24,7 +24,6 @@ export interface IUser {
   email: string;
   password: string;
   gender: string;
-  dob: string;
   role: string;
   isEmailVerified: boolean;
   createdAt: Date | string;
