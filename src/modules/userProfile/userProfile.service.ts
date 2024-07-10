@@ -4,10 +4,10 @@ import { UserProfileDocument } from './userProfile.interface';
 import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 
-export const createUserProfile = async (user: any) => {
-  console.log('pp', user);
+export const createUserProfile = async (user: any, dob: string, country: string, city: string, percent: number = 0) => {
+  // console.log('pp', user);
 
-  return await UserProfile.create({ users_id: user });
+  return await UserProfile.create({ users_id: user, dob, country, city, totalFilled: percent });
 };
 
 export const getUserProfile = async (id: string) => {
@@ -53,10 +53,16 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   // Object.assign(userProfileToUpdate, userProfileBody);
   let filledPropertiesCount = Object.entries(userProfileToUpdate.toObject()).filter(
     ([key, value]) =>
-      key !== '_id' && key !== '__v' && key !== 'users_id' && key !== 'totalFilled' && value !== null && value !== undefined
+      key !== '_id' &&
+      key !== '__v' &&
+      key !== 'users_id' &&
+      key !== 'totalFilled' &&
+      key !== 'email' &&
+      value !== null &&
+      value !== undefined
   ).length;
 
-  let ProfilePercentage = Math.ceil((filledPropertiesCount / 14) * 100);
+  let ProfilePercentage = Math.ceil((filledPropertiesCount / 13) * 100);
   // console.log(ProfilePercentage);
 
   userProfileToUpdate.totalFilled = ProfilePercentage;
