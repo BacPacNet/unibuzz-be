@@ -2,11 +2,6 @@ import { Schema, model } from 'mongoose';
 import { communityGroupInterface } from './communityGroup.interface';
 import { CommunityType } from '../../config/community.type';
 
-// communityId: {
-//   type: Schema.Types.ObjectId,
-//   ref: 'community',
-//   required: true,
-// },
 const communityGroupSchema = new Schema<communityGroupInterface>({
   adminUserId: {
     type: Schema.Types.ObjectId,

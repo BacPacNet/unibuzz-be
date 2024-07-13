@@ -16,7 +16,6 @@ export const getAllUserCommunity = async (req: any, res: Response, next: NextFun
     community = await communityService.getUserCommunitys(userID);
     return res.status(200).json({ community });
   } catch (error) {
-    //   console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
@@ -33,7 +32,6 @@ export const getCommunity = async (req: any, res: Response, next: NextFunction) 
     community = await communityService.getCommunity(req.params.communityId);
     return res.status(200).json({ community });
   } catch (error) {
-    //   console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
@@ -49,7 +47,6 @@ export const updateCommunity = async (req: any, res: Response, next: NextFunctio
     community = await communityService.updateCommunity(req.params.communityId, req.body);
     return res.status(200).json({ community });
   } catch (error) {
-    //   console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to update Community'));
   }
@@ -57,10 +54,8 @@ export const updateCommunity = async (req: any, res: Response, next: NextFunctio
 
 export const CreateCommunity = async (req: any, res: Response) => {
   const userID = req.userId;
-  // console.log(userID);
 
   const { collegeID }: any = req.body;
-  // console.log("cc",collegeID);
 
   try {
     const college: any = await universityService.getUniversityById(collegeID);
@@ -77,7 +72,6 @@ export const CreateCommunity = async (req: any, res: Response) => {
       college.images,
       college.logos
     );
-    // return res.status(201).json({ community });
     await userService.joinCommunity(userID, String(community._id), community.name, true);
     const dataForCommunityGroup = {
       title: community.name,
@@ -89,11 +83,9 @@ export const CreateCommunity = async (req: any, res: Response) => {
 
     const communityGroup = await communityGroupService.createCommunityGroup(userID, community._id, dataForCommunityGroup);
     await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id), communityGroupRoleAccess.Admin);
-    //  console.log("gg",group);
 
     return res.status(201).json({ community });
   } catch (error: any) {
-    //   console.log(req);
     console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

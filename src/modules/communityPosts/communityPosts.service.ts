@@ -32,23 +32,13 @@ export const createCommunityPost = async (post: communityPostsInterface, adminId
     }
   });
 
-  // return console.log(adminCommunityGroup?._id,"adminrole",isCommunityUser.role);
-
   if (isCommunityUser?.role == 'Member' || isUnVeriCommunityUser?.role == 'Member') {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not admin/moderator of the group!');
   }
-
-  // if (adminCommunityGroup?.adminUserId != null ) {
-  //   if (String(admin?._id) != adminCommunityGroup?.adminUserId.toString()) {
-  //     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not admin of the group!');
-  //   }
-  // }
   return await CommunityPostModel.create(postData);
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
-  // console.log(id);
-
   const post = await communityPostsModel.findById(id);
 
   if (!post?.likeCount.some((x) => x.userId === userId)) {
@@ -78,35 +68,12 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   return await communityPostsModel.findByIdAndDelete(id);
 };
 
-// export const getAllCommunityPost = async (communityId: string) => {
-//   // return await communityPostsModel.find({ communityId: communityId });
-//     // Fetch all posts in the community
-//     const posts = await communityPostsModel.find({ communityId }).lean()
-//         // return console.log(posts,communityId);
-
-//     // Fetch all comments related to these posts
-//     const postIds = posts.map(post => post._id);
-//     const comments = await communityPostCommentsModel.find({ communityId: { $in: postIds } })
-//     .populate({
-//       path: 'commenterId',
-//       select: 'firstName lastName content _id'
-//     })
-
-//     // Associate comments with their respective posts
-//     const postsWithComments = posts.map(post => ({
-//       ...post,
-//       comments: comments.filter(comment => comment.communityId.toString() === post._id.toString()),
-//     }));
-
-//     return postsWithComments;
-// };
-
 export const getAllCommunityPost = async (communityId: string) => {
   const posts: any = await communityPostsModel
     .find({ communityId })
     .populate({
       path: 'user_id',
-      select: 'firstName lastName', // Only include firstName and lastName
+      select: 'firstName lastName',
     })
     .sort({ createdAt: -1 })
     .lean();

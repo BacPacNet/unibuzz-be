@@ -5,8 +5,6 @@ import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 
 export const createUserProfile = async (user: any, dob: string, country: string, city: string, percent: number = 0) => {
-  // console.log('pp', user);
-
   return await UserProfile.create({ users_id: user, dob, country, city, totalFilled: percent });
 };
 
@@ -29,7 +27,6 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   if (!userProfileToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found!');
   }
-  // console.log(userProfileBody.email);
   // Check if the updateData contains new email to be added
   if (userProfileBody.email && userProfileBody.email.length > 0) {
     for (const newEmailEntry of userProfileBody.email) {
@@ -46,11 +43,9 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
     }
   }
 
-  // Merge userProfileBody into userProfileToUpdate, excluding email
   const { email, totalFilled, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
 
-  // Object.assign(userProfileToUpdate, userProfileBody);
   let filledPropertiesCount = Object.entries(userProfileToUpdate.toObject()).filter(
     ([key, value]) =>
       key !== '_id' &&
@@ -64,7 +59,6 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   ).length;
 
   let ProfilePercentage = Math.ceil((filledPropertiesCount / 13) * 100);
-  // console.log(filledPropertiesCount,ProfilePercentage,"check",userProfileToUpdate.toObject());
 
   userProfileToUpdate.totalFilled = ProfilePercentage;
 

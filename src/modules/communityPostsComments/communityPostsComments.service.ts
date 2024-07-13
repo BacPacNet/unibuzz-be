@@ -43,14 +43,10 @@ export const deleteCommunityPostComment = async (id: mongoose.Types.ObjectId) =>
 };
 
 export const getAllCommunityPostComment = async (commentPostId: string) => {
-  // console.log(commentPostId);
-
   return await communityPostCommentModel.find({ communityId: commentPostId });
 };
 
 export const likeUnlikeComment = async (id: string, userId: string) => {
-  // console.log(id);
-
   const comment = await communityPostCommentModel.findById(id);
 
   if (!comment?.likeCount.some((x) => x.userId === userId)) {

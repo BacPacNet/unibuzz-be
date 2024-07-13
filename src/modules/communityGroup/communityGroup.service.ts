@@ -6,8 +6,6 @@ import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
 
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
-  // console.log("bb",body);
-
   const newGroup = { ...body, communityId: communityId, adminUserId: userID };
   return await communityGroupModel.create(newGroup);
 };
@@ -78,25 +76,19 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string, r
 
     const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
 
-    // changes
     const userUnverifiedVerifiedCommunityIds =
       user?.userUnVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
 
     if (userUnverifiedVerifiedCommunityIds.includes(communityIdStr) && community.communityGroupType == 'private') {
       throw new ApiError(httpStatus.NOT_FOUND, ' only verified community users can join!');
     }
-    // console.log(userVerifiedCommunityIds);
 
     if (!userVerifiedCommunityIds.includes(communityIdStr) && !userUnverifiedVerifiedCommunityIds.includes(communityIdStr)) {
       throw new ApiError(httpStatus.NOT_FOUND, ' not part of university!');
-      // console.log("no");
     }
-
-    // let communityExists = false;
     // for verified Communities
     user.userVerifiedCommunities = user.userVerifiedCommunities.map((c: any) => {
       if (c.communityId.toString() === communityIdStr) {
-        // Check if the group exists within the community
         const groupIndex = c.communityGroups.findIndex((g: any) => g.communityGroupId === groupId);
         if (groupIndex !== -1) {
           c.communityGroups.splice(groupIndex, 1);
@@ -131,7 +123,7 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string, r
       }
       return c;
     });
-    // return { message: !communityExists ? 'left Group' : 'Joined Group' };
+
     await user.save();
     await community.save();
     return { message, user };

@@ -13,7 +13,6 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
-  // const userProfile = await userProfileService.createUserProfile(user);
   res.status(httpStatus.CREATED).send({ user });
 });
 
@@ -31,7 +30,6 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
     const userProfile = await userProfileService.getUserProfile(user.id);
-    // console.log(user);
 
     res.send({ user, userProfile });
   }
@@ -53,7 +51,6 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
 
 export const joinCommunity = async (req: any, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
-  // console.log(communityId);
   const { communityName } = req.body;
 
   try {
@@ -88,7 +85,6 @@ export const findUsersByCommunityId = async (req: any, res: Response, next: Next
   const { communityId } = req.params;
   const { privacy, name } = req.query;
   const userID = req.userId;
-  // console.log("priva",userID);
 
   try {
     if (typeof communityId == 'string') {
@@ -105,16 +101,15 @@ export const findUsersByCommunityId = async (req: any, res: Response, next: Next
 
 export const findUsersByCommunityGroupId = async (req: any, res: Response, next: NextFunction) => {
   const { communityGroupId } = req.params;
-  const { privacy, name } = req.query;
+  const { name } = req.query;
   const userID = req.userId;
-  // console.log("priva",userID,communityGroupId);
 
   try {
     if (typeof communityGroupId == 'string') {
       if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
-      let user = await userService.findUsersByCommunityGroupId(communityGroupId, privacy, name, userID);
+      let user = await userService.findUsersByCommunityGroupId(communityGroupId, name, userID);
       return res.status(200).json({ user });
     }
   } catch (error: any) {
@@ -125,7 +120,6 @@ export const findUsersByCommunityGroupId = async (req: any, res: Response, next:
 export const updateUserCommunityGroupRole = async (req: any, res: Response, next: NextFunction) => {
   const { communityGroupId, role, id } = req.body;
   const userID = req.userId;
-  // return console.log("priva",req.body);
 
   try {
     if (typeof communityGroupId == 'string') {

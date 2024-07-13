@@ -4,7 +4,6 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
-// import { communityPostCommentsService } from '../communityPostsComments';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -15,7 +14,6 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
   const adminId = req.userId;
   let adminObjectId;
   let post;
-  // console.log(adminId);
 
   try {
     if (adminId && mongoose.Types.ObjectId.isValid(adminId)) {
@@ -44,7 +42,6 @@ export const updateCommunityPost = async (req: Request, res: Response, next: Nex
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
     res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -61,7 +58,6 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
@@ -69,20 +65,14 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 //get all community post
 export const getAllCommunityPost = async (req: any, res: Response, next: NextFunction) => {
   let communityPosts: any;
-  // let communityComments;
   try {
     const user = await User.findById(req.userId);
-
-    // const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-    // const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-    // console.log(userVerifiedCommunityIds);
 
     const userVerifiedCommunityIds =
       user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
 
     const userUnverifiedVerifiedCommunityIds =
       user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-    //  return  console.log(userUnverifiedVerifiedCommunityIds,userVerifiedCommunityIds);
 
     if (
       !userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityId)) &&
@@ -92,10 +82,9 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
     }
 
     communityPosts = await communityPostsService.getAllCommunityPost(req.params.communityId);
-    // communityComments =await communityPostCommentsService.getAllCommunityPostComment(communityPosts)
+
     return res.status(200).json({ communityPosts });
   } catch (error) {
-    // console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));
   }
@@ -104,7 +93,6 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
 //like and unlike
 export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
-  // console.log(req.userId);
 
   try {
     if (postId && req.userId) {

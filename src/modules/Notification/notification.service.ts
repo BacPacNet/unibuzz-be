@@ -30,8 +30,6 @@ export const createManyNotification = async (
 };
 
 export const getUserNotification = async (userID: string) => {
-  // console.log(userID);
-
   const userNotification = await notificationModel
     .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
     .populate([
@@ -40,16 +38,12 @@ export const getUserNotification = async (userID: string) => {
       { path: 'communityPostId', select: ' _id' },
     ])
     .sort({ createdAt: -1 });
-  // console.log(userNotification);
 
   return userNotification;
 };
 
 export const updateUserNotification = async (id: string) => {
-  // console.log(id);
-
   const userNotification = await notificationModel.findByIdAndUpdate(id, { isRead: true }, { new: true });
-  // console.log(userNotification);
 
   return userNotification;
 };

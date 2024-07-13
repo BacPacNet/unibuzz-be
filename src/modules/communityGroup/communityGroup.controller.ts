@@ -15,7 +15,6 @@ interface extendedRequest extends Request {
 export const CreateCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { communityId } = req.params;
-  // console.log("body",req.body);
   let group;
   let userData;
   if (!req.body.title) {
@@ -63,7 +62,6 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
     res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -79,7 +77,6 @@ export const deleteCommunityGroup = async (req: Request, res: Response, next: Ne
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
@@ -94,7 +91,6 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
 
       const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
       const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-      // console.log(userVerifiedCommunityIds);
 
       if (
         !userUnverifiedVerifiedCommunityIds.includes(String(communityId)) &&
@@ -107,8 +103,6 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       return res.status(200).json({ groups });
     }
   } catch (error: any) {
-    // console.log(req);
-    // console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -120,11 +114,9 @@ export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Respo
   try {
     if (userID && groupId) {
       status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId, communityGroupRoleAccess.Member);
-      // console.log(status);
       return res.status(200).json(status);
     }
   } catch (error: any) {
-    // console.log(error);
     if (error instanceof ApiError) {
       return res.status(error.statusCode).json({ message: error.message });
     } else {

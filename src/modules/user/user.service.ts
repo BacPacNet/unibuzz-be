@@ -100,7 +100,6 @@ export const joinCommunity = async (
   isAllowed: boolean = false
 ) => {
   const user = await getUserById(userId);
-  // console.log("isall",isAllowed);
 
   const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
   const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
@@ -117,7 +116,6 @@ export const joinCommunity = async (
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
   }
 
-  //  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
   let updatedUser;
   if (isAllowed) {
     updatedUser = await User.findOneAndUpdate(
@@ -164,8 +162,6 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
 };
 
 export const findUsersByCommunityId = async (communityId: string, privacy: string, name: string, userID: string) => {
-  // console.log(privacy);
-
   try {
     let query: any = {};
 
@@ -179,8 +175,6 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
         const nameRegex = new RegExp(name, 'i');
         query.firstName = nameRegex;
       }
-
-      // console.log('Private Query:', query);
     } else {
       const communityConditions = [
         { 'userVerifiedCommunities.communityId': communityId },
@@ -200,8 +194,6 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
           _id: { $ne: userID },
         };
       }
-
-      // console.log('Public Query:', query); // Debug log
     }
 
     const users = await User.find(query).select('firstName lastName _id');
@@ -216,64 +208,24 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
       profile: userProfiles.find((profile) => profile.users_id.toString() === user._id.toString()),
     }));
 
-    // console.log('Result:', result);
     return result;
-    // console.log('Users:', users);
-    // return users;
   } catch (error) {
     console.error(error);
     throw error;
   }
 };
 
-export const findUsersByCommunityGroupId = async (
-  communityGroupId: string,
-  privacy: string,
-  name: string,
-  userID: string
-) => {
-  // console.log(privacy);
-
+export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string, userID: string) => {
   try {
-    let query: any = {};
+    let query: any = {
+      'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
+      _id: { $ne: userID },
+    };
 
-    if (privacy == 'Private') {
-      query = {
-        'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
-        _id: { $ne: userID },
-      };
-
-      if (name) {
-        const nameRegex = new RegExp(name, 'i');
-        query.firstName = nameRegex;
-      }
-
-      console.log('Private Query:', query);
-    } else {
-      const communityConditions = [
-        { 'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId },
-        { 'userUnVerifiedCommunities.communityGroups.communityGroupId': communityGroupId },
-      ];
-
-      if (name) {
-        const nameRegex = new RegExp(name, 'i');
-        const nameConditions = [{ firstName: nameRegex }, { lastName: nameRegex }];
-
-        query = {
-          $and: [{ $or: communityConditions }, { $or: nameConditions }, { _id: { $ne: userID } }],
-        };
-      } else {
-        query = {
-          $or: communityConditions,
-          _id: { $ne: userID },
-        };
-      }
-
-      // console.log('Public Query:', query); // Debug log
-    }
+    const nameRegex = new RegExp(name, 'i');
+    query.firstName = nameRegex;
 
     const users = await User.find(query).select('firstName lastName _id userVerifiedCommunities userUnVerifiedCommunities');
-    // console.log("users", users);
 
     const userIds = users.map((user) => user._id);
 
@@ -283,8 +235,6 @@ export const findUsersByCommunityGroupId = async (
 
     const result = users.map((user: any) => {
       const profile = userProfiles.find((profile) => profile.users_id.toString() === user._id.toString());
-
-      // return console.log(user.userUnVerifiedCommunities,"veri",user.userVerifiedCommunities);
 
       let verifiedGroup;
       let unVerifiedGroup;
@@ -308,20 +258,13 @@ export const findUsersByCommunityGroupId = async (
         });
       }
 
-      // console.log(verifiedGroup,unVerifiedGroup);
-      // console.log('Verified Group:', verifiedGroup);
-      // console.log('Unverified Group:', unVerifiedGroup);
-
       return {
         ...user.toObject(),
         profile,
         communityGroup: verifiedGroup || unVerifiedGroup, // Include the matching community group
       };
     });
-    // console.log('Result:', result);
     return result;
-    // console.log('Users:', users);
-    // return users;
   } catch (error) {
     console.error(error);
     throw error;
@@ -363,7 +306,6 @@ export const updateUserCommunityGroupRole = async (userId: string, communityGrou
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
   }
 
-  // Save the updated user
   await user.save();
   return user;
 };

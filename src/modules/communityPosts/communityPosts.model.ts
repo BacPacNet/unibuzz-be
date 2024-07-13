@@ -2,8 +2,6 @@ import { Schema, model } from 'mongoose';
 import { communityPostsInterface } from './communityPosts.interface';
 import { CommunityType } from '../../config/community.type';
 
-// communityId: { type: Schema.Types.ObjectId, ref: 'Community', required: true },
-
 const communityPostSchema = new Schema<communityPostsInterface>(
   {
     communityId: { type: String, required: true },
