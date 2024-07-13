@@ -1,9 +1,9 @@
 import { Schema, model } from 'mongoose';
-import { notificationInterface } from './notification.interface';
+import { notificationInterface, notificationRole } from './notification.interface';
 
 const notificationSchema = new Schema<notificationInterface>(
   {
-    adminId: {
+    sender_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
@@ -16,9 +16,18 @@ const notificationSchema = new Schema<notificationInterface>(
     communityGroupId: {
       type: Schema.Types.ObjectId,
       ref: 'communityGroup',
-      required: true,
     },
-    isSeen: {
+    communityPostId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CommunityPost',
+    },
+    userPostId: {
+      type: Schema.Types.ObjectId,
+      ref: 'userPost',
+    },
+    type: { type: String, enum: notificationRole, required: true },
+    message: { type: String, required: true },
+    isRead: {
       type: Boolean,
       default: false,
     },

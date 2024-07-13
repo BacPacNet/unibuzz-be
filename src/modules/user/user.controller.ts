@@ -7,6 +7,9 @@ import pick from '../utils/pick';
 import { IOptions } from '../paginate/paginate';
 import * as userService from './user.service';
 import { userProfileService } from '../userProfile';
+import { notificationService } from '../Notification';
+import { io } from '../../app';
+import { notificationRoleAccess } from '../Notification/notification.interface';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -28,6 +31,8 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
     const userProfile = await userProfileService.getUserProfile(user.id);
+    // console.log(user);
+
     res.send({ user, userProfile });
   }
 });
@@ -91,6 +96,53 @@ export const findUsersByCommunityId = async (req: any, res: Response, next: Next
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
       let user = await userService.findUsersByCommunityId(communityId, privacy, name, userID);
+      return res.status(200).json({ user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const findUsersByCommunityGroupId = async (req: any, res: Response, next: NextFunction) => {
+  const { communityGroupId } = req.params;
+  const { privacy, name } = req.query;
+  const userID = req.userId;
+  // console.log("priva",userID,communityGroupId);
+
+  try {
+    if (typeof communityGroupId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      let user = await userService.findUsersByCommunityGroupId(communityGroupId, privacy, name, userID);
+      return res.status(200).json({ user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const updateUserCommunityGroupRole = async (req: any, res: Response, next: NextFunction) => {
+  const { communityGroupId, role, id } = req.body;
+  const userID = req.userId;
+  // return console.log("priva",req.body);
+
+  try {
+    if (typeof communityGroupId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      let user = await userService.updateUserCommunityGroupRole(id, communityGroupId, role);
+      const notifications = {
+        sender_id: userID,
+        receiverId: id,
+        communityGroupId: communityGroupId,
+        type: notificationRoleAccess.ASSIGN,
+        message: `assigned you as ${role}`,
+      };
+
+      await notificationService.CreateNotification(notifications);
+      io.emit(`notification_${id}`, { message: 'You have a been assigned' });
       return res.status(200).json({ user });
     }
   } catch (error: any) {

@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { communityGroupService } from '../communityGroup';
 import { userService } from '../user';
+import { communityGroupRoleAccess } from '../user/user.interfaces';
 
 // get all userCommunity
 export const getAllUserCommunity = async (req: any, res: Response, next: NextFunction) => {
@@ -87,7 +88,7 @@ export const CreateCommunity = async (req: any, res: Response) => {
     };
 
     const communityGroup = await communityGroupService.createCommunityGroup(userID, community._id, dataForCommunityGroup);
-    await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id));
+    await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id), communityGroupRoleAccess.Admin);
     //  console.log("gg",group);
 
     return res.status(201).json({ community });

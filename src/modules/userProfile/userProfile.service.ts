@@ -5,7 +5,7 @@ import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 
 export const createUserProfile = async (user: any) => {
-  console.log('pp', user);
+  // console.log('pp', user);
 
   return await UserProfile.create({ users_id: user });
 };

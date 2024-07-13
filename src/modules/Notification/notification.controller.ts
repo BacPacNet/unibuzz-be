@@ -47,7 +47,7 @@ export const JoinGroup = async (req: extendedRequest, res: Response) => {
   let status;
   try {
     if (userID && groupId) {
-      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId);
+      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId, 'Member');
       await notificationService.updateUserNotification(id);
       return res.status(200).json(status);
     }

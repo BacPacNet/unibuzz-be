@@ -26,7 +26,7 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       return res.status(httpStatus.CREATED).send(post);
     }
   } catch (error: any) {
-    //   console.log(error);
+    console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

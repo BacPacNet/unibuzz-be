@@ -8,6 +8,7 @@ interface Like {
 interface communityPostsInterface {
   communityId: Schema.Types.ObjectId;
   content: string;
+  user_id: Schema.Types.ObjectId;
   imageUrl?: { imageUrl: String; publicId: String };
   likeCount: Like[];
   communityPostsType: CommunityType;

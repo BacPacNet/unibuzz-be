@@ -8,8 +8,8 @@ import { getUserProfiles } from '../userProfile/userProfile.service';
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
   // console.log("bb",body);
 
-  const newComment = { ...body, communityId: communityId, adminUserId: userID };
-  return await communityGroupModel.create(newComment);
+  const newGroup = { ...body, communityId: communityId, adminUserId: userID };
+  return await communityGroupModel.create(newGroup);
 };
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
@@ -58,17 +58,18 @@ export const getCommunityGroup = async (groupId: string) => {
   return await communityGroupModel.findById(groupId);
 };
 
-export const joinLeaveCommunityGroup = async (userID: string, groupId: string) => {
+export const joinLeaveCommunityGroup = async (userID: string, groupId: string, role: string) => {
   try {
     const user: any = await getUserById(new mongoose.Types.ObjectId(userID));
     const community: any = await getCommunityGroup(groupId);
 
     const communityIdStr = community?.communityId.toString();
-    // console.log(communityIdStr);
+    console.log(role);
     let message;
     const communityGroup: any = {
       communityGroupName: community?.title,
       communityGroupId: community?._id,
+      role: role,
     };
 
     if (!user.userVerifiedCommunities) {
@@ -135,7 +136,7 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string) =
     await community.save();
     return { message, user };
   } catch (err) {
-    // console.log(err)
+    console.log(err);
     throw err;
   }
 };

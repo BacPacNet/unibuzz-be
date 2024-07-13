@@ -1,21 +1,29 @@
 import mongoose from 'mongoose';
 import notificationModel from './notification.modal';
+import { io } from '../../app';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
   communityGroupId: mongoose.Types.ObjectId,
-  receiverArr: Array<string>
+  receiverArr: Array<string>,
+  type: String,
+  message: string
 ) => {
   const receiverIds = receiverArr.map((id) => new mongoose.Types.ObjectId(id));
 
   const notifications = receiverIds.map((receiverId) => ({
-    adminId: adminId,
+    sender_id: adminId,
     receiverId: receiverId,
     communityGroupId: communityGroupId,
+    type,
+    message,
   }));
 
   try {
     await notificationModel.create(notifications);
+    receiverIds.forEach((userId) => {
+      io.emit(`notification_${userId}`, { message: 'You have a new notification' });
+    });
   } catch (error) {
     throw error;
   }
@@ -25,11 +33,13 @@ export const getUserNotification = async (userID: string) => {
   // console.log(userID);
 
   const userNotification = await notificationModel
-    .find({ receiverId: new mongoose.Types.ObjectId(userID), isSeen: false })
+    .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
     .populate([
-      { path: 'adminId', select: 'firstName lastName _id' },
+      { path: 'sender_id', select: 'firstName lastName _id' },
       { path: 'communityGroupId', select: 'title  _id' },
-    ]);
+      { path: 'communityPostId', select: ' _id' },
+    ])
+    .sort({ createdAt: -1 });
   // console.log(userNotification);
 
   return userNotification;
@@ -38,8 +48,12 @@ export const getUserNotification = async (userID: string) => {
 export const updateUserNotification = async (id: string) => {
   // console.log(id);
 
-  const userNotification = await notificationModel.findByIdAndUpdate(id, { isSeen: true }, { new: true });
+  const userNotification = await notificationModel.findByIdAndUpdate(id, { isRead: true }, { new: true });
   // console.log(userNotification);
 
   return userNotification;
+};
+
+export const CreateNotification = async (notification: any) => {
+  return await notificationModel.create(notification);
 };
