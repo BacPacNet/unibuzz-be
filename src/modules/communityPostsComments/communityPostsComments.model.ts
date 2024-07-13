@@ -17,6 +17,7 @@ const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
       type: String,
       required: true,
     },
+    likeCount: [{ userId: String }],
     imageUrl: { imageUrl: String, publicId: String },
   },
   { timestamps: true }

@@ -14,6 +14,8 @@ router
   .put(communityPostCommentsController.updateComment)
   .delete(communityPostCommentsController.deleteCommunityPost);
 
+router.put('/likeUnlike/:communityPostCommentId', userIdAuth, communityPostCommentsController.LikeCommunityPostComments);
+
 export default router;
 
 /**

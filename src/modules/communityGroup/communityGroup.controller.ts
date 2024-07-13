@@ -29,7 +29,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response, 
       }
 
       group = await communityGroupService.createCommunityGroup(userID, communityId, req.body);
-
+      await communityGroupService.joinLeaveCommunityGroup(userID, String(group._id));
       if (req.body.selectedUsersId.length >= 1 && group._id) {
         await notificationService.createManyNotification(group.adminUserId, group._id, req.body.selectedUsersId);
       }

@@ -49,8 +49,6 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       trim: true,
     },
 
-    dob: { type: String, required: true, trim: true },
-
     role: {
       type: String,
       enum: roles,

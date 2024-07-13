@@ -93,8 +93,14 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
 
 // join community
 
-export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId: string, communityName: string) => {
+export const joinCommunity = async (
+  userId: mongoose.Types.ObjectId,
+  cummunityId: string,
+  communityName: string,
+  isAllowed: boolean = false
+) => {
   const user = await getUserById(userId);
+  // console.log("isall",isAllowed);
 
   const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
   const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
@@ -107,16 +113,26 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Already Joined!');
   }
 
-  if (userUnverifiedVerifiedCommunityIds.length >= 1 && user.role != 'admin') {
+  if (userUnverifiedVerifiedCommunityIds.length >= 1 && !isAllowed && user.role != 'admin') {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
   }
 
   //  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
-  const updatedUser = await User.findOneAndUpdate(
-    { _id: userId },
-    { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
-    { new: true }
-  );
+  let updatedUser;
+  if (isAllowed) {
+    updatedUser = await User.findOneAndUpdate(
+      { _id: userId },
+      { $push: { userVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
+      { new: true }
+    );
+  } else {
+    updatedUser = await User.findOneAndUpdate(
+      { _id: userId },
+      { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
+      { new: true }
+    );
+  }
+
   return updatedUser;
 };
 

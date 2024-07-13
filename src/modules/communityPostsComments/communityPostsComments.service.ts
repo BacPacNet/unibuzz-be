@@ -33,3 +33,15 @@ export const getAllCommunityPostComment = async (commentPostId: string) => {
 
   return await communityPostCommentModel.find({ communityId: commentPostId });
 };
+
+export const likeUnlikeComment = async (id: string, userId: string) => {
+  // console.log(id);
+
+  const comment = await communityPostCommentModel.findById(id);
+
+  if (!comment?.likeCount.some((x) => x.userId === userId)) {
+    return await comment?.updateOne({ $push: { likeCount: { userId } } });
+  } else {
+    return await comment.updateOne({ $pull: { likeCount: { userId } } });
+  }
+};
