@@ -5,6 +5,7 @@ import userRoute from './user.route';
 import universityRoute from './university.route';
 import userProfileRoute from './userProfile.route';
 import communityPostsRoute from './communityPosts.route';
+import userPostRoute from './userPost.route';
 import communityPostCommentRoute from './communityPostComment.route';
 import communityGroup from './communityGroup.route';
 import community from './community.route';
@@ -59,6 +60,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/notification',
     route: notificationRoute,
+  },
+  {
+    path: '/userpost',
+    route: userPostRoute,
   },
 ];
 
