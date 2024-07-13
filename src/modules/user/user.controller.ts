@@ -13,8 +13,8 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
-  const userProfile = await userProfileService.createUserProfile(user);
-  res.status(httpStatus.CREATED).send({ user, userProfile });
+  // const userProfile = await userProfileService.createUserProfile(user);
+  res.status(httpStatus.CREATED).send({ user });
 });
 
 export const getUsers = catchAsync(async (req: Request, res: Response) => {

@@ -9,7 +9,7 @@ interface extendedRequest extends Request {
 
 export const getGroupNotification = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
-  console.log(userID);
+  // console.log(userID);
 
   try {
     if (userID) {
