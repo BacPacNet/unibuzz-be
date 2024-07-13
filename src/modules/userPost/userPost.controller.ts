@@ -12,7 +12,7 @@ interface extendedRequest extends Request {
 export const createUserPost = async (req: extendedRequest, res: Response) => {
 
   try {
-      let post = await userPostService.createUserPost(req.body);
+      let post = await userPostService.createUserPost({...req.body, userId: req.userId});
 
       return res.status(httpStatus.CREATED).send(post);
   } catch (error: any) {

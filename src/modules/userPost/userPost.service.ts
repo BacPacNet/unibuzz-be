@@ -41,10 +41,11 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
   return await UserPostModel.findByIdAndDelete(id);
 };
 
-export const getAllPosts = async (userId: string) => {
+export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
   // Fetch all posts of user followers
   const followingRelationships = await followingRelationship.find({ user_id: userId});
   const followingUserIds = followingRelationships.map((relationship) => relationship.following_user_id);
+  followingUserIds.push(userId);
   const posts = await UserPostModel.find({ userId: { $in: followingUserIds } }).sort({ createdAt: -1 });
 
   return posts;
