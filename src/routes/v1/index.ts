@@ -12,6 +12,7 @@ import community from './community.route';
 import userFollowRoute from './userFollow.route';
 import notificationRoute from './notification.route';
 import config from '../../config/config';
+import userPostCommentsRoute from './userPostComment.route';
 
 const router = express.Router();
 
@@ -64,6 +65,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/userpost',
     route: userPostRoute,
+  },
+  {
+    path: '/userpostcomment',
+    route: userPostCommentsRoute,
   },
 ];
 

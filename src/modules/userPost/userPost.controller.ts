@@ -16,7 +16,6 @@ export const createUserPost = async (req: extendedRequest, res: Response) => {
 
       return res.status(httpStatus.CREATED).send(post);
   } catch (error: any) {
-    //   console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -34,7 +33,6 @@ export const updateUserPost = async (req: Request, res: Response, next: NextFunc
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
     res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -51,7 +49,6 @@ export const deleteUserPost = async (req: Request, res: Response, next: NextFunc
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
@@ -65,7 +62,6 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
 
     return res.status(200).json({ timelinePosts });
   } catch (error) {
-    // console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Posts'));
   }
@@ -74,7 +70,6 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
 //like and unlike
 export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
-  // console.log(req.userId);
 
   try {
     if (postId && req.userId) {

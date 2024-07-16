@@ -4,6 +4,8 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import { followingRelationship } from '../userFollow';
+import { User } from '../user';
+import CommunityPostModel from '../communityPosts/communityPosts.model';
 
 export const createUserPost = async (post: userPostInterface) => {
 
@@ -11,7 +13,6 @@ export const createUserPost = async (post: userPostInterface) => {
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
-  // console.log(id);
 
   const post = await UserPostModel.findById(id);
 
@@ -41,12 +42,40 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
   return await UserPostModel.findByIdAndDelete(id);
 };
 
+//get all posts
 export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
-  // Fetch all posts of user followers
-  const followingRelationships = await followingRelationship.find({ user_id: userId});
+  const followingAndSelfUserIds = await getFollowingAndSelfUserIds(userId);
+  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds);
+  const CommunityPosts = await getCommunityPostsForUserIds(followingAndSelfUserIds);
+
+  const allPosts: any = [...UsersPosts, ...CommunityPosts];
+  allPosts.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  return allPosts;
+};
+
+// Helper Services for getAllPosts
+
+//get user ids of followers and the user itself
+const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId) => {
+  const followingRelationships = await followingRelationship.find({ user_id: userId });
   const followingUserIds = followingRelationships.map((relationship) => relationship.following_user_id);
   followingUserIds.push(userId);
-  const posts = await UserPostModel.find({ userId: { $in: followingUserIds } }).sort({ createdAt: -1 });
+  return followingUserIds;
+}
 
-  return posts;
-};
+//fetch userPosts for given user ids
+const getUserPostsForUserIds = async (userIds: mongoose.Schema.Types.ObjectId[]) => {
+  const followingUserPosts = await UserPostModel.find({ userId: { $in: userIds } }).sort({ createdAt: -1 });
+  return followingUserPosts;
+}
+
+const getCommunityPostsForUserIds = async (userIds: mongoose.Schema.Types.ObjectId[]) => {
+  const followingUsers = await User.find({ _id: { $in: userIds}});
+  const followingUsersCommunityIds = followingUsers.flatMap((user) => [...user.userVerifiedCommunities.map((community) => community.communityId), ...user.userUnVerifiedCommunities.map((community) => community.communityId)]);
+  const followingUsersCommunityPosts = await CommunityPostModel.find({ communityId: {$in: followingUsersCommunityIds}, communityPostsType: 'Public'}).sort({createdAt: -1});
+  return followingUsersCommunityPosts;
+}
+
+
+
