@@ -11,7 +11,6 @@ interface AuthenticatedRequest extends Request {
 // Middleware function to verify JWT and extract userId
 export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1]; // Assuming JWT is passed in Authorization header
-  // console.log("token",token);
 
   if (!token) {
     return res.status(401).json({ message: 'Missing token' });
@@ -25,12 +24,9 @@ export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextF
     }
 
     req.userId = decoded.sub;
-    // console.log("aaa",req.userId);
 
     next();
   } catch (error: any) {
-    // console.log(error.message);
-
     return res.status(401).json({ message: error.message });
   }
 };

@@ -1,4 +1,3 @@
-// import { communityInterface } from "./community.interface";
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import communityModel from './community.model';

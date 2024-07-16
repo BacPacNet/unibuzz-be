@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import universityModal from './university.model';
-// import { University } from './university.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 
@@ -33,8 +32,6 @@ export const getAllUniversity = async (page: number, limit: number) => {
   const Currpage = page ? page : 1;
   const limitpage = limit ? limit : 10;
   const startIndex = (Currpage - Number(1)) * Number(limitpage);
-
-  // console.log("aa",limitpage,startIndex);
 
   return await universityModal.find().skip(startIndex).limit(limitpage);
 };

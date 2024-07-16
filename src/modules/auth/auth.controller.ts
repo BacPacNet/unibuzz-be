@@ -9,9 +9,7 @@ import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
-  // console.log(req.body);
   const { dob, country, city, ...body } = req.body;
-  // console.log("aaa",dob,country,city,body);
 
   const user = await userService.registerUser(body);
   const userProfile = await userProfileService.createUserProfile(user._id, dob, country, city, 23);
@@ -48,14 +46,3 @@ export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   await authService.resetPassword(req.query['token'], req.body.password);
   res.status(httpStatus.NO_CONTENT).send();
 });
-
-//export const sendVerificationEmail = catchAsync(async (req: Request, res: Response) => {
-//  const verifyEmailToken = await tokenService.generateVerifyEmailToken(req.user);
-//  await emailService.sendVerificationEmail(req.user.email, verifyEmailToken, req.user.name);
-//  res.status(httpStatus.NO_CONTENT).send();
-//});
-
-//export const verifyEmail = catchAsync(async (req: Request, res: Response) => {
-//  await authService.verifyEmail(req.query['token']);
-//  res.status(httpStatus.NO_CONTENT).send();
-//});

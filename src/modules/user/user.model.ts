@@ -3,7 +3,7 @@ import validator from 'validator';
 import bcrypt from 'bcryptjs';
 import toJSON from '../toJSON/toJSON';
 import paginate from '../paginate/paginate';
-import { IUserDoc, IUserModel } from './user.interfaces';
+import { communityGroupRole, communityGroupRoleAccess, IUserDoc, IUserModel } from './user.interfaces';
 import { roles } from '../../config/roles';
 
 const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
@@ -63,14 +63,26 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       {
         communityId: String,
         communityName: String,
-        communityGroups: [{ communityGroupName: String, communityGroupId: String }],
+        communityGroups: [
+          {
+            communityGroupName: String,
+            communityGroupId: String,
+            role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
+          },
+        ],
       },
     ],
     userUnVerifiedCommunities: [
       {
         communityId: String,
         communityName: String,
-        communityGroups: [{ communityGroupName: String, communityGroupId: String }],
+        communityGroups: [
+          {
+            communityGroupName: String,
+            communityGroupId: String,
+            role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
+          },
+        ],
       },
     ],
   },

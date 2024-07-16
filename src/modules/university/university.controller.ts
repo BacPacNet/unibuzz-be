@@ -45,7 +45,6 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };

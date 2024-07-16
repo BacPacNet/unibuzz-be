@@ -12,6 +12,8 @@ import { jwtStrategy } from './modules/auth';
 import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
+import { Server as SocketIoServer } from 'socket.io';
+import { createServer } from 'http';
 
 const app: Express = express();
 
@@ -52,6 +54,24 @@ if (config.env === 'production') {
 // v1 api routes
 app.use('/v1', routes);
 
+const httpServer = createServer(app);
+const io = new SocketIoServer(httpServer, {
+  cors: {
+    origin: '*',
+  },
+});
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('A client connected');
+
+  socket.on('disconnect', () => {
+    console.log('A client disconnected');
+  });
+});
+
+httpServer.listen(9000);
+
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
@@ -62,5 +82,7 @@ app.use(errorConverter);
 
 // handle error
 app.use(errorHandler);
+
+export { io };
 
 export default app;
