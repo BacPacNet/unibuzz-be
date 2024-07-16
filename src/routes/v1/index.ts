@@ -5,12 +5,14 @@ import userRoute from './user.route';
 import universityRoute from './university.route';
 import userProfileRoute from './userProfile.route';
 import communityPostsRoute from './communityPosts.route';
+import userPostRoute from './userPost.route';
 import communityPostCommentRoute from './communityPostComment.route';
 import communityGroup from './communityGroup.route';
 import community from './community.route';
 import userFollowRoute from './userFollow.route';
 import notificationRoute from './notification.route';
 import config from '../../config/config';
+import userPostCommentsRoute from './userPostComment.route';
 
 const router = express.Router();
 
@@ -59,6 +61,14 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/notification',
     route: notificationRoute,
+  },
+  {
+    path: '/userpost',
+    route: userPostRoute,
+  },
+  {
+    path: '/userpostcomment',
+    route: userPostCommentsRoute,
   },
 ];
 
