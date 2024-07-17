@@ -5,7 +5,7 @@ interface Like {
 }
 
 interface userPostInterface {
-  userId: Schema.Types.ObjectId;
+  user_id: Schema.Types.ObjectId;
   content: string;
   imageUrl?: { imageUrl: String; publicId: String };
   likeCount: Like[];
