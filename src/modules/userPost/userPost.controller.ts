@@ -73,6 +73,9 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
 
   try {
     if (postId && req.userId) {
+      if (!mongoose.Types.ObjectId.isValid(postId)) {
+        return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid post ID type' });
+      }
       let likeCount = await userPostService.likeUnlike(postId, req.userId);
       return res.status(200).json({ likeCount });
     }
