@@ -1,9 +1,16 @@
+import { userIdAuth } from '../../modules/user';
 import { userProfileController } from '../../modules/userProfile';
 import express, { Router } from 'express';
 
 const router: Router = express.Router();
 
+router.route("/")
+.get(userIdAuth,userProfileController.getAllUserFollow)
+.put(userIdAuth,userProfileController.toggleFollow)
+
 router.route('/:userProfileId').put(userProfileController.updateUserProfile);
+
+
 
 export default router;
 

@@ -91,6 +91,59 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
   return user;
 };
 
+//get Users with Profile data
+export const getUsersWithProfile=async(name:string,userId:string)=>{
+
+  const profile:any = await UserProfile.findOne({ users_id: userId }).populate('following.userId')
+  const ids = profile.following.map((id:any)=>id.userId._id)
+  let query:any
+
+  query = {
+    $and: [
+      { _id: { $ne: userId } },
+      { _id: { $nin: ids } }
+    ]
+  }
+
+  if (name) {
+    let nameParts = name.split(' ').filter(part => part); 
+    if (nameParts.length > 1) {
+      query.$and = nameParts.map(part => ({
+        $or: [
+          { firstName: new RegExp(part, "i") },
+          { lastName: new RegExp(part, "i") }
+        ]
+      }));
+    } else {
+
+      let regName = new RegExp(name, "i");
+      query.$or = [
+        { firstName: regName },
+        { lastName: regName }
+      ];
+    }
+  }
+
+  const user:any =await User.find(query).select('firstName lastName _id ').lean()
+
+  const userIds = user.map((user:any) => user._id);
+
+  const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
+    'profile_dp university_name study_year degree major users_id major occupation'
+  );
+
+  const userWithProfile = user.map((user:any)=>{
+    const profile = userProfiles.find((profile)=> profile.users_id.toString() == user._id.toString())
+    return{
+      ...user,
+      profile
+    }
+    
+  })
+  return userWithProfile
+
+}
+
 // join community
 
 export const joinCommunity = async (

@@ -71,3 +71,96 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
 
   return userProfileToUpdate;
 };
+
+
+export const toggleFollow = async (userId: mongoose.Types.ObjectId,userToFollow:mongoose.Types.ObjectId) => {
+  
+  const userProfile = await UserProfile.findOne({users_id:userId});
+  const userToFollowProfile = await UserProfile.findOne({users_id:userToFollow});
+
+
+  // if (!userProfile?.following.some((x) => x.userId.toString() === userId.toString())) {
+  //   await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
+  //   return await userProfile?.updateOne({ $push: { following: { userToFollow } } });
+  // } else {
+  //   await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
+  //   return await userProfile.updateOne({ $pull: { following: { userToFollow } } });
+  // }
+
+  if (!userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString())) {
+    await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
+    return await UserProfile.findOneAndUpdate(
+      { users_id: userId },
+      { $push: { following: { userId: userToFollow } } },
+      { new: true }
+    );
+  } else {
+    await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
+    return await UserProfile.findOneAndUpdate(
+      { users_id: userId },
+      { $pull: { following: { userId: userToFollow } } },
+      { new: true }
+    );
+  }
+};
+  
+
+
+export const getFollow = async (name:string,userId: string) => {
+// console.log(name);
+  let firstNametoPush:any
+  let lastNametopush:any 
+
+  const profile:any = await UserProfile.findOne({ users_id: userId }).populate('following.userId')
+    // console.log("pro",profile);
+    // console.log("ob",profile.following.toObject());
+    
+  const ids = profile.following.map((id:any)=>id.userId._id)
+  // const userFollows = await UserProfile.find({users_id:{ $in : ids }}).populate({
+  //   path: 'users_id',
+  //   match: {
+  //     firstName: { $regex: new RegExp(name, 'i') } // 'i' for case-insensitive search
+  //   }
+  // })
+
+// console.log("ids",ids);
+
+
+  if(name){
+    let nameParts = name.split(' ')
+    if(nameParts.length > 1){
+      firstNametoPush = nameParts[0]
+      lastNametopush = nameParts[1]
+    }else{
+      firstNametoPush = name
+    }
+    
+  }
+
+  
+  const userFollows = await UserProfile.find({
+    $and: [
+      { users_id: { $in: ids } }
+    ]
+  })
+  .populate({
+    path: 'users_id',
+    match: {
+      $or: [
+        { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : [])
+      ]
+    }
+  })
+  
+  const filteredUserFollows = userFollows.filter(profile => profile.users_id !== null);
+  
+
+
+  return filteredUserFollows
+
+
+};
+
+
+

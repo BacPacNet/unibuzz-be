@@ -46,6 +46,21 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
+export const getUsersWithProfileData = async(req:any,res:Response)=>{
+  const {  name } = req.query;
+  const userID = req.userId;
+
+  try {
+    
+      let user = await userService.getUsersWithProfile( name, userID);
+      return res.status(200).json({ user });
+    
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+}
+
+
 export const joinCommunity = async (req: any, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
   // console.log(communityId);
