@@ -2,10 +2,24 @@ import mongoose from 'mongoose';
 import communityPostCommentModel from './communityPostsComments.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
+import { io } from '../../app';
+import { notificationService } from '../Notification';
+import { notificationRoleAccess } from '../Notification/notification.interface';
 
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
   const newComment = { ...body, communityId: communityPostId, commenterId: userID };
-  return await communityPostCommentModel.create(newComment);
+  const notifications = {
+    sender_id: userID,
+    receiverId: body.adminId,
+    communityPostId: communityPostId,
+    type: notificationRoleAccess.COMMENT,
+    message: 'commented on your post',
+  };
+
+  const comment = await communityPostCommentModel.create(newComment);
+  await notificationService.CreateNotification(notifications);
+  io.emit(`notification_${body.adminId}`, { message: 'You have a new notification' });
+  return comment;
 };
 
 export const updateCommunityPostComment = async (id: mongoose.Types.ObjectId, comment: any) => {
@@ -29,14 +43,10 @@ export const deleteCommunityPostComment = async (id: mongoose.Types.ObjectId) =>
 };
 
 export const getAllCommunityPostComment = async (commentPostId: string) => {
-  // console.log(commentPostId);
-
   return await communityPostCommentModel.find({ communityId: commentPostId });
 };
 
 export const likeUnlikeComment = async (id: string, userId: string) => {
-  // console.log(id);
-
   const comment = await communityPostCommentModel.findById(id);
 
   if (!comment?.likeCount.some((x) => x.userId === userId)) {

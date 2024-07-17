@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import { communityPostCommentsService } from '.';
+import { userPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 
@@ -10,14 +10,14 @@ interface extendedRequest extends Request {
 
 export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
-  const { communityPostId } = req.params;
+  const { userPostId } = req.params;
   let comment;
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
   }
   try {
-    if (userID && communityPostId) {
-      comment = communityPostCommentsService.createCommunityComment(userID, communityPostId, req.body);
+    if (userID && userPostId) {
+      comment = userPostCommentsService.createUserPostComment(userID, userPostId, req.body);
     }
     return res.status(httpStatus.CREATED).json({ comment });
   } catch (error: any) {
@@ -30,9 +30,9 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
   try {
     if (typeof commentId == 'string') {
       if (!mongoose.Types.ObjectId.isValid(commentId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment Id'));
       }
-      await communityPostCommentsService.updateCommunityPostComment(new mongoose.Types.ObjectId(commentId), req.body);
+      await userPostCommentsService.updateUserPostComment(new mongoose.Types.ObjectId(commentId), req.body);
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
@@ -40,28 +40,29 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteCommunityPost = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteComment = async (req: Request, res: Response, next: NextFunction) => {
   const { commentId } = req.params;
   try {
     if (typeof commentId == 'string') {
       if (!mongoose.Types.ObjectId.isValid(commentId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment ID'));
       }
-      await communityPostCommentsService.deleteCommunityPostComment(new mongoose.Types.ObjectId(commentId));
+      await userPostCommentsService.deleteUserPostComment(new mongoose.Types.ObjectId(commentId));
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
+    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
 
-export const getAllCommunityPostComments = async (req: Request, res: Response, next: NextFunction) => {
-  const { communityPostId } = req.params;
+export const getAllUserPostComments = async (req: Request, res: Response, next: NextFunction) => {
+  const { userPostId } = req.params;
   let allComments;
 
   try {
-    if (communityPostId) {
-      allComments = await communityPostCommentsService.getAllCommunityPostComment(communityPostId);
+    if (userPostId) {
+      allComments = await userPostCommentsService.getAllUserPostComment(userPostId);
       return res.status(200).json({ allComments });
     }
   } catch (error) {
@@ -71,12 +72,12 @@ export const getAllCommunityPostComments = async (req: Request, res: Response, n
   }
 };
 
-export const LikeCommunityPostComments = async (req: extendedRequest, res: Response) => {
-  const { communityPostCommentId } = req.params;
+export const LikeUserPostComment = async (req: extendedRequest, res: Response) => {
+  const { userPostCommentId } = req.params;
 
   try {
-    if (communityPostCommentId && req.userId) {
-      let likeCount = await communityPostCommentsService.likeUnlikeComment(communityPostCommentId, req.userId);
+    if (userPostCommentId && req.userId) {
+      let likeCount = await userPostCommentsService.likeUnlikeComment(userPostCommentId, req.userId);
       return res.status(200).json({ likeCount });
     }
   } catch (error: any) {

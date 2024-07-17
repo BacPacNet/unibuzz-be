@@ -2,9 +2,18 @@ import mongoose, { Model, Document } from 'mongoose';
 import { QueryResult } from '../paginate/paginate';
 import { AccessAndRefreshTokens } from '../token/token.interfaces';
 
+export const communityGroupRoleAccess = {
+  Admin: 'Admin',
+  Member: 'Member',
+  Moderator: 'Moderator',
+};
+
+export const communityGroupRole = Object.keys(communityGroupRoleAccess);
+
 interface communityGroupsInterface {
   communityGroupName: String;
   communityGroupId: String;
+  role: string;
 }
 
 interface verifiedInterface {

@@ -153,7 +153,6 @@ export const joinCommunity = async (
   isAllowed: boolean = false
 ) => {
   const user = await getUserById(userId);
-  // console.log("isall",isAllowed);
 
   const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
   const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
@@ -170,7 +169,6 @@ export const joinCommunity = async (
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
   }
 
-  //  await user.updateOne({ $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } });
   let updatedUser;
   if (isAllowed) {
     updatedUser = await User.findOneAndUpdate(
@@ -217,8 +215,6 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
 };
 
 export const findUsersByCommunityId = async (communityId: string, privacy: string, name: string, userID: string) => {
-  // console.log(privacy);
-
   try {
     let query: any = {};
 
@@ -232,8 +228,6 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
         const nameRegex = new RegExp(name, 'i');
         query.firstName = nameRegex;
       }
-
-      // console.log('Private Query:', query);
     } else {
       const communityConditions = [
         { 'userVerifiedCommunities.communityId': communityId },
@@ -253,8 +247,6 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
           _id: { $ne: userID },
         };
       }
-
-      // console.log('Public Query:', query); // Debug log
     }
 
     const users = await User.find(query).select('firstName lastName _id');
@@ -269,12 +261,104 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
       profile: userProfiles.find((profile) => profile.users_id.toString() === user._id.toString()),
     }));
 
-    // console.log('Result:', result); // Log combined result
     return result;
-    // console.log('Users:', users);
-    // return users;
   } catch (error) {
     console.error(error);
     throw error;
   }
+};
+
+export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string, userID: string) => {
+  try {
+    let query: any = {
+      'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
+      _id: { $ne: userID },
+    };
+
+    const nameRegex = new RegExp(name, 'i');
+    query.firstName = nameRegex;
+
+    const users = await User.find(query).select('firstName lastName _id userVerifiedCommunities userUnVerifiedCommunities');
+
+    const userIds = users.map((user) => user._id);
+
+    const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
+      'profile_dp university_name study_year degree major users_id'
+    );
+
+    const result = users.map((user: any) => {
+      const profile = userProfiles.find((profile) => profile.users_id.toString() === user._id.toString());
+
+      let verifiedGroup;
+      let unVerifiedGroup;
+      if (user.userVerifiedCommunities) {
+        user.userVerifiedCommunities.forEach((verifiedCommunity: any) => {
+          if (verifiedCommunity.communityGroups) {
+            verifiedGroup = verifiedCommunity.communityGroups.find(
+              (group: any) => group.communityGroupId === communityGroupId
+            );
+          }
+        });
+      }
+
+      if (user.userUnVerifiedCommunities) {
+        user.userUnVerifiedCommunities.forEach((unVerifiedCommunity: any) => {
+          if (unVerifiedCommunity.communityGroups) {
+            unVerifiedGroup = unVerifiedCommunity.communityGroups.find(
+              (group: any) => group.communityGroupId === communityGroupId
+            );
+          }
+        });
+      }
+
+      return {
+        ...user.toObject(),
+        profile,
+        communityGroup: verifiedGroup || unVerifiedGroup, // Include the matching community group
+      };
+    });
+    return result;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
+export const updateUserCommunityGroupRole = async (userId: string, communityGroupId: string, role: string) => {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  let updated = false;
+
+  // Update the role in userVerifiedCommunities
+  user.userVerifiedCommunities.forEach((verifiedCommunity) => {
+    verifiedCommunity.communityGroups.forEach((group: any) => {
+      if (group.communityGroupId === communityGroupId) {
+        group.role = role;
+        updated = true;
+      }
+    });
+  });
+
+  // Update the role in userUnVerifiedCommunities if not found in userVerifiedCommunities
+  if (!updated) {
+    user.userUnVerifiedCommunities.forEach((unVerifiedCommunity) => {
+      unVerifiedCommunity.communityGroups.forEach((group: any) => {
+        if (group.communityGroupId === communityGroupId) {
+          group.role = role;
+          updated = true;
+        }
+      });
+    });
+  }
+
+  if (!updated) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+  }
+
+  await user.save();
+  return user;
 };

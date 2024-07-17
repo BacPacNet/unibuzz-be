@@ -6,10 +6,8 @@ import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
 
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
-  // console.log("bb",body);
-
-  const newComment = { ...body, communityId: communityId, adminUserId: userID };
-  return await communityGroupModel.create(newComment);
+  const newGroup = { ...body, communityId: communityId, adminUserId: userID };
+  return await communityGroupModel.create(newGroup);
 };
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
@@ -58,17 +56,18 @@ export const getCommunityGroup = async (groupId: string) => {
   return await communityGroupModel.findById(groupId);
 };
 
-export const joinLeaveCommunityGroup = async (userID: string, groupId: string) => {
+export const joinLeaveCommunityGroup = async (userID: string, groupId: string, role: string) => {
   try {
     const user: any = await getUserById(new mongoose.Types.ObjectId(userID));
     const community: any = await getCommunityGroup(groupId);
 
     const communityIdStr = community?.communityId.toString();
-    // console.log(communityIdStr);
+    console.log(role);
     let message;
     const communityGroup: any = {
       communityGroupName: community?.title,
       communityGroupId: community?._id,
+      role: role,
     };
 
     if (!user.userVerifiedCommunities) {
@@ -77,25 +76,19 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string) =
 
     const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
 
-    // changes
     const userUnverifiedVerifiedCommunityIds =
       user?.userUnVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
 
     if (userUnverifiedVerifiedCommunityIds.includes(communityIdStr) && community.communityGroupType == 'private') {
       throw new ApiError(httpStatus.NOT_FOUND, ' only verified community users can join!');
     }
-    // console.log(userVerifiedCommunityIds);
 
     if (!userVerifiedCommunityIds.includes(communityIdStr) && !userUnverifiedVerifiedCommunityIds.includes(communityIdStr)) {
       throw new ApiError(httpStatus.NOT_FOUND, ' not part of university!');
-      // console.log("no");
     }
-
-    // let communityExists = false;
     // for verified Communities
     user.userVerifiedCommunities = user.userVerifiedCommunities.map((c: any) => {
       if (c.communityId.toString() === communityIdStr) {
-        // Check if the group exists within the community
         const groupIndex = c.communityGroups.findIndex((g: any) => g.communityGroupId === groupId);
         if (groupIndex !== -1) {
           c.communityGroups.splice(groupIndex, 1);
@@ -130,12 +123,12 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string) =
       }
       return c;
     });
-    // return { message: !communityExists ? 'left Group' : 'Joined Group' };
+
     await user.save();
     await community.save();
     return { message, user };
   } catch (err) {
-    // console.log(err)
+    console.log(err);
     throw err;
   }
 };

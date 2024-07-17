@@ -12,6 +12,7 @@ interface image {
 interface communityPostsInterface {
   communityId: Schema.Types.ObjectId;
   content: string;
+  user_id: Schema.Types.ObjectId;
   imageUrl?: image[];
   likeCount: Like[];
   communityPostsType: CommunityType;

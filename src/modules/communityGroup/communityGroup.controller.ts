@@ -3,8 +3,10 @@ import httpStatus from 'http-status';
 import { communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
-import { User } from '../user';
+import { User, userService } from '../user';
 import { notificationService } from '../Notification';
+import { communityGroupRoleAccess } from '../user/user.interfaces';
+import { notificationRoleAccess } from '../Notification/notification.interface';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -13,8 +15,8 @@ interface extendedRequest extends Request {
 export const CreateCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { communityId } = req.params;
-  // console.log("body",req.body);
   let group;
+  let userData;
   if (!req.body.title) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'title required!'));
   }
@@ -25,17 +27,26 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response, 
       const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
 
       if (!userVerifiedCommunityIds.includes(String(communityId))) {
-        return next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the Groups!'));
+        return next(new ApiError(httpStatus.UNAUTHORIZED, ' only verified user can create Groups!'));
       }
 
       group = await communityGroupService.createCommunityGroup(userID, communityId, req.body);
-      await communityGroupService.joinLeaveCommunityGroup(userID, String(group._id));
+      await communityGroupService.joinLeaveCommunityGroup(userID, String(group._id), communityGroupRoleAccess.Admin);
+      userData = await userService.getUserById(new mongoose.Types.ObjectId(userID));
       if (req.body.selectedUsersId.length >= 1 && group._id) {
-        await notificationService.createManyNotification(group.adminUserId, group._id, req.body.selectedUsersId);
+        await notificationService.createManyNotification(
+          group.adminUserId,
+          group._id,
+          req.body.selectedUsersId,
+          notificationRoleAccess.GROUP_INVITE,
+          'recieved an invitation to join group'
+        );
       }
     }
-    return res.status(httpStatus.CREATED).json({ group });
+    return res.status(httpStatus.CREATED).json({ group, userData });
   } catch (error: any) {
+    console.log(error);
+
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -51,7 +62,6 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
     res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -67,7 +77,6 @@ export const deleteCommunityGroup = async (req: Request, res: Response, next: Ne
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
@@ -82,7 +91,6 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
 
       const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
       const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-      // console.log(userVerifiedCommunityIds);
 
       if (
         !userUnverifiedVerifiedCommunityIds.includes(String(communityId)) &&
@@ -95,8 +103,6 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       return res.status(200).json({ groups });
     }
   } catch (error: any) {
-    // console.log(req);
-    // console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -107,12 +113,10 @@ export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Respo
   let status;
   try {
     if (userID && groupId) {
-      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId);
-      // console.log(status);
+      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId, communityGroupRoleAccess.Member);
       return res.status(200).json(status);
     }
   } catch (error: any) {
-    // console.log(error);
     if (error instanceof ApiError) {
       return res.status(error.statusCode).json({ message: error.message });
     } else {

@@ -8,7 +8,6 @@ import { ApiError } from '../errors';
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
   const { userProfileId } = req.params;
-  // console.log(req.params);
 
   try {
     if (typeof userProfileId == 'string') {
