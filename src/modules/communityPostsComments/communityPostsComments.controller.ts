@@ -11,7 +11,6 @@ interface extendedRequest extends Request {
 export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { communityPostId } = req.params;
-  // console.log(communityPostId);
   let comment;
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
@@ -37,7 +36,6 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    // console.log("err",error.message);
     res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -53,7 +51,6 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
     }
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
-    // console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
   }
 };
@@ -76,7 +73,6 @@ export const getAllCommunityPostComments = async (req: Request, res: Response, n
 
 export const LikeCommunityPostComments = async (req: extendedRequest, res: Response) => {
   const { communityPostCommentId } = req.params;
-  // console.log(req.userId);
 
   try {
     if (communityPostCommentId && req.userId) {

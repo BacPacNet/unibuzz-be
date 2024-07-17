@@ -9,13 +9,10 @@ interface extendedRequest extends Request {
 
 export const getGroupNotification = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
-  // console.log(userID);
 
   try {
     if (userID) {
       const notification = await notificationService.getUserNotification(userID);
-      // console.log(notification);
-
       return res.status(200).json(notification);
     }
   } catch (error: any) {
@@ -24,9 +21,7 @@ export const getGroupNotification = async (req: extendedRequest, res: Response) 
 };
 
 export const updateGroupNotification = async (req: extendedRequest, res: Response) => {
-  // const userID = req.userId;
   const { id } = req.body;
-  // console.log("id",req.body);
 
   try {
     if (id) {
@@ -42,12 +37,11 @@ export const updateGroupNotification = async (req: extendedRequest, res: Respons
 export const JoinGroup = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
   const { id, groupId } = req.body;
-  //   console.log("ss",id,"sss",groupId)
 
   let status;
   try {
     if (userID && groupId) {
-      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId);
+      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId, 'Member');
       await notificationService.updateUserNotification(id);
       return res.status(200).json(status);
     }

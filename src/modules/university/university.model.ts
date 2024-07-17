@@ -51,7 +51,6 @@ const collogesSchema = new Schema<College>({
   logos: [String],
 });
 
-// const UniversityModel = model<University>('University', UniversitySchema);
 const UniversityModel = model<College>('colleges', collogesSchema);
 
 export default UniversityModel;
