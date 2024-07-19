@@ -92,7 +92,7 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
 };
 
 //get Users with Profile data
-export const getUsersWithProfile = async (name: string, userId: string) => {
+export const getUsersWithProfile = async (name: string = '', userId: string) => {
   const profile: any = await UserProfile.findOne({ users_id: userId }).populate('following.userId');
   const ids = profile.following.map((id: any) => id.userId._id);
   let query: any;
@@ -201,7 +201,12 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   return updatedUser;
 };
 
-export const findUsersByCommunityId = async (communityId: string, privacy: string, name: string, userID: string) => {
+export const findUsersByCommunityId = async (
+  communityId: string,
+  privacy: string = '',
+  name: string = '',
+  userID: string
+) => {
   try {
     let query: any = {};
 
@@ -255,7 +260,7 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
   }
 };
 
-export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string, userID: string) => {
+export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string = '', userID: string) => {
   try {
     let query: any = {
       'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
