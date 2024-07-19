@@ -9,6 +9,7 @@ import { User } from '../user';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile } from '../userProfile';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
+import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
 export const createUserPost = async (post: userPostInterface) => {
 
@@ -78,8 +79,8 @@ const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[])
     path: 'user_id',
     select: 'firstName lastName _id'
   }).sort({ createdAt: -1 }).lean();
-  
   //get all comments of the posts
+
   const postIds = followingUserPosts.map((post: any) => post._id);
   const comments = await userPostCommentsModel.find({ userPostId: { $in: postIds } }).populate({
     path: 'commenterId',
@@ -94,7 +95,7 @@ const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[])
     ]),
   ];
   const profiles = await UserProfile.find({ users_id: { $in: userIds } });
-  
+
   //merge posts with comments and profiles
   const postsWithCommentsAndProfiles = followingUserPosts.map((post: any) => {
     const userProfile = profiles.find((profile: any) => profile.users_id?.toString() === post.user_id?._id.toString());
@@ -103,7 +104,7 @@ const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[])
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((comment: any) => {
         const commenterProfile = profiles.find(
-          (profile: any) => profile.users_id.toString() === comment.commenterId._id.toString()
+          (profile: UserProfileDocument) => profile.users_id.toString() === comment.commenterId._id.toString()
         );
         return {
           ...comment.toObject(),
@@ -143,7 +144,7 @@ const getCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.Object
     .sort({createdAt: -1}).lean();
   
   //get comments of the community posts
-  const postIds = followingUsersCommunityPosts.map((post: any) => post._id);
+  const postIds = followingUsersCommunityPosts.map((post) => post._id);
   const comments = await communityPostCommentsModel.find({ communityId: { $in: postIds } }).populate({
     path: 'commenterId',
     select: 'firstName lastName content _id',
@@ -160,13 +161,13 @@ const getCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.Object
 
   //merge posts with comments and profiles
   const postsWithCommentsAndProfiles = followingUsersCommunityPosts.map((post: any) => {
-    const userProfile = profiles.find((profile: any) => profile.users_id.toString() === post.user_id._id.toString());
+    const userProfile = profiles.find((profile: UserProfileDocument) => profile.users_id.toString() === post.user_id._id.toString());
     const postComments = comments
       .filter((comment) => comment.communityId.toString() === post._id.toString())
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((comment: any) => {
         const commenterProfile = profiles.find(
-          (profile: any) => profile.users_id.toString() === comment.commenterId._id.toString()
+          (profile: UserProfileDocument) => profile.users_id.toString() === comment.commenterId._id.toString()
         );
         return {
           ...comment.toObject(),
