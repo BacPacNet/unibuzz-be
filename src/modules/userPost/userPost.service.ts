@@ -8,12 +8,10 @@ import { User } from '../user';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 
 export const createUserPost = async (post: userPostInterface) => {
-
   return await UserPostModel.create(post);
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
-
   const post = await UserPostModel.findById(id);
 
   if (!post?.likeCount.some((x) => x.userId === userId)) {
@@ -62,20 +60,23 @@ const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId
   const followingUserIds = followingRelationships.map((relationship) => relationship.following_user_id);
   followingUserIds.push(userId);
   return followingUserIds;
-}
+};
 
 //fetch userPosts for given user ids
 const getUserPostsForUserIds = async (userIds: mongoose.Schema.Types.ObjectId[]) => {
   const followingUserPosts = await UserPostModel.find({ userId: { $in: userIds } }).sort({ createdAt: -1 });
   return followingUserPosts;
-}
+};
 
 const getCommunityPostsForUserIds = async (userIds: mongoose.Schema.Types.ObjectId[]) => {
-  const followingUsers = await User.find({ _id: { $in: userIds}});
-  const followingUsersCommunityIds = followingUsers.flatMap((user) => [...user.userVerifiedCommunities.map((community) => community.communityId), ...user.userUnVerifiedCommunities.map((community) => community.communityId)]);
-  const followingUsersCommunityPosts = await CommunityPostModel.find({ communityId: {$in: followingUsersCommunityIds}, communityPostsType: 'Public'}).sort({createdAt: -1});
+  const followingUsers = await User.find({ _id: { $in: userIds } });
+  const followingUsersCommunityIds = followingUsers.flatMap((user) => [
+    ...user.userVerifiedCommunities.map((community) => community.communityId),
+    ...user.userUnVerifiedCommunities.map((community) => community.communityId),
+  ]);
+  const followingUsersCommunityPosts = await CommunityPostModel.find({
+    communityId: { $in: followingUsersCommunityIds },
+    communityPostsType: 'Public',
+  }).sort({ createdAt: -1 });
   return followingUsersCommunityPosts;
-}
-
-
-
+};

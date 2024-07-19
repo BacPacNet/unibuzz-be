@@ -6,8 +6,8 @@ const router: Router = Router();
 
 router.route('/').get(userIdAuth, userFollowController.getFollowCounts);
 
-router.get("/following",userIdAuth,userFollowController.getUserFollowing)
-router.get("/followers",userIdAuth,userFollowController.getUserFollowers)
+router.get('/following', userIdAuth, userFollowController.getUserFollowing);
+router.get('/followers', userIdAuth, userFollowController.getUserFollowers);
 
 router.route('/:userToFollowId').put(userIdAuth, userFollowController.toggleFollow);
 

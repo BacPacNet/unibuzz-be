@@ -33,7 +33,6 @@ export const getAllUserPostComment = async (userPostId: string) => {
 };
 
 export const likeUnlikeComment = async (commentId: string, userId: string) => {
-
   const comment = await userPostCommentsModel.findById(commentId);
 
   if (!comment?.likeCount.some((x) => x.userId === userId)) {

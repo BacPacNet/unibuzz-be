@@ -36,33 +36,28 @@ export const getFollowCounts = async (req: userIdExtend, res: Response) => {
   }
 };
 
-
 // get User following
 export const getUserFollowing = async (req: any, res: Response) => {
   const userId = req.userId;
-  const {  name } = req.query;
+  const { name } = req.query;
   try {
-    
-      const userFollowing = await userFollowService.getUserFollowing(name,userId);
-      return res.status(200).json(userFollowing);
-
+    const userFollowing = await userFollowService.getUserFollowing(name, userId);
+    return res.status(200).json(userFollowing);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to get follow counts' });
   }
-}
+};
 
 // get User followers
 export const getUserFollowers = async (req: any, res: Response) => {
   const userId = req.userId;
-  const {  name } = req.query;
+  const { name } = req.query;
   try {
-    
-      const userFollowers = await userFollowService.getUserFollowers(name,userId);
-      return res.status(200).json(userFollowers);
-
+    const userFollowers = await userFollowService.getUserFollowers(name, userId);
+    return res.status(200).json(userFollowers);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to get follow counts' });
   }
-}
+};

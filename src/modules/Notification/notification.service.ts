@@ -22,7 +22,7 @@ export const createManyNotification = async (
   try {
     await notificationModel.create(notifications);
     receiverIds.forEach((userId) => {
-      io.emit(`notification_${userId}`, { message: 'You have a new notification' });
+      io.emit(`notification_${userId}`, { type: type });
     });
   } catch (error) {
     throw error;
