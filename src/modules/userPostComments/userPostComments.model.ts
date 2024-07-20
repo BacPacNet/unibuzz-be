@@ -5,7 +5,7 @@ const userPostCommentsSchema = new Schema<userPostCommentsInterface>(
   {
     userPostId: {
       type: Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'UserPost',
       required: true,
     },
     commenterId: {
