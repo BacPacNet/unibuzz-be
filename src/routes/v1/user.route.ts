@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
-import { auth } from '../../modules/auth';
+// import { auth } from '../../modules/auth';
 import { userController, userIdAuth, userValidation } from '../../modules/user';
 
 const router: Router = express.Router();
@@ -8,7 +8,7 @@ const router: Router = express.Router();
 router
   .route('/')
   .post(validate(userValidation.createUser), userController.createUser)
-  .get(auth('getUsers'), validate(userValidation.getUsers), userController.getUsers);
+  .get(userIdAuth, userController.getUsersWithProfileData);
 
 router
   .route('/:userId')

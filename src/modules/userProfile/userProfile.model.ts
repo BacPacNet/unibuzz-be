@@ -21,6 +21,24 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   major: String,
   affiliation: String,
   occupation: String,
+  following: [
+    {
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+    },
+  ],
+  followers: [
+    {
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+    },
+  ],
   totalFilled: {
     type: Number,
     default: 0,

@@ -10,11 +10,10 @@ interface extendedRequest extends Request {
 
 // create user post
 export const createUserPost = async (req: extendedRequest, res: Response) => {
-
   try {
-      let post = await userPostService.createUserPost({...req.body, user_id: req.userId});
+    let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
 
-      return res.status(httpStatus.CREATED).send(post);
+    return res.status(httpStatus.CREATED).send(post);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
@@ -57,7 +56,6 @@ export const deleteUserPost = async (req: Request, res: Response, next: NextFunc
 export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
   let timelinePosts: any;
   try {
-
     timelinePosts = await userPostService.getAllPosts(req.userId);
 
     return res.status(200).json({ timelinePosts });

@@ -4,15 +4,9 @@ import express, { Router } from 'express';
 
 const router: Router = express.Router();
 
-router
-  .route('/')
-  .get(userIdAuth, userPostController.getAllUserPosts)
-  .post(userIdAuth, userPostController.createUserPost);
+router.route('/').get(userIdAuth, userPostController.getAllUserPosts).post(userIdAuth, userPostController.createUserPost);
 
-router
-  .route('/:postId')
-  .put(userPostController.updateUserPost)
-  .delete(userPostController.deleteUserPost);
+router.route('/:postId').put(userPostController.updateUserPost).delete(userPostController.deleteUserPost);
 
 router.put('/likeunlike/:postId', userIdAuth, userPostController.likeUnlikePost);
 

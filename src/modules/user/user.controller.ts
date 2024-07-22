@@ -10,6 +10,7 @@ import { userProfileService } from '../userProfile';
 import { notificationService } from '../Notification';
 import { io } from '../../app';
 import { notificationRoleAccess } from '../Notification/notification.interface';
+import { userIdExtend } from 'src/config/userIDType';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -49,7 +50,21 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
-export const joinCommunity = async (req: any, res: Response, next: NextFunction) => {
+export const getUsersWithProfileData = async (req: userIdExtend, res: Response) => {
+  const { name } = req.query as { name?: string };
+  const userID = req.userId;
+
+  try {
+    if (userID) {
+      let user = await userService.getUsersWithProfile(name, userID);
+      return res.status(200).json({ user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const joinCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
   const { communityName } = req.body;
 
@@ -66,7 +81,7 @@ export const joinCommunity = async (req: any, res: Response, next: NextFunction)
   }
 };
 
-export const leaveCommunity = async (req: any, res: Response, next: NextFunction) => {
+export const leaveCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
   try {
     if (typeof communityId == 'string') {
@@ -81,9 +96,9 @@ export const leaveCommunity = async (req: any, res: Response, next: NextFunction
   }
 };
 
-export const findUsersByCommunityId = async (req: any, res: Response, next: NextFunction) => {
+export const findUsersByCommunityId = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
-  const { privacy, name } = req.query;
+  const { privacy, name } = req.query as { name?: string; privacy?: string };
   const userID = req.userId;
 
   try {
@@ -91,17 +106,19 @@ export const findUsersByCommunityId = async (req: any, res: Response, next: Next
       if (!mongoose.Types.ObjectId.isValid(communityId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
-      let user = await userService.findUsersByCommunityId(communityId, privacy, name, userID);
-      return res.status(200).json({ user });
+      if (userID) {
+        let user = await userService.findUsersByCommunityId(communityId, privacy, name, userID);
+        return res.status(200).json({ user });
+      }
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
-export const findUsersByCommunityGroupId = async (req: any, res: Response, next: NextFunction) => {
+export const findUsersByCommunityGroupId = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityGroupId } = req.params;
-  const { name } = req.query;
+  const { name } = req.query as { name?: string };
   const userID = req.userId;
 
   try {
@@ -109,15 +126,17 @@ export const findUsersByCommunityGroupId = async (req: any, res: Response, next:
       if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
-      let user = await userService.findUsersByCommunityGroupId(communityGroupId, name, userID);
-      return res.status(200).json({ user });
+      if (userID) {
+        let user = await userService.findUsersByCommunityGroupId(communityGroupId, name, userID);
+        return res.status(200).json({ user });
+      }
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
-export const updateUserCommunityGroupRole = async (req: any, res: Response, next: NextFunction) => {
+export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityGroupId, role, id } = req.body;
   const userID = req.userId;
 
@@ -136,7 +155,7 @@ export const updateUserCommunityGroupRole = async (req: any, res: Response, next
       };
 
       await notificationService.CreateNotification(notifications);
-      io.emit(`notification_${id}`, { message: 'You have a been assigned' });
+      io.emit(`notification_${id}`, { type: notificationRoleAccess.ASSIGN });
       return res.status(200).json({ user });
     }
   } catch (error: any) {

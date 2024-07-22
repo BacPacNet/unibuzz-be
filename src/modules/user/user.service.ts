@@ -1,10 +1,11 @@
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import User from './user.model';
 import ApiError from '../errors/ApiError';
 import { IOptions, QueryResult } from '../paginate/paginate';
-import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser } from './user.interfaces';
+import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser, IUser } from './user.interfaces';
 import { UserProfile } from '../userProfile';
+import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
 /**
  * Create a user
@@ -91,6 +92,51 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
   return user;
 };
 
+//get Users with Profile data
+export const getUsersWithProfile = async (name: string = '', userId: string) => {
+  const profile: UserProfileDocument | null = await UserProfile.findOne({ users_id: userId }).populate('following.userId');
+  const following = profile?.following as { userId: { _id: Types.ObjectId } }[] | undefined;
+
+  const ids = following && following.map((id) => id.userId._id);
+
+  let query: any;
+
+  query = {
+    $and: [{ _id: { $ne: userId } }, { _id: { $nin: ids } }],
+  };
+
+  if (name) {
+    let nameParts = name.split(' ').filter((part) => part);
+    if (nameParts.length > 1) {
+      query.$and = nameParts.map((part) => ({
+        $or: [{ firstName: new RegExp(part, 'i') }, { lastName: new RegExp(part, 'i') }],
+      }));
+    } else {
+      let regName = new RegExp(name, 'i');
+      query.$or = [{ firstName: regName }, { lastName: regName }];
+    }
+  }
+
+  const user: (IUser & { _id: string })[] | null = await User.find(query).select('firstName lastName _id ').lean();
+
+  const userIds = user && user.map((user) => user._id);
+
+  const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
+    'profile_dp university_name study_year degree major users_id major occupation'
+  );
+
+  const userWithProfile =
+    user &&
+    user.map((user) => {
+      const profile = userProfiles.find((profile) => profile.users_id.toString() == user._id.toString());
+      return {
+        ...user,
+        profile,
+      };
+    });
+  return userWithProfile;
+};
+
 // join community
 
 export const joinCommunity = async (
@@ -161,7 +207,12 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   return updatedUser;
 };
 
-export const findUsersByCommunityId = async (communityId: string, privacy: string, name: string, userID: string) => {
+export const findUsersByCommunityId = async (
+  communityId: string,
+  privacy: string = '',
+  name: string = '',
+  userID: string
+) => {
   try {
     let query: any = {};
 
@@ -215,9 +266,17 @@ export const findUsersByCommunityId = async (communityId: string, privacy: strin
   }
 };
 
-export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string, userID: string) => {
+export const findUsersByCommunityGroupId = async (communityGroupId: string, name: string = '', userID: string) => {
   try {
-    let query: any = {
+    interface UserQuery {
+      'userVerifiedCommunities.communityGroups.communityGroupId': string;
+      _id: {
+        $ne: string; // or mongoose.Types.ObjectId if using ObjectId type
+      };
+      firstName?: string | RegExp;
+    }
+
+    let query: UserQuery = {
       'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
       _id: { $ne: userID },
     };
@@ -225,45 +284,47 @@ export const findUsersByCommunityGroupId = async (communityGroupId: string, name
     const nameRegex = new RegExp(name, 'i');
     query.firstName = nameRegex;
 
-    const users = await User.find(query).select('firstName lastName _id userVerifiedCommunities userUnVerifiedCommunities');
+    const users: (IUser & { _id: string })[] | null = await User.find(query)
+      .select('firstName lastName _id userVerifiedCommunities userUnVerifiedCommunities')
+      .lean();
 
-    const userIds = users.map((user) => user._id);
+    const userIds = users && users.map((user) => user._id);
 
     const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
       'profile_dp university_name study_year degree major users_id'
     );
 
-    const result = users.map((user: any) => {
-      const profile = userProfiles.find((profile) => profile.users_id.toString() === user._id.toString());
+    const result =
+      users &&
+      users.map((user) => {
+        const profile = userProfiles.find((profile) => profile.users_id.toString() === user._id.toString());
 
-      let verifiedGroup;
-      let unVerifiedGroup;
-      if (user.userVerifiedCommunities) {
-        user.userVerifiedCommunities.forEach((verifiedCommunity: any) => {
-          if (verifiedCommunity.communityGroups) {
-            verifiedGroup = verifiedCommunity.communityGroups.find(
-              (group: any) => group.communityGroupId === communityGroupId
-            );
-          }
-        });
-      }
+        let verifiedGroup;
+        let unVerifiedGroup;
+        if (user.userVerifiedCommunities) {
+          user.userVerifiedCommunities.forEach((verifiedCommunity) => {
+            if (verifiedCommunity.communityGroups) {
+              verifiedGroup = verifiedCommunity.communityGroups.find((group) => group.communityGroupId === communityGroupId);
+            }
+          });
+        }
 
-      if (user.userUnVerifiedCommunities) {
-        user.userUnVerifiedCommunities.forEach((unVerifiedCommunity: any) => {
-          if (unVerifiedCommunity.communityGroups) {
-            unVerifiedGroup = unVerifiedCommunity.communityGroups.find(
-              (group: any) => group.communityGroupId === communityGroupId
-            );
-          }
-        });
-      }
+        if (user.userUnVerifiedCommunities) {
+          user.userUnVerifiedCommunities.forEach((unVerifiedCommunity) => {
+            if (unVerifiedCommunity.communityGroups) {
+              unVerifiedGroup = unVerifiedCommunity.communityGroups.find(
+                (group) => group.communityGroupId === communityGroupId
+              );
+            }
+          });
+        }
 
-      return {
-        ...user.toObject(),
-        profile,
-        communityGroup: verifiedGroup || unVerifiedGroup, // Include the matching community group
-      };
-    });
+        return {
+          ...user,
+          profile,
+          communityGroup: verifiedGroup || unVerifiedGroup, // Include the matching community group
+        };
+      });
     return result;
   } catch (error) {
     console.error(error);
@@ -278,11 +339,17 @@ export const updateUserCommunityGroupRole = async (userId: string, communityGrou
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
+  interface groupInter {
+    communityGroupName: String;
+    communityGroupId: String;
+    role: string;
+  }
+
   let updated = false;
 
   // Update the role in userVerifiedCommunities
   user.userVerifiedCommunities.forEach((verifiedCommunity) => {
-    verifiedCommunity.communityGroups.forEach((group: any) => {
+    verifiedCommunity.communityGroups.forEach((group: groupInter) => {
       if (group.communityGroupId === communityGroupId) {
         group.role = role;
         updated = true;
@@ -293,7 +360,7 @@ export const updateUserCommunityGroupRole = async (userId: string, communityGrou
   // Update the role in userUnVerifiedCommunities if not found in userVerifiedCommunities
   if (!updated) {
     user.userUnVerifiedCommunities.forEach((unVerifiedCommunity) => {
-      unVerifiedCommunity.communityGroups.forEach((group: any) => {
+      unVerifiedCommunity.communityGroups.forEach((group: groupInter) => {
         if (group.communityGroupId === communityGroupId) {
           group.role = role;
           updated = true;

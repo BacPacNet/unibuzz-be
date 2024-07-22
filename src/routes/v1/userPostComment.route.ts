@@ -9,10 +9,7 @@ router
   .get(userIdAuth, userPostCommentsController.getAllUserPostComments)
   .post(userIdAuth, userPostCommentsController.CreateComment);
 
-router
-  .route('/:commentId')
-  .put(userPostCommentsController.updateComment)
-  .delete(userPostCommentsController.deleteComment);
+router.route('/:commentId').put(userPostCommentsController.updateComment).delete(userPostCommentsController.deleteComment);
 
 router.put('/likeUnlike/:userPostCommentId', userIdAuth, userPostCommentsController.LikeUserPostComment);
 

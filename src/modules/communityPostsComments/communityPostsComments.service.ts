@@ -18,7 +18,7 @@ export const createCommunityComment = async (userID: string, communityPostId: st
 
   const comment = await communityPostCommentModel.create(newComment);
   await notificationService.CreateNotification(notifications);
-  io.emit(`notification_${body.adminId}`, { message: 'You have a new notification' });
+  io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.COMMENT });
   return comment;
 };
 

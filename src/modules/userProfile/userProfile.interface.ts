@@ -5,6 +5,10 @@ interface userProfileEmail {
   UniversityEmail: string;
 }
 
+interface following {
+  userId: Schema.Types.ObjectId;
+}
+
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
@@ -21,6 +25,8 @@ interface UserProfileDocument {
   major?: string;
   affiliation?: string;
   occupation?: string;
+  following: following[];
+  followers: following[];
   totalFilled: number;
 }
 

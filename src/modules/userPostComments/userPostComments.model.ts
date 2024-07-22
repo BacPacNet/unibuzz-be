@@ -23,9 +23,6 @@ const userPostCommentsSchema = new Schema<userPostCommentsInterface>(
   { timestamps: true }
 );
 
-const userPostCommentsModel = model<userPostCommentsInterface>(
-  'userPostComments',
-  userPostCommentsSchema
-);
+const userPostCommentsModel = model<userPostCommentsInterface>('userPostComments', userPostCommentsSchema);
 
 export default userPostCommentsModel;
