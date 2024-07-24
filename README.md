@@ -238,7 +238,7 @@ CLIENT_URL=http://localhost:5000
 │   ├── custom.d.ts                   # File for extending types from node modules
 │   ├── declaration.d.ts              # File for declaring modules without types
 │   ├── index.ts                      # App entry file
-│   ├── modules                       # Modules such as models, controllers, services 
+│   ├── modules                       # Modules such as models, controllers, services
 │   └── routes                        # Routes
 ├── TODO.md                         # TODO List
 ├── package.json
@@ -456,9 +456,9 @@ const options = {
 
 The `projectBy` option can include multiple criteria (separated by a comma) but cannot include and exclude fields at the same time. Check out the following examples:
 
-  - [x] `name:hide, role:hide` should work
-  - [x] `name:include, role:include` should work
-  - [ ] `name:include, role:hide` will not work
+- [x] `name:hide, role:hide` should work
+- [x] `name:include, role:include` should work
+- [ ] `name:include, role:hide` will not work
 
 The plugin also supports sorting by multiple criteria (separated by a comma): `sortBy: name:desc,role:asc`
 

@@ -36,19 +36,46 @@ export const getAllUniversity = async (page: number, limit: number) => {
 };
 
 export const searchUniversityByQuery = async (searchTerm: string) => {
-  
   const searchQuery = [
     {
       $search: {
-        index: "college_search_index",
+        index: 'college_search_index',
         text: {
           query: searchTerm,
           path: {
-            wildcard: "*"
-          }
-        }
-      }
-    }
+            wildcard: '*',
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        name: 1,
+        country: 1,
+        pathUrl: 1,
+      },
+    },
+  ];
+
+  const universities = await universityModal.aggregate(searchQuery).exec();
+
+  return universities;
+};
+
+export const getUniversity = async (pathUrl: string) => {
+  const searchQuery = [
+    {
+      $search: {
+        index: 'college_search_index',
+        text: {
+          query: pathUrl,
+          path: {
+            wildcard: '*',
+          },
+        },
+      },
+    },
   ];
 
   const universities = await universityModal.aggregate(searchQuery).exec();

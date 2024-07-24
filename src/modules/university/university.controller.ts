@@ -86,3 +86,15 @@ export const searchUniversityByQuery = async (req: Request, res: Response, next:
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'No university Found!'));
   }
 };
+
+// get college data
+export const getUniversity = async (req: Request, res: Response, next: NextFunction) => {
+  const { pathUrl } = req.query;
+
+  try {
+    const result = await universityService.getUniversity(String(pathUrl));
+    res.status(200).json({ result });
+  } catch (error) {
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'No university Found!'));
+  }
+};
