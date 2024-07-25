@@ -126,3 +126,30 @@ export const getAllCommunityPost = async (communityId: string) => {
 
   return postsWithCommentsAndProfiles;
 };
+
+export const getcommunityPost = async (postId: string) => {
+  const post = await communityPostsModel
+    .findById(postId)
+    .populate({
+      path: 'user_id',
+      select: 'firstName lastName',
+    })
+    .lean();
+
+  const comments = await communityPostCommentsModel
+    .find({ communityId: post?._id })
+    .populate({
+      path: 'commenterId',
+      select: 'firstName lastName content _id',
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const profiles = await UserProfile.find({ users_id: post?.user_id });
+
+  return {
+    ...post,
+    comments,
+    profiles,
+  };
+};

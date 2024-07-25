@@ -7,6 +7,7 @@ const router: Router = express.Router();
 router.route('/:communityId').get(userIdAuth, communityPostsController.getAllCommunityPost);
 
 router.route('/').post(userIdAuth, communityPostsController.createCommunityPost);
+router.route('/post/:postId').get(userIdAuth, communityPostsController.getPost);
 
 router
   .route('/:postId')
