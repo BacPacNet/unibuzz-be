@@ -4,6 +4,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
+import { userPostService } from '../userPost';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -98,6 +99,27 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
     if (postId && req.userId) {
       let likeCount = await communityPostsService.likeUnlike(postId, req.userId);
       return res.status(200).json({ likeCount });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getPost = async (req: extendedRequest, res: Response) => {
+  const { postId } = req.params;
+  const { isType } = req.query;
+  let post;
+  try {
+    if (postId) {
+      if (isType == 'CommunityPost') {
+        post = await communityPostsService.getcommunityPost(postId);
+      } else if (isType == 'userPost') {
+        post = await userPostService.getUserPost(postId);
+      } else {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');
+      }
+
+      return res.status(200).json({ post });
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });

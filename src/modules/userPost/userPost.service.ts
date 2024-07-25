@@ -201,3 +201,27 @@ const getCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.Object
 
   return postsWithCommentsAndProfiles;
 };
+
+export const getUserPost = async (postId: string) => {
+  const post = await UserPostModel.findById(postId)
+    .populate({
+      path: 'user_id',
+      select: 'firstName lastName _id',
+    })
+    .lean();
+
+  const comments = await userPostCommentsModel
+    .find({ userPostId: post?._id })
+    .populate({
+      path: 'commenterId',
+      select: 'firstName lastName content _id',
+    })
+    .sort({ createdAt: -1 });
+
+  const profiles = await UserProfile.find({ users_id: post?.user_id });
+  return {
+    ...post,
+    comments,
+    profiles,
+  };
+};
