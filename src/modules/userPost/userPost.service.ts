@@ -4,7 +4,6 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import userPostCommentsModel from '../userPostComments/userPostComments.model';
-import { followingRelationship } from '../userFollow';
 import { User } from '../user';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile } from '../userProfile';
@@ -50,8 +49,8 @@ export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
   const followingAndSelfUserIds = await getFollowingAndSelfUserIds(userId);
 
   // get different types of posts
-  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds);
-  const CommunityPosts = await getCommunityPostsForUserIds(followingAndSelfUserIds);
+  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds!);
+  const CommunityPosts = await getCommunityPostsForUserIds(followingAndSelfUserIds!);
 
   //merge them and sort them by latest
   const allPosts: any = [...UsersPosts, ...CommunityPosts];
@@ -64,8 +63,11 @@ export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
 
 //get user ids of followers and the user itself
 const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId) => {
-  const followingRelationships = await followingRelationship.find({ user_id: userId });
-  const followingUserIds = followingRelationships.map((relationship) => relationship.following_user_id);
+  const followingUsers = await UserProfile.findOne({ users_id: userId});
+  let followingUserIds: mongoose.Schema.Types.ObjectId[] = [];
+  if(followingUsers?.following?.length && followingUsers.following.length > 0) {
+    followingUserIds = followingUsers?.following.map((user) => user.userId);
+  }
   followingUserIds.push(userId);
   return followingUserIds;
 };

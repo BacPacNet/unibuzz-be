@@ -7,6 +7,7 @@ interface userProfileEmail {
 
 interface following {
   userId: Schema.Types.ObjectId;
+  isBlock: boolean;
 }
 
 interface UserProfileDocument {
