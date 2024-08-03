@@ -10,6 +10,12 @@ import { UserProfile } from '../userProfile';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
+export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
+  const UserPosts = await getUserPostsForUserIds([userId]); //get all posts of the user
+
+  return UserPosts;
+}
+
 export const createUserPost = async (post: userPostInterface) => {
   return await UserPostModel.create(post);
 };
@@ -44,7 +50,7 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
 };
 
 //get all posts
-export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
+export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId) => {
   // get user ids of the user and his followers
   const followingAndSelfUserIds = await getFollowingAndSelfUserIds(userId);
 

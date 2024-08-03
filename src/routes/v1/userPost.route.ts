@@ -5,6 +5,7 @@ import express, { Router } from 'express';
 const router: Router = express.Router();
 
 router.route('/').get(userIdAuth, userPostController.getAllUserPosts).post(userIdAuth, userPostController.createUserPost);
+router.route('/timeline').get(userIdAuth, userPostController.getAllTimelinePosts);
 
 router.route('/:postId').put(userPostController.updateUserPost).delete(userPostController.deleteUserPost);
 
