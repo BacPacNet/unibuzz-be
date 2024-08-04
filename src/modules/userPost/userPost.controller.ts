@@ -8,6 +8,19 @@ interface extendedRequest extends Request {
   userId?: string;
 }
 
+// get all user posts
+export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
+
+  try {
+    const userPosts = await userPostService.getAllUserPosts(req.userId);
+
+    return res.status(200).json({ userPosts });
+  } catch (error) {
+    console.log(error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get User Posts'));
+  }
+};
+
 // create user post
 export const createUserPost = async (req: extendedRequest, res: Response) => {
   try {
@@ -53,10 +66,10 @@ export const deleteUserPost = async (req: Request, res: Response, next: NextFunc
 };
 
 //get all user posts
-export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
+export const getAllTimelinePosts = async (req: any, res: Response, next: NextFunction) => {
   let timelinePosts: any;
   try {
-    timelinePosts = await userPostService.getAllPosts(req.userId);
+    timelinePosts = await userPostService.getAllTimelinePosts(req.userId);
 
     return res.status(200).json({ timelinePosts });
   } catch (error) {
