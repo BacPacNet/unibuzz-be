@@ -63,9 +63,9 @@ export const getAllPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
 
 //get user ids of followers and the user itself
 const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId) => {
-  const followingUsers = await UserProfile.findOne({ users_id: userId});
+  const followingUsers = await UserProfile.findOne({ users_id: userId });
   let followingUserIds: mongoose.Schema.Types.ObjectId[] = [];
-  if(followingUsers?.following?.length && followingUsers.following.length > 0) {
+  if (followingUsers?.following?.length && followingUsers.following.length > 0) {
     followingUserIds = followingUsers?.following.map((user) => user.userId);
   }
   followingUserIds.push(userId);

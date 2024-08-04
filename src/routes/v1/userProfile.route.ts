@@ -4,14 +4,13 @@ import express, { Router } from 'express';
 
 const router: Router = express.Router();
 
-router
-  .route('/')
-  .get(userIdAuth, userProfileController.getAllUserFollow)
-  .put(userIdAuth, userProfileController.toggleFollow);
+router.route('/').put(userIdAuth, userProfileController.toggleFollow);
 
 router.route('/me').get(userIdAuth, userProfileController.getUserProfile);
 
 router.route('/followers').get(userIdAuth, userProfileController.getAllUserFollowers);
+router.route('/following').get(userIdAuth, userProfileController.getAllUserFollow);
+router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
 
 router.route('/:userProfileId').put(userProfileController.updateUserProfile);
 

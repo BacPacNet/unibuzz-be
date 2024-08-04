@@ -31,7 +31,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
       isBlock: {
         type: Boolean,
         default: false,
-      }
+      },
     },
   ],
   followers: [
@@ -44,7 +44,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
       isBlock: {
         type: Boolean,
         default: false,
-      }
+      },
     },
   ],
   totalFilled: {
