@@ -77,3 +77,15 @@ export const getUserProfile = async (req: userIdExtend, res: Response) => {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  try {
+    if (userID) {
+      let blockedUsers = await userProfileService.getBlockedUsers(userID);
+      return res.status(200).json({ blockedUsers });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};

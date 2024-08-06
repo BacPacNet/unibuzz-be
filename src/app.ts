@@ -12,8 +12,8 @@ import { jwtStrategy } from './modules/auth';
 import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
-import { Server as SocketIoServer } from 'socket.io';
-import { createServer } from 'http';
+// import { Server as SocketIoServer } from 'socket.io';
+// import { createServer } from 'http';
 
 const app: Express = express();
 
@@ -54,23 +54,24 @@ if (config.env === 'production') {
 // v1 api routes
 app.use('/v1', routes);
 
-const httpServer = createServer(app);
-const io = new SocketIoServer(httpServer, {
-  cors: {
-    origin: '*',
-  },
-});
+// const httpServer = createServer(app);
 
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  console.log('A client connected');
+// const io = new SocketIoServer(httpServer, {
+//   cors: {
+//     origin: '*',
+//   },
+// });
 
-  socket.on('disconnect', () => {
-    console.log('A client disconnected');
-  });
-});
+// // Socket.io connection handling
+// io.on('connection', (socket) => {
+//   console.log('A client connected');
 
-httpServer.listen(9000);
+//   socket.on('disconnect', () => {
+//     console.log('A client disconnected');
+//   });
+// });
+
+// httpServer.listen(9000);
 
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {
@@ -83,6 +84,6 @@ app.use(errorConverter);
 // handle error
 app.use(errorHandler);
 
-export { io };
+// export { io };
 
 export default app;

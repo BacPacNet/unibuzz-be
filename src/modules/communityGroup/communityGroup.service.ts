@@ -62,7 +62,6 @@ export const joinLeaveCommunityGroup = async (userID: string, groupId: string, r
     const community: any = await getCommunityGroup(groupId);
 
     const communityIdStr = community?.communityId.toString();
-    console.log(role);
     let message;
     const communityGroup: any = {
       communityGroupName: community?.title,

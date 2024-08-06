@@ -97,7 +97,7 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
   const profile: UserProfileDocument | null = await UserProfile.findOne({ users_id: userId }).populate('following.userId');
   const following = profile?.following as { userId: { _id: Types.ObjectId } }[] | undefined;
 
-  const ids = following && following.map((id) => id.userId._id);
+  const ids = following && following.map((id) => id.userId && id.userId._id);
 
   let query: any;
 
@@ -127,13 +127,16 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
 
   const userWithProfile =
     user &&
-    user.map((user) => {
-      const profile = userProfiles.find((profile) => profile.users_id.toString() == user._id.toString());
-      return {
-        ...user,
-        profile,
-      };
-    });
+    user
+      .map((user) => {
+        const profile = userProfiles.find((profile) => profile.users_id.toString() == user._id.toString());
+        return {
+          ...user,
+          profile,
+        };
+      })
+      .filter((user) => user.profile !== undefined);
+
   return userWithProfile;
 };
 

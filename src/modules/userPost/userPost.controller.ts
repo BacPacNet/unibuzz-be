@@ -10,7 +10,6 @@ interface extendedRequest extends Request {
 
 // get all user posts
 export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
-
   try {
     const userPosts = await userPostService.getAllUserPosts(req.userId);
 
