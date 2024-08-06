@@ -8,7 +8,8 @@ const chatSchema = new Schema<chatInterface>(
     groupLogo: { imageUrl: String, publicId: String },
     groupDescription: { type: String },
     users: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    isBlock: Boolean,
+    isBlock: { type: Boolean, default: false },
+    isRequestAccepted: { type: Boolean, default: false },
     latestMessage: {
       type: Schema.Types.ObjectId,
       ref: 'Message',

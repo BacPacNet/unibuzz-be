@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import notificationModel from './notification.modal';
-import { io } from '../../app';
+import { io } from '../../index';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,

@@ -127,13 +127,16 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
 
   const userWithProfile =
     user &&
-    user.map((user) => {
-      const profile = userProfiles.find((profile) => profile.users_id.toString() == user._id.toString());
-      return {
-        ...user,
-        profile,
-      };
-    });
+    user
+      .map((user) => {
+        const profile = userProfiles.find((profile) => profile.users_id.toString() == user._id.toString());
+        return {
+          ...user,
+          profile,
+        };
+      })
+      .filter((user) => user.profile !== undefined);
+
   return userWithProfile;
 };
 

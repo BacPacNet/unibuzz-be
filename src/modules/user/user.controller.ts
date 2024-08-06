@@ -8,7 +8,7 @@ import { IOptions } from '../paginate/paginate';
 import * as userService from './user.service';
 import { userProfileService } from '../userProfile';
 import { notificationService } from '../Notification';
-import { io } from '../../app';
+import { io } from '../../index';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { userIdExtend } from 'src/config/userIDType';
 

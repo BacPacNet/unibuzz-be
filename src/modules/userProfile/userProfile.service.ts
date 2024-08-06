@@ -5,7 +5,7 @@ import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
-import { io } from '../../app';
+import { io } from '../../index';
 
 export const createUserProfile = async (user: any, dob: string, country: string, city: string, percent: number = 0) => {
   return await UserProfile.create({ users_id: user, dob, country, city, totalFilled: percent });
@@ -176,17 +176,14 @@ export const getFollowers = async (name: string = '', userId: string) => {
 
 export const getBlockedUsers = async (userId: string) => {
   const userProfileData = await UserProfile.findOne({ users_id: userId });
-  // console.log(userProfile);
 
   const followingBlockedUsers = userProfileData?.following.filter((item) => item.isBlock == true);
   const followersBlockedUsers = userProfileData?.followers.filter((item) => item.isBlock == true);
   const followingBlockedUsersIds = followingBlockedUsers?.map((item) => item.userId.toString()) || [];
   const followersBlockedUsersIds = followersBlockedUsers?.map((item) => item.userId.toString()) || [];
 
-  // console.log(followingBlockedUsersIds,"fff",followersBlockedUsersIds);
   const allBlockedUserIds = [...followingBlockedUsersIds, ...followersBlockedUsersIds];
   const UniqueBlockUserId = Array.from(new Set(allBlockedUserIds));
-  // console.log("uniq",UniqueBlockUserId);
 
   const allUsers = await UserProfile.find({ users_id: { $in: UniqueBlockUserId } })
     .populate('users_id')

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import communityPostCommentModel from './communityPostsComments.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { io } from '../../app';
+import { io } from '../../index';
 import { notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 

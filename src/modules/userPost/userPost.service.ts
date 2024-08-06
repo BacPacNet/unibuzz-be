@@ -14,7 +14,7 @@ export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId) =>
   const UserPosts = await getUserPostsForUserIds([userId]); //get all posts of the user
 
   return UserPosts;
-}
+};
 
 export const createUserPost = async (post: userPostInterface) => {
   return await UserPostModel.create(post);

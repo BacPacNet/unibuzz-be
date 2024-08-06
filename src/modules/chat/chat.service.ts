@@ -33,6 +33,7 @@ export const createChat = async (yourId: string, userId: string) => {
     chatName: 'OneToOne',
     isGroupChat: false,
     users: [yourId, userId],
+    groupAdmin: yourId,
   };
   const chat = await chatModel.create(chatToCreate);
 

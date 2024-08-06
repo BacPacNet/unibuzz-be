@@ -13,6 +13,7 @@ interface chatInterface {
   latestMessage: mongoose.Types.ObjectId;
   groupAdmin: mongoose.Types.ObjectId;
   isBlock: boolean;
+  isRequestAccepted: boolean;
 }
 
 export { chatInterface };
