@@ -57,31 +57,6 @@ export const updateMessageSeen = async (messageId: string, readByUserId: string)
 };
 
 export const reactToMessage = async (id: any, userId: string, emoji: string) => {
-  // const message = await messageModel.findById(id);
-  // if (!message) {
-  //   throw new Error('Message not found');
-  // }
-
-  // const userReaction = message.reactions.find((x) => x.userId === userId);
-
-  // let update;
-
-  // if (!userReaction) {
-  //   // Add a new reaction if the user hasn't reacted yet
-  //   update = { $push: { reactions: { userId, emoji } } };
-  // } else if (userReaction.emoji === emoji) {
-  //   // Remove the reaction if the user reacted with the same emoji
-  //   update = { $pull: { reactions: { userId, emoji } } };
-  // } else {
-  //   // Update the reaction if the user reacted with a different emoji
-  //   update = { $set: { "reactions.$.emoji": emoji } };
-  // }
-
-  // // Update and return the modified document
-  // const updatedMessage = await messageModel.findByIdAndUpdate(id, update, { new: true });
-
-  // return updatedMessage;
-
   const message = await messageModel.findById(id);
 
   if (!message) {

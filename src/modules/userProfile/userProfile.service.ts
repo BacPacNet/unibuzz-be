@@ -181,10 +181,9 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
 
   const followersIds = profile.followers.map((id: { userId: { _id: string } }) => id.userId._id);
   const followingIds = profile.following.map((id: { userId: { _id: string } }) => id.userId._id);
-  // return console.log("ids",followingIds,followersIds);
+
   const uniqueIds = new Set([...followersIds, ...followingIds]);
   const ids = Array.from(uniqueIds);
-  //  return console.log("ids",ids);
 
   if (name) {
     let nameParts = name.split(' ');

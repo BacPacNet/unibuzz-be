@@ -6,9 +6,6 @@ import { Server as SocketIoServer, Socket } from 'socket.io';
 import { handleNewMessage } from './sockets/messageHandlers';
 import { OnlineUsers } from './sockets/onlineUsers';
 import { handleConnection } from './sockets/connectionHandler3';
-// import { handleConnection2 } from './sockets/connectionHandler2';
-
-// import { handleConnection } from './sockets/connectionHandlers';
 
 let server: any;
 let io: any;

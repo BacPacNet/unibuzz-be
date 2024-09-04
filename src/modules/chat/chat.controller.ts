@@ -59,7 +59,6 @@ export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
           acceptRequest,
         };
       });
-      // return console.log("userstoAdd",usersToAdd);
 
       const newGroup = await chatService.createGroupChat(userID, usersToAdd, groupName, groupDescription, groupLogo);
       return res.status(201).json(newGroup);
