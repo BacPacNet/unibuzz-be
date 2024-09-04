@@ -7,9 +7,14 @@ const chatSchema = new Schema<chatInterface>(
     isGroupChat: { type: Boolean, default: false },
     groupLogo: { imageUrl: String, publicId: String },
     groupDescription: { type: String },
-    users: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    users: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: 'User' },
+        isRequestAccepted: { type: Boolean, default: null },
+      },
+    ],
     isBlock: { type: Boolean, default: false },
-    isRequestAccepted: { type: Boolean, default: false },
+    isRequestAccepted: { type: Boolean, default: false || null },
     latestMessage: {
       type: Schema.Types.ObjectId,
       ref: 'Message',

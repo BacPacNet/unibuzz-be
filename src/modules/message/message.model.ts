@@ -9,6 +9,7 @@ const messageSchema = new Schema<messageInterface>(
     chat: { type: Schema.Types.ObjectId, ref: 'Chat' },
     readByUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     media: [{ imageUrl: String, publicId: String }],
+    reactions: [{ userId: String, emoji: String }],
   },
   { timestamps: true }
 );

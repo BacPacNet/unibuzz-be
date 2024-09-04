@@ -174,6 +174,58 @@ export const getFollowers = async (name: string = '', userId: string) => {
   return filteredUserFollows;
 };
 
+export const getFollowersAndFollowing = async (name: string = '', userId: string) => {
+  let firstNametoPush: any;
+  let lastNametopush: any;
+  const profile: any = await UserProfile.findOne({ users_id: userId });
+
+  const followersIds = profile.followers.map((id: { userId: { _id: string } }) => id.userId._id);
+  const followingIds = profile.following.map((id: { userId: { _id: string } }) => id.userId._id);
+  // return console.log("ids",followingIds,followersIds);
+  const uniqueIds = new Set([...followersIds, ...followingIds]);
+  const ids = Array.from(uniqueIds);
+  //  return console.log("ids",ids);
+
+  if (name) {
+    let nameParts = name.split(' ');
+    if (nameParts.length > 1) {
+      firstNametoPush = nameParts[0];
+      lastNametopush = nameParts[1];
+    } else {
+      firstNametoPush = name;
+    }
+  }
+
+  const userFollows = await UserProfile.find({
+    $and: [{ users_id: { $in: ids } }],
+  })
+    .populate({
+      path: 'users_id',
+      select: 'firstName lastName',
+      match: {
+        $or: [
+          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+        ],
+      },
+    })
+    .select('profile_dp')
+    .exec();
+
+  const filteredUserFollows = userFollows.filter((profile) => profile.users_id !== null);
+  const result = filteredUserFollows?.map((profile: any) => ({
+    _id: profile.users_id._id,
+    firstName: profile.users_id.firstName,
+    lastName: profile.users_id.lastName,
+    profile: {
+      _id: profile._id,
+      profile_dp: profile.profile_dp,
+    },
+  }));
+  const finalResult = { user: result };
+  return finalResult;
+};
+
 export const getBlockedUsers = async (userId: string) => {
   const userProfileData = await UserProfile.findOne({ users_id: userId });
 
