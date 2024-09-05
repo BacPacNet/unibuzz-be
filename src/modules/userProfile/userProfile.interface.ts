@@ -13,8 +13,8 @@ interface following {
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
-  profile_dp?: { imageUrl: String; publicId: String };
-  cover_dp?: { imageUrl: String; publicId: String };
+  profile_dp?: { imageUrl: string; publicId: string };
+  cover_dp?: { imageUrl: string; publicId: string };
   bio?: string;
   phone_number?: string;
   dob?: Date;

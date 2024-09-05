@@ -66,6 +66,21 @@ export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const getAllUserFollowersAndFollowing = async (req: userIdExtend, res: Response) => {
+  const { name } = req.query as { name?: string };
+
+  try {
+    if (req.userId) {
+      let user = await userProfileService.getFollowersAndFollowing(name, req.userId);
+      return res.status(200).json(user);
+    }
+  } catch (error: any) {
+    console.log(error);
+
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getUserProfile = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   try {

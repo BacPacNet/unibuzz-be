@@ -2,11 +2,14 @@ import mongoose from 'mongoose';
 import app from './app';
 import config from './config/config';
 import logger from './modules/logger/logger';
-import { Server as SocketIoServer } from 'socket.io';
+import { Server as SocketIoServer, Socket } from 'socket.io';
+import { handleNewMessage } from './sockets/messageHandlers';
+import { OnlineUsers } from './sockets/onlineUsers';
+import { handleConnection } from './sockets/connectionHandler3';
 
 let server: any;
 let io: any;
-
+const onlineUsers = new OnlineUsers();
 mongoose.connect(config.mongoose.url).then(() => {
   logger.info('Connected to MongoDB');
   server = app.listen(config.port, () => {
@@ -18,12 +21,9 @@ mongoose.connect(config.mongoose.url).then(() => {
     });
 
     // Socket.io connection handling
-    io.on('connection', (socket: any) => {
-      console.log('A client connected');
-
-      socket.on('disconnect', () => {
-        console.log('A client disconnected');
-      });
+    io.on('connection', (socket: Socket) => {
+      handleConnection(socket, io, onlineUsers);
+      handleNewMessage(socket, io);
     });
   });
 });
