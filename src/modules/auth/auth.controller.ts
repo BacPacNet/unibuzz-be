@@ -17,6 +17,15 @@ export const register = catchAsync(async (req: Request, res: Response) => {
   res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
 });
 
+export const register_v2 = catchAsync(async (req: Request, res: Response) => {
+  const { birthDate, country, universityEmail, ...body } = req.body;
+  let universityName = '';
+
+  const user = await userService.registerUser(body);
+  await userProfileService.createUserProfile(user._id, birthDate, country, '', 23, universityEmail, universityName);
+  res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
+});
+
 export const login = catchAsync(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const user = await authService.loginUserWithEmailAndPassword(email, password);

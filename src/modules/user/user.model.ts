@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       required: true,
       trim: true,
     },
+    userName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     email: {
       type: String,
       required: true,
@@ -35,11 +40,11 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       required: true,
       trim: true,
       minlength: 8,
-      validate(value: string) {
-        if (!value.match(/\d/) || !value.match(/[a-zA-Z]/)) {
-          throw new Error('Password must contain at least one letter and one number');
-        }
-      },
+      // validate(value: string) {
+      //   if (!value.match(/\d/) || !value.match(/[a-zA-Z]/)) {
+      //     throw new Error('Password must contain at least one letter and one number');
+      //   }
+      // },
       private: true, // used by the toJSON plugin
     },
 
@@ -57,7 +62,7 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
 
     isEmailVerified: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     userVerifiedCommunities: [
       {
