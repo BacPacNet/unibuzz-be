@@ -162,3 +162,15 @@ export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Respo
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const checkUserEmailAndUserNameAvailability = async (req: Request, res: Response) => {
+  const { email, userName } = req.body;
+
+  try {
+    await userService.UserEmailAndUserNameAvailability(email, userName);
+    return res.status(httpStatus.OK).json({ message: 'Email and username are available', isAvailable: true });
+  } catch (error: any) {
+    console.log('err', error.message);
+    return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
+  }
+};

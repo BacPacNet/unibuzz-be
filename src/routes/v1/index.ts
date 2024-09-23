@@ -15,6 +15,8 @@ import config from '../../config/config';
 import userPostCommentsRoute from './userPostComment.route';
 import chatRoute from './chat.route';
 import messageRoute from './message.route';
+import loginEmailVerificationRoute from './loginEmailVerification.route';
+import universityEmailVerificationRoute from './universityVerificationEmail.route';
 
 const router = express.Router();
 
@@ -31,6 +33,14 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/users',
     route: userRoute,
+  },
+  {
+    path: '/useremailverification',
+    route: loginEmailVerificationRoute,
+  },
+  {
+    path: '/universityemailverification',
+    route: universityEmailVerificationRoute,
   },
   {
     path: '/university',

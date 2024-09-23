@@ -7,8 +7,29 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
 
-export const createUserProfile = async (user: any, dob: string, country: string, city: string, percent: number = 0) => {
-  return await UserProfile.create({ users_id: user, dob, country, city, totalFilled: percent });
+export const createUserProfile = async (
+  user: any,
+  dob: string,
+  country: string,
+  city: string = '',
+  percent: number = 0,
+  universityEmail: string = '',
+  universityName: string = 'test'
+) => {
+  let emailField = [];
+
+  if (universityEmail) {
+    emailField.push({ UniversityName: universityName, UniversityEmail: universityEmail });
+  }
+
+  return await UserProfile.create({
+    users_id: user,
+    dob,
+    country,
+    city,
+    totalFilled: percent,
+    ...(emailField.length > 0 && { email: emailField }),
+  });
 };
 
 export const getUserProfile = async (id: string) => {

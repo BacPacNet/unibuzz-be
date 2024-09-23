@@ -379,3 +379,17 @@ export const updateUserCommunityGroupRole = async (userId: string, communityGrou
   await user.save();
   return user;
 };
+
+export const UserEmailAndUserNameAvailability = async (email: string, userName: string) => {
+  const [userEmail, userNameAvailable] = await Promise.all([User.findOne({ email }), User.findOne({ userName })]);
+
+  if (userEmail) {
+    throw new ApiError(httpStatus.CONFLICT, 'Email is already taken');
+  }
+
+  if (userNameAvailable) {
+    throw new ApiError(httpStatus.CONFLICT, 'userName Already taken');
+  }
+
+  return { message: 'Both email and username are available' };
+};
