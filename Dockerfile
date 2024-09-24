@@ -23,4 +23,6 @@ RUN yarn install --production=false --pure-lockfile
 
 COPY --from=base /usr/src/app/dist ./dist
 
+EXPOSE 5000
+
 CMD [ "yarn", "run", "dev"]
