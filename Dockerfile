@@ -3,6 +3,8 @@ FROM node:14 as base
 
 WORKDIR /usr/src/app
 
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
 COPY package.json yarn.lock tsconfig.json ecosystem.config.json ./
 
 COPY ./src ./src
