@@ -7,37 +7,25 @@ export const createCommunity = async (
   name: string,
   adminId: string,
   collegeID: string,
-  studentsAndFacultiesData: any,
+  numberOfStudent: string,
+  numberOfFaculty: string,
   coverImg: any,
-  logo: any
+  logo: any,
+  about: string
 ) => {
   const coverImage = coverImg[0] ? coverImg[0] : '';
   const logoImage = logo[0] ? logo[0] : '';
-  const studentsAndFacultiesDataObject =
-    studentsAndFacultiesData && studentsAndFacultiesData.toObject ? studentsAndFacultiesData.toObject() : [];
-  const mapStudents = studentsAndFacultiesDataObject
-    .map((item: { [key: string]: any }) => {
-      const value = item['Total students'];
-      return typeof value === 'string' ? parseInt(value.replace(/,/g, ''), 10) : value;
-    })
-    .filter((value: any) => typeof value === 'number');
-
-  const mapFaculty = studentsAndFacultiesDataObject
-    .map((item: { [key: string]: any }) => {
-      const value = item['Total faculty staff'];
-      return typeof value === 'string' ? parseInt(value.replace(/,/g, ''), 10) : value;
-    })
-    .filter((value: any) => typeof value === 'number');
 
   const data = {
     name,
     adminId,
     collegeID,
-    numberOfStudent: mapStudents[0] || 0,
-    numberOfFaculty: mapFaculty[0] || 0,
+    numberOfStudent: numberOfStudent || 0,
+    numberOfFaculty: numberOfFaculty || 0,
     numberOfUser: 0,
     communityCoverUrl: { imageUrl: coverImage },
     communityLogoUrl: { imageUrl: logoImage },
+    about,
   };
   return await communityModel.create(data);
 };
@@ -71,4 +59,10 @@ export const updateCommunity = async (id: string, community: any) => {
   Object.assign(communityToUpadate, community);
   await communityToUpadate.save();
   return communityToUpadate;
+};
+
+export const communityMemberToggle = async (communityId: string, isMember: boolean) => {
+  const incrementValue = isMember ? 1 : -1;
+
+  await communityModel.findOneAndUpdate({ _id: communityId }, { $inc: { numberOfUser: incrementValue } });
 };

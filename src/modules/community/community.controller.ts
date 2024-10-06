@@ -4,9 +4,9 @@ import { ApiError } from '../errors';
 import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
-import { communityGroupService } from '../communityGroup';
-import { userService } from '../user';
-import { communityGroupRoleAccess } from '../user/user.interfaces';
+// import { communityGroupService } from '../communityGroup';
+// import { userService } from '../user';
+// import { communityGroupRoleAccess } from '../user/user.interfaces';
 
 // get all userCommunity
 export const getAllUserCommunity = async (req: any, res: Response, next: NextFunction) => {
@@ -64,25 +64,30 @@ export const CreateCommunity = async (req: any, res: Response) => {
       throw new ApiError(httpStatus.BAD_REQUEST, 'community Not Allowed');
     }
 
+    // return  console.log("colle",college.topUniInfo.studentsAndFacultiesData.Total_students.Total_students)
+    // return  console.log("colle",college.topUniInfo.studentsAndFacultiesData.Total_faculty_staff);
+
     const community: any = await communityService.createCommunity(
       college.name,
       userID,
       collegeID,
-      college.topUniInfo.studentsAndFacultiesData,
+      college.topUniInfo.studentsAndFacultiesData.Total_students.Total_students,
+      college.topUniInfo.studentsAndFacultiesData.Total_faculty_staff.Total_faculty_staff,
       college.images,
-      college.logos
+      college.logos,
+      college.topUniInfo.about
     );
-    await userService.joinCommunity(userID, String(community._id), community.name, true);
-    const dataForCommunityGroup = {
-      title: community.name,
-      communityGroupLogoCoverUrl: {
-        imageUrl: community.communityCoverUrl.imageUrl ? community.communityCoverUrl.imageUrl : '',
-      },
-      communityGroupLogoUrl: { imageUrl: community.communityLogoUrl.imageUrl ? community.communityLogoUrl.imageUrl : '' },
-    };
+    // await userService.joinCommunity(userID, String(community._id), community.name, true);
+    // const dataForCommunityGroup = {
+    //   title: community.name,
+    //   communityGroupLogoCoverUrl: {
+    //     imageUrl: community.communityCoverUrl.imageUrl ? community.communityCoverUrl.imageUrl : '',
+    //   },
+    //   communityGroupLogoUrl: { imageUrl: community.communityLogoUrl.imageUrl ? community.communityLogoUrl.imageUrl : '' },
+    // };
 
-    const communityGroup = await communityGroupService.createCommunityGroup(userID, community._id, dataForCommunityGroup);
-    await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id), communityGroupRoleAccess.Admin);
+    // const communityGroup = await communityGroupService.createCommunityGroup(userID, community._id, dataForCommunityGroup);
+    // await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id), communityGroupRoleAccess.Admin);
 
     return res.status(201).json({ community });
   } catch (error: any) {

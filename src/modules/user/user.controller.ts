@@ -163,6 +163,25 @@ export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Respo
   }
 };
 
+export const updateUserCommunityRole = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { communityId, role, userID } = req.body;
+  // const userID = req.userId;
+
+  try {
+    if (typeof communityId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+      let user = await userService.updateUserCommunityRole(userID, communityId, role);
+
+      return res.status(200).json({ user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const checkUserEmailAndUserNameAvailability = async (req: Request, res: Response) => {
   const { email, userName } = req.body;
 

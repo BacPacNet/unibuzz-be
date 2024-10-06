@@ -11,6 +11,7 @@ interface image {
 
 interface communityPostsInterface {
   communityId: Schema.Types.ObjectId;
+  communiyGroupId: Schema.Types.ObjectId;
   content: string;
   user_id: Schema.Types.ObjectId;
   imageUrl?: image[];

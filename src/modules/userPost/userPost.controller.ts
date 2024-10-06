@@ -21,6 +21,16 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
 };
 
 // create user post
+// export const createUserPost = async (req: extendedRequest, res: Response) => {
+//   try {
+//     let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
+
+//     return res.status(httpStatus.CREATED).send(post);
+//   } catch (error: any) {
+//     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+//   }
+// };
+
 export const createUserPost = async (req: extendedRequest, res: Response) => {
   try {
     let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });

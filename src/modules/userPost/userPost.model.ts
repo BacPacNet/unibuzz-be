@@ -9,7 +9,7 @@ const userPostSchema = new Schema<userPostInterface>(
       required: true,
     },
     content: { type: String },
-    imageUrl: { imageUrl: String, publicId: String },
+    imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
   },
   { timestamps: true }

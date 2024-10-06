@@ -68,9 +68,17 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   return await communityPostsModel.findByIdAndDelete(id);
 };
 
-export const getAllCommunityPost = async (communityId: string) => {
-  const posts: any = await communityPostsModel
-    .find({ communityId })
+export const getAllCommunityPost = async (communityId: string, communityGroupId?: string) => {
+  const query: any = { communityId: new mongoose.Types.ObjectId(communityId) };
+
+  if (communityGroupId !== undefined && communityGroupId.length > 0) {
+    query.communiyGroupId = new mongoose.Types.ObjectId(communityGroupId);
+  } else {
+    query.communiyGroupId = { $exists: false };
+  }
+
+  const posts = await communityPostsModel
+    .find(query)
     .populate({
       path: 'user_id',
       select: 'firstName lastName',
@@ -78,7 +86,8 @@ export const getAllCommunityPost = async (communityId: string) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  const postIds = posts.map((post: any) => post._id);
+  const postIds = posts?.length ? posts.map((post: any) => post._id) : [];
+
   const comments = await communityPostCommentsModel.find({ communityId: { $in: postIds } }).populate({
     path: 'commenterId',
     select: 'firstName lastName content _id',
@@ -107,6 +116,9 @@ export const getAllCommunityPost = async (communityId: string) => {
           commenterId: {
             ...comment.commenterId.toObject(),
             profile_dp: commenterProfile ? commenterProfile.profile_dp : null,
+            university_name: commenterProfile ? commenterProfile.university_name : null,
+            study_year: commenterProfile ? commenterProfile.study_year : null,
+            degree: commenterProfile ? commenterProfile.degree : null,
           },
         };
       });
