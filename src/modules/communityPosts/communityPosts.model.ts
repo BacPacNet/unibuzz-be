@@ -4,7 +4,8 @@ import { CommunityType } from '../../config/community.type';
 
 const communityPostSchema = new Schema<communityPostsInterface>(
   {
-    communityId: { type: String, required: true },
+    communityId: { type: Schema.Types.ObjectId, ref: 'community', required: true },
+    communiyGroupId: { type: Schema.Types.ObjectId, ref: 'communityGroup', required: false },
     user_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',

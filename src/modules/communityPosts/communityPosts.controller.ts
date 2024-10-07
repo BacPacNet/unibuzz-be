@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
 import { userPostService } from '../userPost';
+import { communityService } from '../community';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -20,6 +21,12 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
     if (adminId && mongoose.Types.ObjectId.isValid(adminId)) {
       adminObjectId = new mongoose.Types.ObjectId(adminId);
 
+      if (req.body.communityId && !req.body.communiyGroupId) {
+        const community = await communityService.getCommunity(req.body.communityId);
+        if (adminId !== String(community?.adminId)) {
+          throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
+        }
+      }
       post = await communityPostsService.createCommunityPost(req.body, adminObjectId);
 
       return res.status(httpStatus.CREATED).send(post);
@@ -69,20 +76,29 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
   try {
     const user = await User.findById(req.userId);
 
-    const userVerifiedCommunityIds =
-      user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-    const userUnverifiedVerifiedCommunityIds =
-      user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-    if (
-      !userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityId)) &&
-      !userVerifiedCommunityIds.includes(String(req.params.communityId))
-    ) {
-      next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!'));
+    if (req.params.communityId) {
+      const isVerifiedMember = user?.userVerifiedCommunities?.map(
+        (item) => item.communityId == String(req.params.communityId)
+      );
+      if (!isVerifiedMember) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
+      }
     }
+    if (req.params.communityId && req.params.communityGroupId) {
+      const userVerifiedCommunityIds =
+        user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
 
-    communityPosts = await communityPostsService.getAllCommunityPost(req.params.communityId);
+      const userUnverifiedVerifiedCommunityIds =
+        user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
+
+      if (
+        !userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId)) &&
+        !userVerifiedCommunityIds.includes(String(req.params.communityGroupId))
+      ) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
+      }
+    }
+    communityPosts = await communityPostsService.getAllCommunityPost(req.params.communityId, req.params.communityGroupId);
 
     return res.status(200).json({ communityPosts });
   } catch (error) {

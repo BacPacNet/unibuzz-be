@@ -20,6 +20,7 @@ router
 router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
 
 router.route('/user/GroupRole').put(userIdAuth, userController.updateUserCommunityGroupRole);
+router.route('/user/CommunityRole').put(userIdAuth, userController.updateUserCommunityRole);
 
 router.route('/communityUsers/:communityId').get(userIdAuth, userController.findUsersByCommunityId);
 router.route('/communityGroupUsers/:communityGroupId').get(userIdAuth, userController.findUsersByCommunityGroupId);

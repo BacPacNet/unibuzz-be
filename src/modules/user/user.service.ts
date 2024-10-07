@@ -6,6 +6,7 @@ import { IOptions, QueryResult } from '../paginate/paginate';
 import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser, IUser } from './user.interfaces';
 import { UserProfile } from '../userProfile';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
+import { communityService } from '../community';
 
 /**
  * Create a user
@@ -172,12 +173,15 @@ export const joinCommunity = async (
       { $push: { userVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
       { new: true }
     );
+
+    await communityService.communityMemberToggle(cummunityId, true);
   } else {
     updatedUser = await User.findOneAndUpdate(
       { _id: userId },
       { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
       { new: true }
     );
+    await communityService.communityMemberToggle(cummunityId, false);
   }
 
   return updatedUser;
@@ -250,7 +254,7 @@ export const findUsersByCommunityId = async (
       }
     }
 
-    const users = await User.find(query).select('firstName lastName _id');
+    const users = await User.find(query).select('firstName lastName _id userVerifiedCommunities');
     const userIds = users.map((user) => user._id);
 
     const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
@@ -374,6 +378,31 @@ export const updateUserCommunityGroupRole = async (userId: string, communityGrou
 
   if (!updated) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+  }
+
+  await user.save();
+  return user;
+};
+
+export const updateUserCommunityRole = async (userId: string, communityId: string, role: string) => {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  let updated = false;
+
+  // Update the role in userVerifiedCommunities
+  user.userVerifiedCommunities.forEach((verifiedCommunity) => {
+    if (communityId == verifiedCommunity.communityId.toString()) {
+      verifiedCommunity.role = role;
+      updated = true;
+    }
+  });
+
+  if (!updated) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
 
   await user.save();

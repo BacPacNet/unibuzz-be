@@ -68,6 +68,7 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       {
         communityId: String,
         communityName: String,
+        role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
         communityGroups: [
           {
             communityGroupName: String,

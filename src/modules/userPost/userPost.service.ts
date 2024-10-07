@@ -120,6 +120,9 @@ const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[])
           commenterId: {
             ...comment.commenterId.toObject(),
             profile_dp: commenterProfile ? commenterProfile.profile_dp : null,
+            university_name: commenterProfile ? commenterProfile.university_name : null,
+            study_year: commenterProfile ? commenterProfile.study_year : null,
+            degree: commenterProfile ? commenterProfile.degree : null,
           },
         };
       });

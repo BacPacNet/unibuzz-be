@@ -19,6 +19,7 @@ interface communityGroupsInterface {
 interface verifiedInterface {
   communityId: string;
   communityName: string;
+  role: string;
   communityGroups: communityGroupsInterface[];
 }
 interface unverifiedInterface {

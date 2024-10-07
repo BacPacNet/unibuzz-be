@@ -9,6 +9,7 @@ interface communityInterface {
   numberOfUser: number;
   numberOfStudent: number;
   numberOfFaculty: number;
+  about: string;
 }
 
 export { communityInterface };
