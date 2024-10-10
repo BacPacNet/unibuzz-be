@@ -324,23 +324,7 @@ export const acceptGroupRequest = async (userId: string, chatId: string) => {
   return await chat.save();
 };
 
-// export const messageNotification = async ( userId: string, page: number = 1,
-//   limit: number = 10
-// ) => {
-//   const skip = (page - 1) * limit;
 
-//   const chats: (chatInterface & { _id: string })[] = await chatModel
-//   .find({
-//     users: { $elemMatch: { userId: userId } },
-//   })
-//   .populate({
-//     path: 'users.userId',
-//     select: 'firstName lastName',
-//   })
-//   .populate('latestMessage')
-//   .lean();
-
-// }
 
 export const messageNotification = async (userId: string = '', page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;

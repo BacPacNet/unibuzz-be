@@ -30,18 +30,7 @@ export const createManyNotification = async (
   }
 };
 
-// export const getUserNotification = async (userID: string) => {
-//   const userNotification = await notificationModel
-//     .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
-//     .populate([
-//       { path: 'sender_id', select: 'firstName lastName _id' },
-//       { path: 'communityGroupId', select: 'title  _id' },
-//       { path: 'communityPostId', select: ' _id' },
-//     ])
-//     .sort({ createdAt: -1 });
 
-//   return userNotification;
-// };
 
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
   const skip = (page - 1) * limit;
