@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import notificationModel from './notification.modal';
 import { io } from '../../index';
+import { UserProfile } from '../userProfile';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
@@ -29,17 +30,56 @@ export const createManyNotification = async (
   }
 };
 
-export const getUserNotification = async (userID: string) => {
+
+
+export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
+  const skip = (page - 1) * limit;
+
   const userNotification = await notificationModel
     .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
     .populate([
       { path: 'sender_id', select: 'firstName lastName _id' },
-      { path: 'communityGroupId', select: 'title  _id' },
-      { path: 'communityPostId', select: ' _id' },
+      { path: 'communityGroupId', select: 'title _id' },
+      { path: 'communityPostId', select: '_id' },
     ])
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
 
-  return userNotification;
+  const userIDs = userNotification.map((item) => item.sender_id._id.toString());
+  const uniqueUserIDs = [...new Set(userIDs)];
+  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIDs } })
+    .select('profile_dp users_id')
+    .lean();
+
+  const userNotificationWithDp = userNotification.map((item) => {
+    const userProfile = userProfiles.find((profile) => profile.users_id.toString() === item.sender_id._id.toString());
+
+    const profileDp = userProfile?.profile_dp?.imageUrl ?? '';
+
+    return {
+      ...item,
+      sender_id: {
+        ...item.sender_id,
+        profileDp,
+      },
+    };
+  });
+
+  const totalNotifications = await notificationModel.countDocuments({
+    receiverId: new mongoose.Types.ObjectId(userID),
+    isRead: false,
+  });
+
+  const totalPages = Math.ceil(totalNotifications / limit);
+
+  return {
+    notifications: userNotificationWithDp,
+    currentPage: page,
+    totalPages,
+    totalNotifications,
+  };
 };
 
 export const updateUserNotification = async (id: string) => {

@@ -16,6 +16,7 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
 
       if (room) {
         socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
+        io.emit(`message_notification_${user.userId}`);
       } else {
         console.log(`User ${user} is not in the room, cannot send message`);
       }

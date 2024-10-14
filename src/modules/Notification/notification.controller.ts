@@ -9,10 +9,10 @@ interface extendedRequest extends Request {
 
 export const getGroupNotification = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
-
+  const { page } = req.query;
   try {
     if (userID) {
-      const notification = await notificationService.getUserNotification(userID);
+      const notification = await notificationService.getUserNotification(userID, Number(page));
       return res.status(200).json(notification);
     }
   } catch (error: any) {

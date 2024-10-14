@@ -323,3 +323,76 @@ export const acceptGroupRequest = async (userId: string, chatId: string) => {
 
   return await chat.save();
 };
+
+
+
+export const messageNotification = async (userId: string = '', page: number = 1, limit: number = 10) => {
+  const skip = (page - 1) * limit;
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const chats = await chatModel
+    .find({
+      users: { $elemMatch: { userId: userObjectId } },
+      latestMessage: { $exists: true, $ne: null },
+    })
+    .populate({
+      path: 'users.userId',
+      select: 'firstName lastName',
+    })
+    .populate({
+      path: 'latestMessage',
+      match: {
+        readByUsers: { $ne: userObjectId },
+      },
+    })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  const filteredChats = chats.filter((chat) => chat.latestMessage !== null);
+
+  const userIds = filteredChats.flatMap((chat) =>
+    chat.users.map((user) => {
+      if (typeof user.userId === 'object' && user.userId._id) {
+        return user.userId._id.toString();
+      }
+      return user.userId.toString();
+    })
+  );
+
+  const uniqueUserIds = [...new Set(userIds)];
+
+  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
+    .select('profile_dp users_id')
+    .lean();
+
+  const allChats = filteredChats.map((chat) => {
+    let profileDp: string | null = null;
+
+    if (!chat.isGroupChat) {
+      const otherUser = chat.users.find((user) => user.userId._id.toString() !== userId.toString());
+
+      if (otherUser) {
+        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === otherUser.userId._id.toString());
+        profileDp = userProfile ? userProfile.profile_dp?.imageUrl ?? null : null;
+      }
+    } else {
+      chat.users = chat.users.map((user) => {
+        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId.toString());
+        const profileDp = userProfile ? userProfile.profile_dp?.imageUrl ?? null : null;
+
+        return {
+          ...user,
+          profileDp,
+        };
+      }) as any;
+    }
+
+    return {
+      ...chat,
+      groupLogoImage: profileDp,
+    };
+  });
+
+  return allChats;
+};

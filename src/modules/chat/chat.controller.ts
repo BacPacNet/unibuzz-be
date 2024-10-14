@@ -41,6 +41,17 @@ export const getUserChats = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const getUserMessageNotification = async (req: userIdExtend, res: Response) => {
+  const UserID = req.userId;
+  const { page, limit } = req.query;
+  try {
+    let message = await chatService.messageNotification(UserID, Number(page), Number(limit));
+    return res.status(200).json({ message });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
   const { users, groupName, groupDescription, groupLogo } = req.body;
   const userID = req.userId;
