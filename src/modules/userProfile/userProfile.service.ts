@@ -240,9 +240,9 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
     profile: {
       _id: profile._id,
       profile_dp: profile.profile_dp,
-      degree:profile.degree, 
-      study_year:profile.study_year, 
-      university_name:profile.university_name, 
+      degree: profile.degree,
+      study_year: profile.study_year,
+      university_name: profile.university_name,
     },
   }));
   const finalResult = { user: result };

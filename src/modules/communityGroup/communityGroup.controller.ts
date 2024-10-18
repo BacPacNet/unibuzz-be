@@ -111,7 +111,6 @@ export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Respo
   const userID = req.userId;
   const { groupId } = req.params;
 
-
   let status;
   try {
     if (userID && groupId) {

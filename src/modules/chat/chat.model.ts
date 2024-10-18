@@ -15,7 +15,7 @@ const chatSchema = new Schema<chatInterface>(
       },
     ],
     isBlock: { type: Boolean, default: false },
-    blockedBy:[Schema.Types.ObjectId],
+    blockedBy: [Schema.Types.ObjectId],
     isRequestAccepted: { type: Boolean, default: false || null },
     latestMessage: {
       type: Schema.Types.ObjectId,

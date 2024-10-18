@@ -18,7 +18,6 @@ interface Message {
   updatedAt: Date;
   sender: mongoose.Types.ObjectId;
   readByUsers: mongoose.Types.ObjectId[];
-
 }
 
 interface chatInterface {

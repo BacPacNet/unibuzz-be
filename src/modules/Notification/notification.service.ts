@@ -30,8 +30,6 @@ export const createManyNotification = async (
   }
 };
 
-
-
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
   const skip = (page - 1) * limit;
 
