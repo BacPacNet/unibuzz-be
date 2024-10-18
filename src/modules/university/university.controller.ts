@@ -52,11 +52,22 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
 // get All university
 export const getAllUniversity = async (req: Request, res: Response, next: NextFunction) => {
   const { page, limit } = req.query;
-  let allUniversity;
-
   try {
-    allUniversity = await universityService.getAllUniversity(Number(page), Number(limit));
+    let allUniversity = await universityService.getAllUniversity(Number(page), Number(limit));
     return res.status(200).json({ allUniversity });
+  } catch (error) {
+    console.log(req);
+    console.log(error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));
+  }
+};
+
+// get one university
+export const getUniversityById = async (req: Request, res: Response, next: NextFunction) => {
+  const { university_name } = req.params;
+  try {
+    let university = await universityService.getUniversityById(university_name as string);
+    return res.status(200).json(university);
   } catch (error) {
     console.log(req);
     console.log(error);
