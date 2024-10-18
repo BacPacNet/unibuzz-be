@@ -10,6 +10,8 @@ router.route('/:id').delete(universityController.deleteUniversity).put(universit
 
 router.get('/searched', universityController.searchUniversityByQuery);
 
+router.get('/:university_name', universityController.getUniversityById);
+
 export default router;
 
 /**
