@@ -7,8 +7,8 @@ export const createUniversity = async (university: any) => {
   return await universityModal.create(university);
 };
 
-export const getUniversityById = async (id: any) => {
-  return await universityModal.findById(id).lean();
+export const getUniversityById = async (university_name: string) => {
+  return await universityModal.findOne({ pathUrl: university_name });
 };
 
 export const updateUniversity = async (id: mongoose.Types.ObjectId, university: any) => {
