@@ -12,6 +12,7 @@ export const sendMessge = async (req: userIdExtend, res: Response) => {
   const UserID = req.userId;
   const { content, chatId, media, UserProfileId } = req.body;
 
+  
   try {
     if (UserID) {
       const chat: chatInterface | null = await chatService.getChatById(chatId);

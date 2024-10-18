@@ -110,7 +110,7 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
 export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
   const { groupId } = req.params;
-  console.log('Group', groupId);
+
 
   let status;
   try {

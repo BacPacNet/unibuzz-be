@@ -11,9 +11,11 @@ const chatSchema = new Schema<chatInterface>(
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },
         isRequestAccepted: { type: Boolean, default: null },
+        isStarred: { type: Boolean, default: false },
       },
     ],
     isBlock: { type: Boolean, default: false },
+    blockedBy:[Schema.Types.ObjectId],
     isRequestAccepted: { type: Boolean, default: false || null },
     latestMessage: {
       type: Schema.Types.ObjectId,

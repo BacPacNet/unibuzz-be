@@ -80,9 +80,10 @@ export const getUserChats = async (userId: string) => {
   const uniqueUserIds = [...new Set(userIds)];
 
   const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
-    .select('profile_dp users_id')
+    .select('profile_dp users_id university_name study_year degree')
     .lean();
 
+  
   const messages = await messageModel
     .find({ chat: { $in: chatIds } })
     .sort({ createdAt: -1 })
@@ -120,33 +121,51 @@ export const getUserChats = async (userId: string) => {
 
   const allChats = chats.map((chat) => {
     let profileDp: string | null = null;
-
+  
     if (!chat.isGroupChat) {
-      const otherUser = chat.users.find((user) => user.userId._id.toString() !== userId.toString());
-
-      if (otherUser) {
-        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === otherUser.userId._id.toString());
-        profileDp = userProfile ? userProfile.profile_dp?.imageUrl ?? null : null;
-      }
+      chat.users = chat.users.map((user) => {
+        if (user.userId._id.toString() !== userId.toString()) {
+          const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId._id.toString());
+          profileDp = userProfile?.profile_dp?.imageUrl ?? null
+          return {
+            ...user,
+            userId: {
+              ...user.userId,
+              profileDp: userProfile?.profile_dp?.imageUrl ?? null,
+              universityName: userProfile?.university_name ?? null,
+              studyYear:userProfile?.study_year ?? null,
+              degree:userProfile?.degree ?? null,
+            }
+          };
+        }
+        return user;
+      }) as any;
     } else {
       chat.users = chat.users.map((user) => {
-        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId.toString());
-        const profileDp = userProfile ? userProfile.profile_dp?.imageUrl ?? null : null;
-
+        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId._id.toString());
         return {
           ...user,
-          profileDp,
+          userId: {
+            ...user.userId,
+            profileDp: userProfile?.profile_dp?.imageUrl ?? null,
+            universityName: userProfile?.university_name ?? null,
+            studyYear: userProfile?.study_year ?? null,
+            degree: userProfile?.degree ?? null,
+          }
         };
       }) as any;
     }
-
+    const latestMessageTime = (chat.latestMessage && 'createdAt' in chat.latestMessage) 
+      ? new Date(chat.latestMessage.createdAt).getTime() 
+      : 0;
     return {
       ...chat,
       groupLogoImage: profileDp,
       unreadMessagesCount: getUnreadMessagesCount(messagesByChat[chat._id.toString()] || [], userId),
+      latestMessageTime, 
     };
   });
-
+  allChats.sort((a, b) => b.latestMessageTime - a.latestMessageTime);
   return allChats;
 };
 
@@ -193,7 +212,7 @@ export const toggleAddToGroup = async (userID: string, userToToggleId: string, c
     chat.users = chat.users.filter((item) => item.userId.toString() !== userToToggleId.toString());
     updated = true;
   } else {
-    chat.users.push({ userId: new mongoose.Types.ObjectId(userToToggleId), isRequestAccepted: false });
+    chat.users.push({ userId: new mongoose.Types.ObjectId(userToToggleId), isRequestAccepted: false,isStarred:false });
 
     updated = true;
   }
@@ -226,6 +245,7 @@ export const leaveGroupByUserId = async (userID: string, chatId: string) => {
 
 export const toggleBlock = async (userId: string, userToBlockId: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);
+  
   const userProfile = await userProfileService.getUserProfile(userId);
   if (!chat) {
     throw new ApiError(httpStatus.NOT_FOUND, 'chat does not exist');
@@ -237,16 +257,29 @@ export const toggleBlock = async (userId: string, userToBlockId: string, chatId:
     throw new ApiError(httpStatus.NOT_FOUND, 'this is a group Chat');
   }
 
-  const doesUserExist = chat?.users.some((user) => user.toString() == userId.toString());
-  const doesUserToBlockExist = chat?.users.some((user) => user.toString() == userToBlockId.toString());
+  const doesUserExist = chat?.users.some((user) => user.userId.toString() == userId.toString());
+  const doesUserToBlockExist = chat?.users.some((user) => user.userId.toString() == userToBlockId.toString());
 
   if (!doesUserExist || !doesUserToBlockExist) {
     throw new ApiError(httpStatus.NOT_FOUND, 'chat does not exist');
   }
 
   if (chat.isBlock) {
+    
+  const user = chat.blockedBy.some((item) => item.toString() === userId.toString());
+  if (user) {
+    chat.blockedBy = chat.blockedBy.filter((item) => item.toString() !== userId.toString());
+  }else{
+    chat.blockedBy.push(new mongoose.Types.ObjectId(userId));
+  }
+  if(chat.blockedBy.length == 0){
     chat.isBlock = false;
+  }
+ 
 
+
+
+    
     const userToblockProfile = userProfile.followers.find((user) => user.userId.toString() == userToBlockId);
     const userToblockProfileFollwing = userProfile.following.find((user) => user.userId.toString() == userToBlockId);
 
@@ -261,6 +294,11 @@ export const toggleBlock = async (userId: string, userToBlockId: string, chatId:
     }
   } else {
     chat.isBlock = true;
+    const userExists = chat.blockedBy.some((item) => item.toString() === userId.toString());
+    if (!userExists) {
+      chat.blockedBy.push(new mongoose.Types.ObjectId(userId));
+    }
+    
 
     const userToblockProfile = userProfile.followers.find((user) => user.userId.toString() == userToBlockId);
     const userToblockProfileFollwing = userProfile.following.find((user) => user.userId.toString() == userToBlockId);
@@ -320,6 +358,34 @@ export const acceptGroupRequest = async (userId: string, chatId: string) => {
   }
 
   user.isRequestAccepted = true;
+
+  return await chat.save();
+};
+
+
+export const toggleStarredStatus = async (userId: string, chatId: string) => {
+  const chat = await chatModel.findById(chatId);
+
+
+  if (!chat) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'No chat found');
+  }
+  const user = chat.users.find((user) => user.userId.toString() === userId);
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found in chat');
+  }
+
+  if (user.isStarred) {
+ 
+    user.isStarred = false;
+  }else{
+    user.isStarred = true;
+  }
+
+
+
+ 
 
   return await chat.save();
 };

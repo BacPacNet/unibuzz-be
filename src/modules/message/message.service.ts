@@ -9,13 +9,16 @@ export const createmessage = async (
   media: { imageUrl: string; publicId: string }[]
 ) => {
   let messageBody;
-  if (media) {
+
+  
+  
+  if (media.flat().length > 0) {
     messageBody = {
       sender: userId,
       content: content,
       chat: chatId,
       readByUsers: [userId],
-      media: media,
+      media: media.flat(),
       senderProfile: UserProfileId,
     };
   } else {
