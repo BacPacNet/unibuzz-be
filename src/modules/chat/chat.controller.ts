@@ -113,6 +113,7 @@ export const toggleBlock = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { userIdToBlock } = req.params;
   const { chatId } = req.body;
+
   try {
     if (userID && userIdToBlock) {
       const blocked = await chatService.toggleBlock(userID, userIdToBlock, chatId);
@@ -145,6 +146,20 @@ export const acceptGroupRequest = async (req: userIdExtend, res: Response) => {
   try {
     if (userID) {
       const acceptedRequest = await chatService.acceptGroupRequest(userID, chatId);
+      return res.status(201).json(acceptedRequest);
+    }
+  } catch (error: any) {
+    console.log(error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const toggleStarred = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  const { chatId } = req.body;
+  try {
+    if (userID) {
+      const acceptedRequest = await chatService.toggleStarredStatus(userID, chatId);
       return res.status(201).json(acceptedRequest);
     }
   } catch (error: any) {

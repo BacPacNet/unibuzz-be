@@ -12,7 +12,6 @@ export const handleConnection = (socket: Socket, io: Server, onlineUsers: Online
     socket.userID = userID;
     socket.join(userID);
 
-
     onlineUsers.addUser(userID, socket.id);
     // socket.emit(SocketConnectionEnums.CONNECTED, userID);
   });

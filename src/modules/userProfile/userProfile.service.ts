@@ -229,7 +229,7 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
         ],
       },
     })
-    .select('profile_dp')
+    .select('profile_dp degree study_year university_name')
     .exec();
 
   const filteredUserFollows = userFollows.filter((profile) => profile.users_id !== null);
@@ -240,6 +240,9 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
     profile: {
       _id: profile._id,
       profile_dp: profile.profile_dp,
+      degree: profile.degree,
+      study_year: profile.study_year,
+      university_name: profile.university_name,
     },
   }));
   const finalResult = { user: result };
