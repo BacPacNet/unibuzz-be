@@ -64,6 +64,10 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       type: Boolean,
       default: true,
     },
+    isUserDeactive: {
+      type: Boolean,
+      default: false,
+    },
     userVerifiedCommunities: [
       {
         communityId: String,

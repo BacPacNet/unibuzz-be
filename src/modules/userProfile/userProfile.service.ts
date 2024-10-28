@@ -9,7 +9,7 @@ import { io } from '../../index';
 
 export const createUserProfile = async (
   user: any,
-  dob: string,
+  dob: Date,
   country: string,
   city: string = '',
   percent: number = 0,
@@ -33,14 +33,15 @@ export const createUserProfile = async (
 };
 
 export const getUserProfile = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id });
+  const userProfile = await UserProfile.findOne({ users_id: id }).populate({
+    path: 'university_id',
+    select: 'name country logos images',
+  });
   return userProfile;
 };
 
 export const getUserProfiles = async (userIds: any) => {
-  return await UserProfile.find({ users_id: { $in: userIds } }).select(
-    'affiliation study_year university_name degree users_id profile_dp '
-  );
+  return await UserProfile.find({ users_id: { $in: userIds } });
 };
 
 export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: UserProfileDocument) => {
@@ -127,59 +128,56 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
     return updatedUseProfile;
   }
 };
-
+export const getFollowingUsers = async (userId: string) => {
+  const user = await UserProfile.findById(userId).populate('following.userId', 'email profile_dp').exec();
+  console.log('Following:', user);
+  return user!.following;
+};
 export const getFollow = async (name: string = '', userId: string) => {
-  let firstNametoPush: any;
-  let lastNametopush: any;
-  const profile: any = await UserProfile.findOne({ users_id: userId });
-  const ids = profile.following.map((id: any) => id.userId._id);
+  // Fetch user profile and get list of following user IDs
+  const profile = await UserProfile.findOne({ users_id: userId });
+  if (!profile || !profile.following) return [];
 
-  if (name) {
-    let nameParts = name.split(' ');
-    if (nameParts.length > 1) {
-      firstNametoPush = nameParts[0];
-      lastNametopush = nameParts[1];
-    } else {
-      firstNametoPush = name;
-    }
-  }
+  const ids = profile.following.map((id: any) => id.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
 
+  if (!ids.length) return [];
+
+  // Split name if provided
+  const [firstNametoPush, lastNametopush] = name ? name.split(' ') : ['', ''];
+
+  // Find user profiles based on name and following list
   const userFollows = await UserProfile.find({
-    $and: [{ users_id: { $in: ids } }],
+    users_id: { $in: ids },
   }).populate({
     path: 'users_id',
     match: {
       $or: [
-        { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+        { firstName: { $regex: new RegExp(firstNametoPush || '', 'i') } },
         ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
       ],
     },
+    select: '_id firstName lastName',
   });
 
-  const filteredUserFollows = userFollows.filter((profile) => profile.users_id !== null);
-
-  return filteredUserFollows;
+  // Filter out any profiles without populated users_id
+  return userFollows.filter((profile) => profile.users_id);
 };
 
 export const getFollowers = async (name: string = '', userId: string) => {
-  let firstNametoPush: any;
-  let lastNametopush: any;
-  const profile: any = await UserProfile.findOne({ users_id: userId });
+  // Fetch user profile and get list of follower user IDs
+  const profile = await UserProfile.findOne({ users_id: userId });
+  if (!profile || !profile.followers) return [];
 
-  const ids = profile.followers.map((id: any) => id.userId._id);
+  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
 
-  if (name) {
-    let nameParts = name.split(' ');
-    if (nameParts.length > 1) {
-      firstNametoPush = nameParts[0];
-      lastNametopush = nameParts[1];
-    } else {
-      firstNametoPush = name;
-    }
-  }
+  if (!ids.length) return [];
 
+  // Split name if provided
+  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+
+  // Find user profiles based on name and followers list
   const userFollows = await UserProfile.find({
-    $and: [{ users_id: { $in: ids } }],
+    users_id: { $in: ids },
   }).populate({
     path: 'users_id',
     match: {
@@ -190,9 +188,8 @@ export const getFollowers = async (name: string = '', userId: string) => {
     },
   });
 
-  const filteredUserFollows = userFollows.filter((profile) => profile.users_id !== null);
-
-  return filteredUserFollows;
+  // Filter out any profiles without populated users_id
+  return userFollows.filter((profile) => profile.users_id);
 };
 
 export const getFollowersAndFollowing = async (name: string = '', userId: string) => {

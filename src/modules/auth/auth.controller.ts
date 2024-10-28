@@ -7,6 +7,7 @@ import * as authService from './auth.service';
 import { emailService } from '../email';
 import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
+import { parse } from 'date-fns';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
   const { dob, country, city, ...body } = req.body;
@@ -20,9 +21,9 @@ export const register = catchAsync(async (req: Request, res: Response) => {
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   const { birthDate, country, universityEmail, ...body } = req.body;
   let universityName = '';
-
+  const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
   const user = await userService.registerUser(body);
-  await userProfileService.createUserProfile(user._id, birthDate, country, '', 23, universityEmail, universityName);
+  await userProfileService.createUserProfile(user._id, dob, country, '', 23, universityEmail, universityName);
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
 

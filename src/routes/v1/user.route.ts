@@ -10,6 +10,7 @@ router
   .post(validate(userValidation.createUser), userController.createUser)
   .get(userIdAuth, userController.getUsersWithProfileData);
 
+router.route('/connections').get(userController.getAllUser);
 router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
 router
   .route('/:userId')

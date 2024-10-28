@@ -1,6 +1,7 @@
 import mongoose, { Model, Document } from 'mongoose';
 import { QueryResult } from '../paginate/paginate';
 import { AccessAndRefreshTokens } from '../token/token.interfaces';
+import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
 export const communityGroupRoleAccess = {
   Admin: 'Admin',
@@ -40,6 +41,8 @@ export interface IUser {
   createdAt: Date | string;
   userVerifiedCommunities: verifiedInterface[];
   userUnVerifiedCommunities: unverifiedInterface[];
+  profile: UserProfileDocument;
+  isUserDeactive: boolean;
 }
 
 export interface IUserDoc extends IUser, Document {
@@ -53,9 +56,9 @@ export interface IUserModel extends Model<IUserDoc> {
 
 export type UpdateUserBody = Partial<IUser>;
 
-export type NewRegisteredUser = Omit<IUser, 'role' | 'isEmailVerified'>;
+export type NewRegisteredUser = Omit<IUser, 'role' | 'isEmailVerified' | 'profile' | 'isUserDeactive'>;
 
-export type NewCreatedUser = Omit<IUser, 'isEmailVerified'>;
+export type NewCreatedUser = Omit<IUser, 'isEmailVerified' | 'profile' | 'isUserDeactive'>;
 
 export interface IUserWithTokens {
   user: IUserDoc;

@@ -36,6 +36,17 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
+export const getAllUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { page, limit, name } = req.query as any;
+  try {
+    let allUsers = await userService.getAllUser(name, Number(page), Number(limit));
+    return res.status(200).json(allUsers);
+  } catch (error) {
+    console.log(error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Users'));
+  }
+});
+
 export const updateUser = catchAsync(async (req: Request, res: Response) => {
   if (typeof req.params['userId'] === 'string') {
     const user = await userService.updateUserById(new mongoose.Types.ObjectId(req.params['userId']), req.body);
@@ -53,7 +64,6 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
 export const getUsersWithProfileData = async (req: userIdExtend, res: Response) => {
   const { name } = req.query as { name?: string };
   const userID = req.userId;
-
   try {
     if (userID) {
       let user = await userService.getUsersWithProfile(name, userID);

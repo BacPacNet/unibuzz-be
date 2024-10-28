@@ -16,6 +16,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   country: String,
   city: String,
   university_name: String,
+  university_id: { type: Schema.Types.ObjectId, ref: 'colleges' },
   study_year: String,
   degree: String,
   major: String,
