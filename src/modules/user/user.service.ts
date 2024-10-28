@@ -50,6 +50,42 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
  */
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
+export const getAllUser = async (name: string = '', page: number, limit: number) => {
+  const Currpage = page ? page : 1;
+  const limitpage = limit ? limit : 10;
+  const startIndex = (Currpage - Number(1)) * Number(limitpage);
+  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+  const users = await User.aggregate([
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id', // The field in the User schema to match
+        foreignField: 'users_id', // The field in the UserProfile schema to match
+        as: 'profile',
+      },
+    },
+    {
+      $match: {
+        $or: [
+          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+        ],
+      },
+    },
+    {
+      $unwind: {
+        path: '$profile', // Unwind the profile array to get a single object
+        preserveNullAndEmptyArrays: true, // Include users without a matching profile
+      },
+    },
+  ])
+    .skip(startIndex)
+    .limit(limitpage);
+  const totalUsers = await User.countDocuments();
+  const totalPages = Math.ceil(totalUsers / limit);
+
+  return { currentPage: page, totalPages: totalPages, users };
+};
 /**
  * Get user by email
  * @param {string} email

@@ -47,6 +47,7 @@ export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
   try {
     if (req.userId) {
       let profile = await userProfileService.getFollow(name, req.userId);
+
       return res.status(200).json({ profile });
     }
   } catch (error: any) {
