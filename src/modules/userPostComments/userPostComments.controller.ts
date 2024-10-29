@@ -11,6 +11,7 @@ interface extendedRequest extends Request {
 export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { userPostId } = req.params;
+
   let comment;
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
@@ -79,6 +80,46 @@ export const LikeUserPostComment = async (req: extendedRequest, res: Response) =
     if (userPostCommentId && req.userId) {
       let likeCount = await userPostCommentsService.likeUnlikeComment(userPostCommentId, req.userId);
       return res.status(200).json({ likeCount });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getUserPostComments = async (req: extendedRequest, res: Response) => {
+  const { userPostId } = req.params;
+  const { page, limit } = req.query;
+  try {
+    if (userPostId) {
+      let comments = await userPostCommentsService.getUserPostComments(userPostId, Number(page), Number(limit));
+      return res.status(200).json(comments);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getCommentById = async (req: extendedRequest, res: Response) => {
+  const { commentId } = req.params;
+
+  try {
+    if (commentId) {
+      let comments = await userPostCommentsService.getPostCommentById(commentId);
+      return res.status(200).json(comments);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const UserPostCommentReply = async (req: extendedRequest, res: Response) => {
+  const { commentId } = req.params;
+  const { level, ...body } = req.body;
+
+  try {
+    if (commentId && req.userId) {
+      let commentReply = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));
+      return res.status(200).json({ commentReply });
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });

@@ -6,11 +6,15 @@ const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
     communityId: {
       type: Schema.Types.ObjectId,
       ref: 'community',
-      required: true,
     },
     commenterId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+      required: true,
+    },
+    commenterProfileId: {
+      type: Schema.Types.ObjectId,
+      ref: 'UserProfile',
       required: true,
     },
     content: {
@@ -19,6 +23,13 @@ const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
     },
     likeCount: [{ userId: String }],
     imageUrl: { imageUrl: String, publicId: String },
+    replies: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'communityPostComments',
+      },
+    ],
+    level: { type: Number, required: true, default: 0 },
   },
   { timestamps: true }
 );
