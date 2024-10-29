@@ -73,6 +73,8 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 //get all community post
 export const getAllCommunityPost = async (req: any, res: Response, next: NextFunction) => {
   let communityPosts: any;
+  const { page, limit } = req.query;
+
   try {
     const user = await User.findById(req.userId);
 
@@ -98,9 +100,14 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
       }
     }
-    communityPosts = await communityPostsService.getAllCommunityPost(req.params.communityId, req.params.communityGroupId);
+    communityPosts = await communityPostsService.getAllCommunityPost(
+      req.params.communityId,
+      req.params.communityGroupId,
+      Number(page),
+      Number(limit)
+    );
 
-    return res.status(200).json({ communityPosts });
+    return res.status(200).json(communityPosts);
   } catch (error) {
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));

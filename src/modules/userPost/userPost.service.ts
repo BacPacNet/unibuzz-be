@@ -4,14 +4,14 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import userPostCommentsModel from '../userPostComments/userPostComments.model';
-import { User } from '../user';
+// import { User } from '../user';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile } from '../userProfile';
-import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
-import { UserProfileDocument } from '../userProfile/userProfile.interface';
+// import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
+// import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
-export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId) => {
-  const UserPosts = await getUserPostsForUserIds([userId]); //get all posts of the user
+export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 10) => {
+  const UserPosts = await getUserPostsForUserIds([userId], page, limit); //get all posts of the user
 
   return UserPosts;
 };
@@ -49,168 +49,246 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
   return await UserPostModel.findByIdAndDelete(id);
 };
 
-//get all posts
-export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId) => {
-  // get user ids of the user and his followers
+export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {
+  // Get user IDs of the user and their followers
   const followingAndSelfUserIds = await getFollowingAndSelfUserIds(userId);
 
-  // get different types of posts
-  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds!);
-  const CommunityPosts = await getCommunityPostsForUserIds(followingAndSelfUserIds!);
+  const skip = (page - 1) * limit;
+  // Get different types of posts
 
-  //merge them and sort them by latest
+  const totalUserPosts = await countUserPostsForUserIds(followingAndSelfUserIds!);
+  const totalCommunityPosts = await countCommunityPostsForUserIds(followingAndSelfUserIds!);
+  const totalPosts = totalUserPosts + totalCommunityPosts;
+
+  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds!, limit, skip);
+
+  const remainingLimit = Math.max(0, 5 - UsersPosts.length);
+
+  const CommunityPosts = await getCommunityPostsForUserIds(followingAndSelfUserIds!, limit + remainingLimit, skip);
+
+  // Merge and sort all posts by latest
+  // const allPosts: any = [...UsersPosts, ...CommunityPosts];
   const allPosts: any = [...UsersPosts, ...CommunityPosts];
   allPosts.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  return allPosts;
+  // return allPosts;
+  // Calculate total pages
+  const totalPages = Math.ceil(totalPosts / limit);
+
+  // Return posts and pagination details
+  return {
+    allPosts,
+    currentPage: page,
+    totalPages,
+    totalPosts,
+  };
 };
 
-// Helper Services for getAllPosts
+// Helper Services
 
-//get user ids of followers and the user itself
+const countUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[]) => {
+  const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
+
+  try {
+    const totalUserPosts = await UserPostModel.countDocuments({ user_id: { $in: ids } });
+    return totalUserPosts;
+  } catch (error) {
+    console.error('Error counting user posts:', error);
+    throw new Error('Failed to count user posts');
+  }
+};
+
+// Function to count community posts
+const countCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[]) => {
+  const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
+
+  try {
+    const totalCommunityPosts = await CommunityPostModel.countDocuments({
+      user_id: { $in: ids },
+      communityPostsType: 'Public', // Only public posts count
+    });
+    return totalCommunityPosts;
+  } catch (error) {
+    console.error('Error counting community posts:', error);
+    throw new Error('Failed to count community posts');
+  }
+};
+
+// Get user IDs of the user and their followers
 const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId) => {
   const followingUsers = await UserProfile.findOne({ users_id: userId });
   let followingUserIds: mongoose.Schema.Types.ObjectId[] = [];
-  if (followingUsers?.following?.length && followingUsers.following.length > 0) {
+  if (followingUsers?.following?.length) {
     followingUserIds = followingUsers?.following.map((user) => user.userId);
   }
   followingUserIds.push(userId);
   return followingUserIds;
 };
 
-//fetch userPosts for given user ids
-const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[]) => {
-  //get all posts of the users and his followers
-  const followingUserPosts = await UserPostModel.find({ user_id: { $in: userIDs } })
-    .populate({
-      path: 'user_id',
-      select: 'firstName lastName _id',
-    })
-    .sort({ createdAt: -1 })
-    .lean();
-  //get all comments of the posts
+const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[], limit: number, skip: number) => {
+  const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
 
-  const postIds = followingUserPosts.map((post: any) => post._id);
-  const comments = await userPostCommentsModel.find({ userPostId: { $in: postIds } }).populate({
-    path: 'commenterId',
-    select: 'firstName lastName content _id',
-  });
-
-  //get all ids of the users who posted and commented
-  const userIds = [
-    ...new Set([
-      ...followingUserPosts.map((post: any) => post.user_id._id.toString()),
-      ...comments.map((comment: any) => comment.commenterId._id.toString()),
-    ]),
-  ];
-  const profiles = await UserProfile.find({ users_id: { $in: userIds } });
-
-  //merge posts with comments and profiles
-  const postsWithCommentsAndProfiles = followingUserPosts.map((post: any) => {
-    const userProfile = profiles.find((profile: any) => profile.users_id?.toString() === post.user_id?._id.toString());
-    const postComments = comments
-      .filter((comment) => comment.userPostId.toString() === post._id.toString())
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map((comment: any) => {
-        const commenterProfile = profiles.find(
-          (profile: UserProfileDocument) => profile.users_id.toString() === comment.commenterId._id.toString()
-        );
-        return {
-          ...comment.toObject(),
-          commenterId: {
-            ...comment.commenterId.toObject(),
-            profile_dp: commenterProfile ? commenterProfile.profile_dp : null,
-            university_name: commenterProfile ? commenterProfile.university_name : null,
-            study_year: commenterProfile ? commenterProfile.study_year : null,
-            degree: commenterProfile ? commenterProfile.degree : null,
+  try {
+    const followingUserPosts =
+      (await UserPostModel.aggregate([
+        {
+          $match: {
+            user_id: { $in: ids },
           },
-        };
-      });
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        {
+          $unwind: '$user',
+        },
+        {
+          $lookup: {
+            from: 'userprofiles',
+            localField: 'user._id',
+            foreignField: 'users_id',
+            as: 'userProfile',
+          },
+        },
+        {
+          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: 'userpostcomments',
+            localField: '_id',
+            foreignField: 'userPostId',
+            as: 'comments',
+          },
+        },
+        {
+          $addFields: {
+            commentCount: { $size: '$comments' },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            imageUrl: 1,
+            likeCount: 1,
+            commentCount: 1,
+            user: {
+              _id: 1,
+              firstName: 1,
+              lastName: 1,
+            },
+            userProfile: {
+              profile_dp: 1,
+              university_name: 1,
+              study_year: 1,
+              degree: 1,
+            },
+          },
+        },
+      ]).exec()) || [];
 
-    return {
-      ...post,
-      comments: postComments,
-      user_id: {
-        ...post.user_id,
-        profile_dp: userProfile ? userProfile.profile_dp : null,
-        university_name: userProfile ? userProfile.university_name : null,
-        study_year: userProfile ? userProfile.study_year : null,
-        degree: userProfile ? userProfile.degree : null,
-      },
-    };
-  });
-
-  return postsWithCommentsAndProfiles;
+    return followingUserPosts;
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    throw new Error('Failed to Get User Posts');
+  }
 };
 
-const getCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[]) => {
-  //get community ids of the user and his followers
-  const followingUsers = await User.find({ _id: { $in: userIDs } });
-  const followingUsersCommunityIds = followingUsers.flatMap((user) => [
-    ...user.userVerifiedCommunities.map((community) => community.communityId),
-    ...user.userUnVerifiedCommunities.map((community) => community.communityId),
-  ]);
+const getCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[], limit: number, skip: number) => {
+  const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
 
-  //get community posts for above communities
-  const followingUsersCommunityPosts = await CommunityPostModel.find({
-    communityId: { $in: followingUsersCommunityIds },
-    communityPostsType: 'Public',
-  })
-    .populate({ path: 'user_id', select: 'firstName lastName' })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  //get comments of the community posts
-  const postIds = followingUsersCommunityPosts.map((post) => post._id);
-  const comments = await communityPostCommentsModel.find({ communityId: { $in: postIds } }).populate({
-    path: 'commenterId',
-    select: 'firstName lastName content _id',
-  });
-
-  //get all ids of the users who posted and commented
-  const userIds = [
-    ...new Set([
-      ...followingUsersCommunityPosts.map((post: any) => post.user_id._id.toString()),
-      ...comments.map((comment: any) => comment.commenterId._id.toString()),
-    ]),
-  ];
-  const profiles = await UserProfile.find({ users_id: { $in: userIds } });
-
-  //merge posts with comments and profiles
-  const postsWithCommentsAndProfiles = followingUsersCommunityPosts.map((post: any) => {
-    const userProfile = profiles.find(
-      (profile: UserProfileDocument) => profile.users_id.toString() === post.user_id._id.toString()
-    );
-    const postComments = comments
-      .filter((comment) => comment.communityId.toString() === post._id.toString())
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map((comment: any) => {
-        const commenterProfile = profiles.find(
-          (profile: UserProfileDocument) => profile.users_id.toString() === comment.commenterId._id.toString()
-        );
-        return {
-          ...comment.toObject(),
-          commenterId: {
-            ...comment.commenterId.toObject(),
-            profile_dp: commenterProfile ? commenterProfile.profile_dp : null,
+  try {
+    const followingCommunityPosts =
+      (await CommunityPostModel.aggregate([
+        {
+          $match: {
+            user_id: { $in: ids },
+            communityPostsType: 'Public',
           },
-        };
-      });
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        {
+          $unwind: '$user',
+        },
+        {
+          $lookup: {
+            from: 'userprofiles',
+            localField: 'user._id',
+            foreignField: 'users_id',
+            as: 'userProfile',
+          },
+        },
+        {
+          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: 'communitypostcomments',
+            localField: '_id',
+            foreignField: 'communityId',
+            as: 'comments',
+          },
+        },
+        {
+          $addFields: {
+            commentCount: { $size: '$comments' },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            imageUrl: 1,
+            likeCount: 1,
+            commentCount: 1,
+            communiyGroupId: 1,
+            communityId: 1,
+            communityPostsType: 1,
+            user: {
+              _id: 1,
+              firstName: 1,
+              lastName: 1,
+            },
+            userProfile: {
+              profile_dp: 1,
+              university_name: 1,
+              study_year: 1,
+              degree: 1,
+            },
+          },
+        },
+      ]).exec()) || [];
 
-    return {
-      ...post,
-      comments: postComments,
-      user_id: {
-        ...post.user_id,
-        profile_dp: userProfile ? userProfile.profile_dp : null,
-        university_name: userProfile ? userProfile.university_name : null,
-        study_year: userProfile ? userProfile.study_year : null,
-        degree: userProfile ? userProfile.degree : null,
-      },
-    };
-  });
-
-  return postsWithCommentsAndProfiles;
+    return followingCommunityPosts;
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    throw new Error('Failed to Get User Posts');
+  }
 };
 
 export const getUserPost = async (postId: string) => {

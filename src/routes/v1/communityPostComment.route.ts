@@ -6,14 +6,16 @@ const router: Router = express.Router();
 
 router
   .route('/:communityPostId')
-  .get(userIdAuth, communityPostCommentsController.getAllCommunityPostComments)
+  .get(userIdAuth, communityPostCommentsController.getCommunityPostComments)
   .post(userIdAuth, communityPostCommentsController.CreateComment);
 
+router.route('/comment/:commentId').get(userIdAuth, communityPostCommentsController.getCommentById);
 router
   .route('/:commentId')
   .put(communityPostCommentsController.updateComment)
   .delete(communityPostCommentsController.deleteCommunityPost);
 
+router.route('/:commentId/replies').post(userIdAuth, communityPostCommentsController.CommunityPostCommentReply);
 router.put('/likeUnlike/:communityPostCommentId', userIdAuth, communityPostCommentsController.LikeCommunityPostComments);
 
 export default router;

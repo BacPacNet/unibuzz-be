@@ -68,75 +68,113 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   return await communityPostsModel.findByIdAndDelete(id);
 };
 
-export const getAllCommunityPost = async (communityId: string, communityGroupId?: string) => {
-  const query: any = { communityId: new mongoose.Types.ObjectId(communityId) };
+export const getAllCommunityPost = async (
+  communityId: string,
+  communityGroupId?: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  try {
+    const matchStage: any = {
+      communityId: new mongoose.Types.ObjectId(communityId),
+    };
 
-  if (communityGroupId !== undefined && communityGroupId.length > 0) {
-    query.communiyGroupId = new mongoose.Types.ObjectId(communityGroupId);
-  } else {
-    query.communiyGroupId = { $exists: false };
-  }
+    if (communityGroupId && communityGroupId.length > 0) {
+      matchStage.communiyGroupId = new mongoose.Types.ObjectId(communityGroupId);
+    } else {
+      matchStage.communiyGroupId = { $exists: false };
+    }
 
-  const posts = await communityPostsModel
-    .find(query)
-    .populate({
-      path: 'user_id',
-      select: 'firstName lastName',
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+    const totalPost = await CommunityPostModel.countDocuments(matchStage);
+    const totalPages = Math.ceil(totalPost / limit);
 
-  const postIds = posts?.length ? posts.map((post: any) => post._id) : [];
+    const skip = (page - 1) * limit;
 
-  const comments = await communityPostCommentsModel.find({ communityId: { $in: postIds } }).populate({
-    path: 'commenterId',
-    select: 'firstName lastName content _id',
-  });
-
-  const userIds = [
-    ...new Set([
-      ...posts.map((post: any) => post.user_id._id.toString()),
-      ...comments.map((comment: any) => comment.commenterId._id.toString()),
-    ]),
-  ];
-
-  const profiles = await UserProfile.find({ users_id: { $in: userIds } });
-
-  const postsWithCommentsAndProfiles = posts.map((post: any) => {
-    const userProfile = profiles.find((profile: any) => profile.users_id.toString() === post.user_id._id.toString());
-    const postComments = comments
-      .filter((comment) => comment.communityId.toString() === post._id.toString())
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map((comment: any) => {
-        const commenterProfile = profiles.find(
-          (profile: any) => profile.users_id.toString() === comment.commenterId._id.toString()
-        );
-        return {
-          ...comment.toObject(),
-          commenterId: {
-            ...comment.commenterId.toObject(),
-            profile_dp: commenterProfile ? commenterProfile.profile_dp : null,
-            university_name: commenterProfile ? commenterProfile.university_name : null,
-            study_year: commenterProfile ? commenterProfile.study_year : null,
-            degree: commenterProfile ? commenterProfile.degree : null,
+    const finalPost =
+      (await CommunityPostModel.aggregate([
+        {
+          $match: matchStage,
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+        {
+          $skip: skip,
+        },
+        {
+          $limit: limit,
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
           },
-        };
-      });
+        },
+        {
+          $unwind: '$user',
+        },
+        {
+          $lookup: {
+            from: 'userprofiles',
+            localField: 'user._id',
+            foreignField: 'users_id',
+            as: 'userProfile',
+          },
+        },
+        {
+          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: 'communitypostcomments',
+            localField: '_id',
+            foreignField: 'communityId',
+            as: 'comments',
+          },
+        },
+        {
+          $addFields: {
+            commentCount: { $size: '$comments' },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            imageUrl: 1,
+            likeCount: 1,
+            commentCount: 1,
+            communiyGroupId: 1,
+            communityId: 1,
+            communityPostsType: 1,
+            user: {
+              _id: 1,
+              firstName: 1,
+              lastName: 1,
+            },
+            userProfile: {
+              profile_dp: 1,
+              university_name: 1,
+              study_year: 1,
+              degree: 1,
+            },
+          },
+        },
+      ]).exec()) || [];
 
     return {
-      ...post,
-      comments: postComments,
-      user_id: {
-        ...post.user_id,
-        profile_dp: userProfile ? userProfile.profile_dp : null,
-        university_name: userProfile ? userProfile.university_name : null,
-        study_year: userProfile ? userProfile.study_year : null,
-        degree: userProfile ? userProfile.degree : null,
-      },
+      finalPost, // The actual paginated comments
+      currentPage: page, // Current page for React Query
+      totalPages, // Total number of pages
+      totalPost, // Total number of comments/posts
     };
-  });
-
-  return postsWithCommentsAndProfiles;
+  } catch (error) {
+    console.error('Error fetching user posts:', error);
+    throw new Error('Failed to Get User Posts');
+  }
 };
 
 export const getcommunityPost = async (postId: string) => {

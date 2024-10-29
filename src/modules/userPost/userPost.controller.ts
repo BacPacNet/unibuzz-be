@@ -20,17 +20,6 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
   }
 };
 
-// create user post
-// export const createUserPost = async (req: extendedRequest, res: Response) => {
-//   try {
-//     let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
-
-//     return res.status(httpStatus.CREATED).send(post);
-//   } catch (error: any) {
-//     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-//   }
-// };
-
 export const createUserPost = async (req: extendedRequest, res: Response) => {
   try {
     let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
@@ -77,10 +66,11 @@ export const deleteUserPost = async (req: Request, res: Response, next: NextFunc
 //get all user posts
 export const getAllTimelinePosts = async (req: any, res: Response, next: NextFunction) => {
   let timelinePosts: any;
+  const { page, limit } = req.query;
   try {
-    timelinePosts = await userPostService.getAllTimelinePosts(req.userId);
+    timelinePosts = await userPostService.getAllTimelinePosts(req.userId, Number(page), Number(limit));
 
-    return res.status(200).json({ timelinePosts });
+    return res.status(200).json(timelinePosts);
   } catch (error) {
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Posts'));
