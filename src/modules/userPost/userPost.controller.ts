@@ -10,10 +10,10 @@ interface extendedRequest extends Request {
 
 // get all user posts
 export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
+  const userId = req.query.userId || req.userId;
   try {
-    const userPosts = await userPostService.getAllUserPosts(req.userId);
-
-    return res.status(200).json({ userPosts });
+    const userPosts = await userPostService.getAllUserPosts(userId);
+    return res.status(200).json(userPosts);
   } catch (error) {
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get User Posts'));

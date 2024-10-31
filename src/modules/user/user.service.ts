@@ -50,6 +50,36 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
  */
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
+export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
+  const userProfile = await User.aggregate([
+    {
+      $match: {
+        _id: id,
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id', // The field in the User schema to match
+        foreignField: 'users_id', // The field in the UserProfile schema to match
+        as: 'profile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$profile', // Unwind the profile array to get a single object
+        preserveNullAndEmptyArrays: true, // Include users without a matching profile
+      },
+    },
+    {
+      $project: {
+        password: 0, // Exclude the password field
+      },
+    },
+  ]);
+  return userProfile[0];
+};
+
 export const getAllUser = async (name: string = '', page: number, limit: number) => {
   const Currpage = page ? page : 1;
   const limitpage = limit ? limit : 10;

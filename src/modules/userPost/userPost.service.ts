@@ -10,10 +10,9 @@ import { UserProfile } from '../userProfile';
 // import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
 // import { UserProfileDocument } from '../userProfile/userProfile.interface';
 
-export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 10) => {
-  const UserPosts = await getUserPostsForUserIds([userId], page, limit); //get all posts of the user
-
-  return UserPosts;
+export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 0, limit: number = 10) => {
+  const userPosts = await getUserPostsForUserIds([userId], page, limit);
+  return userPosts;
 };
 
 export const createUserPost = async (post: userPostInterface) => {
@@ -60,7 +59,7 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
   const totalCommunityPosts = await countCommunityPostsForUserIds(followingAndSelfUserIds!);
   const totalPosts = totalUserPosts + totalCommunityPosts;
 
-  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds!, limit, skip);
+  const UsersPosts = await getUserPostsForUserIds(followingAndSelfUserIds!, skip, limit);
 
   const remainingLimit = Math.max(0, 5 - UsersPosts.length);
 
@@ -125,79 +124,90 @@ const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId
   return followingUserIds;
 };
 
-const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[], limit: number, skip: number) => {
+const getUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[], page: number, limit: number) => {
+  console.log(page, limit);
   const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
+  const data = await UserPostModel.aggregate([
+    {
+      $match: {
+        user_id: { $in: ids },
+      },
+    },
+  ])
+    .skip(page)
+    .limit(limit);
+  console.log(data);
 
   try {
-    const followingUserPosts =
-      (await UserPostModel.aggregate([
-        {
-          $match: {
-            user_id: { $in: ids },
-          },
+    const followingUserPosts = await UserPostModel.aggregate([
+      {
+        $match: {
+          user_id: { $in: ids },
         },
-        {
-          $sort: { createdAt: -1 },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      { $skip: page },
+      { $limit: limit },
+
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user_id',
+          foreignField: '_id',
+          as: 'user',
         },
-        { $skip: skip },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'user_id',
-            foreignField: '_id',
-            as: 'user',
-          },
+      },
+      {
+        $unwind: '$user',
+      },
+      {
+        $lookup: {
+          from: 'userprofiles',
+          localField: 'user._id',
+          foreignField: 'users_id',
+          as: 'userProfile',
         },
-        {
-          $unwind: '$user',
+      },
+      {
+        $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'userpostcomments',
+          localField: '_id',
+          foreignField: 'userPostId',
+          as: 'comments',
         },
-        {
-          $lookup: {
-            from: 'userprofiles',
-            localField: 'user._id',
-            foreignField: 'users_id',
-            as: 'userProfile',
-          },
+      },
+      {
+        $addFields: {
+          commentCount: { $size: '$comments' },
         },
-        {
-          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $lookup: {
-            from: 'userpostcomments',
-            localField: '_id',
-            foreignField: 'userPostId',
-            as: 'comments',
-          },
-        },
-        {
-          $addFields: {
-            commentCount: { $size: '$comments' },
-          },
-        },
-        {
-          $project: {
+      },
+      {
+        $project: {
+          _id: 1,
+          content: 1,
+          createdAt: 1,
+          imageUrl: 1,
+          likeCount: 1,
+          commentCount: 1,
+          user: {
             _id: 1,
-            content: 1,
-            createdAt: 1,
-            imageUrl: 1,
-            likeCount: 1,
-            commentCount: 1,
-            user: {
-              _id: 1,
-              firstName: 1,
-              lastName: 1,
-            },
-            userProfile: {
-              profile_dp: 1,
-              university_name: 1,
-              study_year: 1,
-              degree: 1,
-            },
+            firstName: 1,
+            lastName: 1,
+          },
+          userProfile: {
+            profile_dp: 1,
+            university_name: 1,
+            study_year: 1,
+            degree: 1,
           },
         },
-      ]).exec()) || [];
+      },
+    ]).exec();
 
     return followingUserPosts;
   } catch (error) {
