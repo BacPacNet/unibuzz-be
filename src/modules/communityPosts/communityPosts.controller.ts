@@ -6,6 +6,7 @@ import { ApiError } from '../errors';
 import { User } from '../user';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
+import { CommunityType } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -74,17 +75,23 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 export const getAllCommunityPost = async (req: any, res: Response, next: NextFunction) => {
   let communityPosts: any;
   const { page, limit } = req.query;
-
+  let access = CommunityType.Public;
   try {
     const user = await User.findById(req.userId);
 
     if (req.params.communityId) {
-      const isVerifiedMember = user?.userVerifiedCommunities?.map(
-        (item) => item.communityId == String(req.params.communityId)
-      );
+      const isVerifiedMember = user?.userVerifiedCommunities?.map((item) => item.communityId);
+      const isUnVerifiedMember = user?.userUnVerifiedCommunities?.map((item) => item.communityId);
       if (!isVerifiedMember) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
       }
+      if (isVerifiedMember?.includes(req.params.communityId)) {
+        access = CommunityType.Private;
+      }
+      if (isUnVerifiedMember?.includes(req.params.communityId)) {
+        access = CommunityType.Public;
+      }
+      // console.log("cc",isVerifiedMember?.includes( req.params.communityId));
     }
     if (req.params.communityId && req.params.communityGroupId) {
       const userVerifiedCommunityIds =
@@ -99,8 +106,16 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
       ) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
       }
+
+      if (userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
+        access = CommunityType.Public;
+      }
+      if (userVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
+        access = CommunityType.Private;
+      }
     }
     communityPosts = await communityPostsService.getAllCommunityPost(
+      access,
       req.params.communityId,
       req.params.communityGroupId,
       Number(page),
@@ -131,12 +146,44 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
 export const getPost = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
   const { isType } = req.query;
-  let post;
+  let post: any;
+
   try {
+    const user = await User.findById(req.userId);
     if (postId) {
-      if (isType == 'CommunityPost') {
+      if (isType == 'Community') {
         post = await communityPostsService.getcommunityPost(postId);
-      } else if (isType == 'userPost') {
+
+        // console.log("post",post);
+        if (post) {
+          const isVerifiedMember = user?.userVerifiedCommunities?.some(
+            (item) => item.communityId == String(post?.communityId)
+          );
+
+          const userVerifiedCommunityIds =
+            user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
+
+          // console.log("isveri",isVerifiedMember,userVerifiedCommunityIds.includes(String(post?.communiyGroupId)));
+
+          if (!isVerifiedMember && post?.communityId && post?.communityPostsType == CommunityType.Private) {
+            throw new ApiError(
+              httpStatus.UNAUTHORIZED,
+              'This is a private post to view please join the community as verified user!'
+            );
+          }
+          if (
+            !isVerifiedMember &&
+            userVerifiedCommunityIds.includes(String(post?.communiyGroupId)) &&
+            post?.communiyGroupId &&
+            post?.communityPostsType == CommunityType.Private
+          ) {
+            throw new ApiError(
+              httpStatus.UNAUTHORIZED,
+              'This is a private post to view please join the community as verified user!'
+            );
+          }
+        }
+      } else if (isType == 'Timeline') {
         post = await userPostService.getUserPost(postId);
       } else {
         throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');

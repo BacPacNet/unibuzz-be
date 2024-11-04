@@ -8,6 +8,7 @@ import { communityPostsModel } from '.';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
 import { communityGroupService } from '../communityGroup';
 import { UserProfile } from '../userProfile';
+import { CommunityType } from '../../config/community.type';
 
 export const createCommunityPost = async (post: communityPostsInterface, adminId: mongoose.Types.ObjectId) => {
   const postData = { ...post, user_id: adminId };
@@ -69,14 +70,21 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
 };
 
 export const getAllCommunityPost = async (
+  access: string,
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
   limit: number = 10
 ) => {
+  console.log('acc', access);
+
   try {
+    const accessType =
+      access === CommunityType.Public ? CommunityType.Public : [CommunityType.Public, CommunityType.Private];
+
     const matchStage: any = {
       communityId: new mongoose.Types.ObjectId(communityId),
+      communityPostsType: Array.isArray(accessType) ? { $in: accessType } : accessType,
     };
 
     if (communityGroupId && communityGroupId.length > 0) {
@@ -186,14 +194,7 @@ export const getcommunityPost = async (postId: string) => {
     })
     .lean();
 
-  const comments = await communityPostCommentsModel
-    .find({ communityId: post?._id })
-    .populate({
-      path: 'commenterId',
-      select: 'firstName lastName content _id',
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+  const comments = await communityPostCommentsModel.countDocuments({ communityId: post?._id });
 
   const profiles = await UserProfile.find({ users_id: post?.user_id });
 
