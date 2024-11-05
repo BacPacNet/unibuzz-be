@@ -7,6 +7,7 @@ import { User, userService } from '../user';
 import { notificationService } from '../Notification';
 import { communityGroupRoleAccess } from '../user/user.interfaces';
 import { notificationRoleAccess } from '../Notification/notification.interface';
+import { CommunityType } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -84,7 +85,7 @@ export const deleteCommunityGroup = async (req: Request, res: Response, next: Ne
 export const getAllCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
   let groups;
-
+  let access = CommunityType.Public;
   try {
     if (communityId) {
       const user = await User.findById(req.userId);
@@ -99,7 +100,14 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
         return next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the Groups!'));
       }
 
-      groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId);
+      if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
+        access = CommunityType.Public;
+      }
+      if (userVerifiedCommunityIds.includes(String(communityId))) {
+        access = CommunityType.Private;
+      }
+
+      groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
       return res.status(200).json({ groups });
     }
   } catch (error: any) {

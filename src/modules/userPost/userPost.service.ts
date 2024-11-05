@@ -309,13 +309,7 @@ export const getUserPost = async (postId: string) => {
     })
     .lean();
 
-  const comments = await userPostCommentsModel
-    .find({ userPostId: post?._id })
-    .populate({
-      path: 'commenterId',
-      select: 'firstName lastName content _id',
-    })
-    .sort({ createdAt: -1 });
+  const comments = await userPostCommentsModel.countDocuments({ userPostId: post?._id });
 
   const profiles = await UserProfile.find({ users_id: post?.user_id });
   return {

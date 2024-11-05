@@ -4,6 +4,7 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
+import { CommunityType } from '../../config/community.type';
 
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
   const newGroup = { ...body, communityId: communityId, adminUserId: userID };
@@ -26,12 +27,15 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
   return await communityGroupModel.findByIdAndDelete(id);
 };
 
-export const getAllCommunityGroup = async (communityId: string) => {
-  return await communityGroupModel.find({ communityId }).populate({ path: 'adminUserId', select: 'firstName lastName _id' });
+export const getAllCommunityGroup = async (communityId: string, access: string) => {
+  const accessType = access === CommunityType.Public ? CommunityType.Public : [CommunityType.Public, CommunityType.Private];
+  return await communityGroupModel
+    .find({ communityId, communityGroupType: accessType })
+    .populate({ path: 'adminUserId', select: 'firstName lastName _id' });
 };
 
-export const getAllCommunityGroupWithUserProfiles = async (communityId: string) => {
-  const communityGroups = await getAllCommunityGroup(communityId);
+export const getAllCommunityGroupWithUserProfiles = async (communityId: string, access: string) => {
+  const communityGroups = await getAllCommunityGroup(communityId, access);
 
   const adminUserIds = communityGroups.map((group) => group.adminUserId._id);
 
