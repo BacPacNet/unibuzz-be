@@ -22,6 +22,8 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
 
 export const createUserPost = async (req: extendedRequest, res: Response) => {
   try {
+    console.log('req', req.body);
+
     let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
 
     return res.status(httpStatus.CREATED).send(post);

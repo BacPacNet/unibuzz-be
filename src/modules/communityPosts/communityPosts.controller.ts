@@ -6,7 +6,8 @@ import { ApiError } from '../errors';
 import { User } from '../user';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
-import { CommunityType } from '../../config/community.type';
+import { CommunityType, userPostType } from '../../config/community.type';
+import UserProfile from '../userProfile/userProfile.model';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -184,7 +185,29 @@ export const getPost = async (req: extendedRequest, res: Response) => {
           }
         }
       } else if (isType == 'Timeline') {
+        const userProfile = await UserProfile.findOne({ users_id: req.userId });
+        const followingIds = (userProfile && userProfile.following.map((user) => user.userId.toString())) || [];
+
         post = await userPostService.getUserPost(postId);
+        // console.log([req.userId,...followingIds],post.PostType,post.user_id._id.toString());
+
+        if (
+          (post.PostType == userPostType.Public || post.PostType == undefined) &&
+          ![req.userId, ...followingIds].includes(post.user_id._id.toString())
+        ) {
+          throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
+        }
+
+        if (post.PostType == userPostType.Private && post.user_id._id) {
+          const postAdminUser = await User.findById(post.user_id._id);
+          const verifiedCommunityID = user?.userVerifiedCommunities?.map((item) => item.communityId);
+          const adminCommunityId = postAdminUser?.userVerifiedCommunities.map((item) => item.communityId);
+          const isCommunityIncluded = adminCommunityId?.some((id) => verifiedCommunityID?.includes(id));
+          // console.log("post",adminCommunityId,"your",verifiedCommunityID,isCommunityIncluded);
+          if (!isCommunityIncluded) {
+            throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
+          }
+        }
       } else {
         throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');
       }
