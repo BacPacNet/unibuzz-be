@@ -165,7 +165,6 @@ export const getPostCommentById = async (commentId: string) => {
     depth: number = 1,
     maxDepth: number = 3
   ): Promise<{ populatedReplies: any[]; totalCount: number }> => {
-
     if (!replies || replies.length === 0 || depth > maxDepth + 1) {
       return { populatedReplies: [], totalCount: 0 };
     }
