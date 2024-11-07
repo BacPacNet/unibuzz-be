@@ -11,6 +11,10 @@ export const getUniversityById = async (university_name: string) => {
   return await universityModal.findOne({ pathUrl: university_name });
 };
 
+export const getUniversityByRealId = async (id: string) => {
+  return await universityModal.findById(id);
+};
+
 export const updateUniversity = async (id: mongoose.Types.ObjectId, university: any) => {
   let universityToUpadate;
 

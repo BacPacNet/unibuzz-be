@@ -58,7 +58,8 @@ export const CreateCommunity = async (req: any, res: Response) => {
   const { collegeID }: any = req.body;
 
   try {
-    const college: any = await universityService.getUniversityById(collegeID);
+    const college: any = await universityService.getUniversityByRealId(collegeID);
+    console.log(college, 'college');
 
     if (!college.isCommunityCreated) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'community Not Allowed');
@@ -71,11 +72,11 @@ export const CreateCommunity = async (req: any, res: Response) => {
       college.name,
       userID,
       collegeID,
-      college.topUniInfo.studentsAndFacultiesData.Total_students.Total_students,
-      college.topUniInfo.studentsAndFacultiesData.Total_faculty_staff.Total_faculty_staff,
-      college.images,
-      college.logos,
-      college.topUniInfo.about
+      college.topUniInfo?.studentsAndFacultiesData?.Total_students?.Total_students || 0,
+      college.topUniInfo?.studentsAndFacultiesData?.Total_faculty_staff?.Total_faculty_staff || 0,
+      college.images || [],
+      college.logos || [],
+      college.topUniInfo.about || ''
     );
     // await userService.joinCommunity(userID, String(community._id), community.name, true);
     // const dataForCommunityGroup = {
