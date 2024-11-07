@@ -58,36 +58,22 @@ export const CreateCommunity = async (req: any, res: Response) => {
   const { collegeID }: any = req.body;
 
   try {
-    const college: any = await universityService.getUniversityById(collegeID);
+    const college: any = await universityService.getUniversityByRealId(collegeID);
 
     if (!college.isCommunityCreated) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'community Not Allowed');
     }
 
-    // return  console.log("colle",college.topUniInfo.studentsAndFacultiesData.Total_students.Total_students)
-    // return  console.log("colle",college.topUniInfo.studentsAndFacultiesData.Total_faculty_staff);
-
     const community: any = await communityService.createCommunity(
       college.name,
       userID,
       collegeID,
-      college.topUniInfo.studentsAndFacultiesData.Total_students.Total_students,
-      college.topUniInfo.studentsAndFacultiesData.Total_faculty_staff.Total_faculty_staff,
-      college.images,
-      college.logos,
-      college.topUniInfo.about
+      college.topUniInfo?.studentsAndFacultiesData?.Total_students?.Total_students || 0,
+      college.topUniInfo?.studentsAndFacultiesData?.Total_faculty_staff?.Total_faculty_staff || 0,
+      college.images || [],
+      college.logos || [],
+      college.topUniInfo.about || ''
     );
-    // await userService.joinCommunity(userID, String(community._id), community.name, true);
-    // const dataForCommunityGroup = {
-    //   title: community.name,
-    //   communityGroupLogoCoverUrl: {
-    //     imageUrl: community.communityCoverUrl.imageUrl ? community.communityCoverUrl.imageUrl : '',
-    //   },
-    //   communityGroupLogoUrl: { imageUrl: community.communityLogoUrl.imageUrl ? community.communityLogoUrl.imageUrl : '' },
-    // };
-
-    // const communityGroup = await communityGroupService.createCommunityGroup(userID, community._id, dataForCommunityGroup);
-    // await communityGroupService.joinLeaveCommunityGroup(userID, String(communityGroup._id), communityGroupRoleAccess.Admin);
 
     return res.status(201).json({ community });
   } catch (error: any) {

@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import communityModel from './community.model';
 import { User } from '../user';
+import mongoose from 'mongoose';
 
 export const createCommunity = async (
   name: string,
@@ -36,8 +37,9 @@ export const getCommunity = async (communityId: string) => {
 
 export const getUserCommunitys = async (userID: string) => {
   const user: any = await User.findById(userID);
-  const verifiedCommunityIds = user.userVerifiedCommunities.map((c: any) => c.communityId);
-  const unverifiedCommunityIds = user.userUnVerifiedCommunities.map((c: any) => c.communityId);
+  const verifiedCommunityIds = user.userVerifiedCommunities.map((c: any) => new mongoose.Types.ObjectId(c.communityId));
+  const unverifiedCommunityIds = user.userUnVerifiedCommunities.map((c: any) => new mongoose.Types.ObjectId(c.communityId));
+  console.log(unverifiedCommunityIds, 'unverifiedCommunityIds');
 
   const allCommunityIds = [...verifiedCommunityIds, ...unverifiedCommunityIds];
   const communities = await communityModel
