@@ -109,13 +109,12 @@ export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
 
 export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
-  const { universityEmail,UniversityOtp} = req.body;
+  const { universityEmail, UniversityOtp } = req.body;
   try {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-     await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
-      let userProfile = await userProfileService.addUniversityEmail(userID,universityEmail);
-      return res.status(200).json(userProfile);
-    
+    await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
+    let userProfile = await userProfileService.addUniversityEmail(userID, universityEmail);
+    return res.status(200).json(userProfile);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

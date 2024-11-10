@@ -489,18 +489,13 @@ export const UserEmailAndUserNameAvailability = async (email: string, userName: 
   return { message: 'Both email and username are available' };
 };
 
+export const changeUserName = async (userID: string, userName: string, newUserName: string, password: string) => {
+  const user = await User.findById(userID);
 
-
-export const changeUserName = async (userID: string, userName: string,newUserName:string,password:string) => {
-  
-const user = await User.findById(userID)
-
-
-
-  if(!user){
+  if (!user) {
     throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
   }
-  if(user?.userName !== userName ){
+  if (user?.userName !== userName) {
     throw new ApiError(httpStatus.CONFLICT, 'userName does not match');
   }
 
@@ -508,16 +503,15 @@ const user = await User.findById(userID)
     throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
   }
 
-  user.userName = newUserName
+  user.userName = newUserName;
 
- await user.save()
-  return user
+  await user.save();
+  return user;
 };
-export const changeUserPassowrd = async (userID: string, password: string,newPassword:string) => {
-  
-const user = await User.findById(userID)
+export const changeUserPassowrd = async (userID: string, password: string, newPassword: string) => {
+  const user = await User.findById(userID);
 
-  if(!user){
+  if (!user) {
     throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
   }
 
@@ -525,52 +519,48 @@ const user = await User.findById(userID)
     throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
   }
 
-  user.password = newPassword
+  user.password = newPassword;
 
- user.save()
-  return user
+  user.save();
+  return user;
 };
 
+export const changeUserEmail = async (userID: string, email: string, newMail: string) => {
+  const user = await User.findById(userID);
 
-export const changeUserEmail = async (userID: string, email: string,newMail:string) => {
-  
-  const user = await User.findById(userID)
-  
-    if(!user){
-      throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
-    }
+  if (!user) {
+    throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
+  }
 
-    if(user.email !== email){
-      throw new ApiError(httpStatus.CONFLICT, 'Email does not match');
-    }
-  
-    user.email = newMail
-  
-   user.save()
-    return user
-  };
-export const deActivateUserAccount = async (userID:string,userName: string, email: string,password:string) => {
-  
-  const user = await User.findById(userID)
-  
-    if(!user){
-      throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
-    }
-    if(user?.userName !== userName ){
-      throw new ApiError(httpStatus.CONFLICT, 'userName does not match');
-    }
+  if (user.email !== email) {
+    throw new ApiError(httpStatus.CONFLICT, 'Email does not match');
+  }
 
-    if(user.email !== email){
-      throw new ApiError(httpStatus.CONFLICT, 'Email does not match');
-    }
+  user.email = newMail;
 
-    if (!(await user.isPasswordMatch(password))) {
-      throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
-    }
-  
-    user.isUserDeactive = true
-  
-   user.save()
-    return user
-  };
+  user.save();
+  return user;
+};
+export const deActivateUserAccount = async (userID: string, userName: string, email: string, password: string) => {
+  const user = await User.findById(userID);
 
+  if (!user) {
+    throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
+  }
+  if (user?.userName !== userName) {
+    throw new ApiError(httpStatus.CONFLICT, 'userName does not match');
+  }
+
+  if (user.email !== email) {
+    throw new ApiError(httpStatus.CONFLICT, 'Email does not match');
+  }
+
+  if (!(await user.isPasswordMatch(password))) {
+    throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
+  }
+
+  user.isUserDeactive = true;
+
+  user.save();
+  return user;
+};
