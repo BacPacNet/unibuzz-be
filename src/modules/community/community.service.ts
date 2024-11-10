@@ -35,19 +35,37 @@ export const getCommunity = async (communityId: string) => {
   return await communityModel.findById(communityId);
 };
 
-export const getUserCommunitys = async (userID: string) => {
-  const user: any = await User.findById(userID);
-  const verifiedCommunityIds = user.userVerifiedCommunities.map((c: any) => new mongoose.Types.ObjectId(c.communityId));
-  const unverifiedCommunityIds = user.userUnVerifiedCommunities.map((c: any) => new mongoose.Types.ObjectId(c.communityId));
-  console.log(unverifiedCommunityIds, 'unverifiedCommunityIds');
+export const getUserCommunities = async (userID: string) => {
+  try {
+    const user = await User.findById(userID).lean();
+    if (!user) throw new Error('User not found');
 
-  const allCommunityIds = [...verifiedCommunityIds, ...unverifiedCommunityIds];
-  const communities = await communityModel
-    .find({ _id: { $in: allCommunityIds } })
-    .populate({ path: 'collegeID', select: 'wikiInfoBox.Address wikiInfoBox.Location collegeBoardInfo.Location' })
-    .lean();
+    const getCommunityIds = (communities: { communityId: string }[]) =>
+      communities.map((c) => new mongoose.Types.ObjectId(c.communityId));
 
-  return communities;
+    const verifiedCommunityIds = getCommunityIds(user.userVerifiedCommunities);
+    const unverifiedCommunityIds = getCommunityIds(user.userUnVerifiedCommunities);
+    const allCommunityIds = [...verifiedCommunityIds, ...unverifiedCommunityIds];
+
+    const communities = await communityModel.aggregate([
+      {
+        $match: { _id: { $in: allCommunityIds } },
+      },
+      {
+        $lookup: {
+          from: 'communitygroups',
+          localField: '_id',
+          foreignField: 'communityId',
+          as: 'communityGroups',
+        },
+      },
+    ]);
+
+    return communities;
+  } catch (error) {
+    console.error('Error fetching user communities:', error);
+    throw error;
+  }
 };
 
 export const updateCommunity = async (id: string, community: any) => {

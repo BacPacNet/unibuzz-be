@@ -4,19 +4,19 @@ import { ApiError } from '../errors';
 import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
+import { userIdExtend } from 'src/config/userIDType';
 // import { communityGroupService } from '../communityGroup';
 // import { userService } from '../user';
 // import { communityGroupRoleAccess } from '../user/user.interfaces';
 
 // get all userCommunity
-export const getAllUserCommunity = async (req: any, res: Response, next: NextFunction) => {
-  let community;
-  const userID = req.userId;
+export const getAllUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const userID = req.userId as string;
   try {
-    community = await communityService.getUserCommunitys(userID);
-    return res.status(200).json({ community });
+    const communities = await communityService.getUserCommunities(userID);
+    res.status(httpStatus.OK).json(communities);
   } catch (error) {
-    console.log(error);
+    console.error('Error fetching user communities:', error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
 };
@@ -30,7 +30,7 @@ export const getCommunity = async (req: any, res: Response, next: NextFunction) 
       return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
     }
     community = await communityService.getCommunity(req.params.communityId);
-    return res.status(200).json({ community });
+    return res.status(200).json(community);
   } catch (error) {
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
