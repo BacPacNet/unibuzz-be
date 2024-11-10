@@ -12,6 +12,7 @@ router.route('/followers').get(userIdAuth, userProfileController.getAllUserFollo
 router.route('/following').get(userIdAuth, userProfileController.getAllUserFollow);
 router.route('/following_and_followers').get(userIdAuth, userProfileController.getAllUserFollowersAndFollowing);
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
+router.route('/addUniversityEmail').put(userIdAuth, userProfileController.addUniversityEmail);
 
 router.route('/:userProfileId').put(userProfileController.updateUserProfile);
 

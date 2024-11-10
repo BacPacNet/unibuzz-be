@@ -24,3 +24,4 @@ export const checkUniversityEmailOtp = async (req: Request, res: Response) => {
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
   }
 };
+
