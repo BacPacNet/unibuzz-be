@@ -14,7 +14,13 @@ export const createUserProfile = async (
   city: string = '',
   percent: number = 0,
   universityEmail: string = '',
-  universityName: string = 'test'
+  universityName: string = '',
+  year: string,
+  degree: string,
+  major: string,
+  occupation: string,
+  department: string,
+  universityId: string
 ) => {
   let emailField = [];
 
@@ -27,6 +33,13 @@ export const createUserProfile = async (
     dob,
     country,
     city,
+    degree,
+    major,
+    occupation,
+    affiliation: department,
+    university_id: universityId,
+    university_name: universityName,
+    study_year: year,
     totalFilled: percent,
     ...(emailField.length > 0 && { email: emailField }),
   });
@@ -263,10 +276,10 @@ export const getBlockedUsers = async (userId: string) => {
   return allUsers;
 };
 
-export const addUniversityEmail = async (userId: string, universityEmail: string) => {
+export const addUniversityEmail = async (userId: string, universityEmail: string, universityName: string) => {
   const updatedUseProfile = await UserProfile.findOneAndUpdate(
     { users_id: userId },
-    { $push: { email: { UniversityName: 'Work in progress', UniversityEmail: universityEmail } } },
+    { $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } } },
     { new: true }
   );
 

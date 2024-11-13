@@ -198,7 +198,6 @@ export const checkUserEmailAndUserNameAvailability = async (req: Request, res: R
     await userService.UserEmailAndUserNameAvailability(email, userName);
     return res.status(httpStatus.OK).json({ message: 'Email and username are available', isAvailable: true });
   } catch (error: any) {
-    console.log('err', error.message);
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
   }
 };
@@ -212,7 +211,6 @@ export const changeUserName = async (req: userIdExtend, res: Response) => {
     const user = await userService.changeUserName(userID, userName, newUserName, password);
     return res.status(httpStatus.OK).json(user);
   } catch (error: any) {
-    console.log('err', error.message);
     return res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -225,7 +223,6 @@ export const changeUserPassword = async (req: userIdExtend, res: Response) => {
     const user = await userService.changeUserPassowrd(userID, currentPassword, newPassword);
     return res.status(httpStatus.OK).json(user);
   } catch (error: any) {
-    console.log('err', error.message);
     return res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -233,7 +230,6 @@ export const changeUserPassword = async (req: userIdExtend, res: Response) => {
 export const changeEmail = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { currentEmail, newMail, emailOtp } = req.body;
-  console.log(currentEmail, newMail);
 
   try {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
