@@ -12,7 +12,6 @@ export const createUserProfile = async (
   dob: Date,
   country: string,
   city: string = '',
-  percent: number = 0,
   universityEmail: string = '',
   universityName: string = '',
   year: string,
@@ -40,7 +39,6 @@ export const createUserProfile = async (
     university_id: universityId,
     university_name: universityName,
     study_year: year,
-    totalFilled: percent,
     ...(emailField.length > 0 && { email: emailField }),
   });
 };
@@ -81,24 +79,8 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
     }
   }
 
-  const { email, totalFilled, ...updateData } = userProfileBody;
+  const { email, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
-
-  let filledPropertiesCount = Object.entries(userProfileToUpdate.toObject()).filter(
-    ([key, value]) =>
-      key !== '_id' &&
-      key !== '__v' &&
-      key !== 'users_id' &&
-      key !== 'totalFilled' &&
-      key !== 'email' &&
-      value !== null &&
-      value !== undefined &&
-      value !== ''
-  ).length;
-
-  let ProfilePercentage = Math.ceil((filledPropertiesCount / 13) * 100);
-
-  userProfileToUpdate.totalFilled = ProfilePercentage;
 
   await userProfileToUpdate.save();
 

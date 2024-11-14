@@ -48,10 +48,6 @@ const userProfileSchema = new Schema<UserProfileDocument>({
       },
     },
   ],
-  totalFilled: {
-    type: Number,
-    default: 0,
-  },
 });
 
 const UserProfile = model<UserProfileDocument>('UserProfile', userProfileSchema);

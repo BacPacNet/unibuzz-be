@@ -29,7 +29,6 @@ interface UserProfileDocument {
   occupation?: string;
   following: following[];
   followers: following[];
-  totalFilled: number;
 }
 
 export { UserProfileDocument };
