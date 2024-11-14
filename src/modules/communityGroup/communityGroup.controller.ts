@@ -84,6 +84,7 @@ export const deleteCommunityGroup = async (req: Request, res: Response, next: Ne
 
 export const getAllCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
+  const { communityGroupId } = req.query;
   let groups;
   let access = CommunityType.Public;
   try {
@@ -106,9 +107,17 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       if (userVerifiedCommunityIds.includes(String(communityId))) {
         access = CommunityType.Private;
       }
-
       groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
-      return res.status(200).json({ groups });
+
+      if (communityGroupId) {
+        const group = groups.find((g) => g._id.toString() === communityGroupId);
+        if (!group) {
+          return next(new ApiError(httpStatus.NOT_FOUND, 'Group not found'));
+        }
+        return res.status(httpStatus.OK).json(group);
+      } else {
+        return res.status(httpStatus.OK).json(groups);
+      }
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
