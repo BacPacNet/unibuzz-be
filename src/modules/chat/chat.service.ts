@@ -69,10 +69,11 @@ export const getUserChats = async (userId: string) => {
 
   const userIds = chats.flatMap((chat) =>
     chat.users.map((user) => {
-      if (typeof user.userId === 'object' && user.userId._id) {
-        return user.userId._id.toString();
+      if (typeof user?.userId === 'object' && user?.userId?._id) {
+        return user?.userId?._id?.toString();
       }
-      return user.userId.toString();
+
+      return user?.userId?.toString();
     })
   );
 

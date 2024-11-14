@@ -7,20 +7,22 @@ import { userProfileService } from '../userProfile';
 export const Create_Get_Chat = async (req: userIdExtend, res: Response) => {
   const YourUserID = req.userId;
   const { userId } = req.body;
-  try {
-    if (YourUserID) {
-      const chat: any = await chatService.getChat(YourUserID, userId);
-      if (chat.length > 0) {
-        return res.status(200).json(chat);
-      } else {
-        const userProfile = await userProfileService.getUserProfile(YourUserID);
-        const followingIds = userProfile?.following.map((id: any) => id.userId._id.toString());
-        const followersIds = userProfile?.followers.map((id: any) => id.userId._id.toString());
 
-        const isRequestAcceptedBoolean = (followingIds?.includes(userId) && followersIds?.includes(userId)) ?? false;
-        const newChat = await chatService.createChat(YourUserID, userId, isRequestAcceptedBoolean);
-        return res.status(200).json(newChat);
-      }
+  try {
+    if (!YourUserID || !userId) {
+      throw new Error('Invalid user id'); // throw error if user id is invalid
+    }
+    const chat: any = await chatService.getChat(YourUserID, userId);
+    if (chat.length > 0) {
+      return res.status(200).json(chat);
+    } else {
+      const userProfile = await userProfileService.getUserProfile(YourUserID);
+      const followingIds = userProfile?.following.map((id: any) => id.userId._id.toString());
+      const followersIds = userProfile?.followers.map((id: any) => id.userId._id.toString());
+
+      const isRequestAcceptedBoolean = (followingIds?.includes(userId) && followersIds?.includes(userId)) ?? false;
+      const newChat = await chatService.createChat(YourUserID, userId, isRequestAcceptedBoolean);
+      return res.status(200).json(newChat);
     }
   } catch (error: any) {
     console.log(error);

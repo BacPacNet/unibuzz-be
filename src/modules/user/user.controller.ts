@@ -10,6 +10,7 @@ import { notificationService } from '../Notification';
 import { io } from '../../index';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { userIdExtend } from 'src/config/userIDType';
+import { loginEmailVerificationService } from '../loginEmailVerification';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -197,7 +198,57 @@ export const checkUserEmailAndUserNameAvailability = async (req: Request, res: R
     await userService.UserEmailAndUserNameAvailability(email, userName);
     return res.status(httpStatus.OK).json({ message: 'Email and username are available', isAvailable: true });
   } catch (error: any) {
-    console.log('err', error.message);
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
+  }
+};
+
+export const changeUserName = async (req: userIdExtend, res: Response) => {
+  const { userName, newUserName, password } = req.body;
+  const userID = req.userId;
+
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    const user = await userService.changeUserName(userID, userName, newUserName, password);
+    return res.status(httpStatus.OK).json(user);
+  } catch (error: any) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+};
+
+export const changeUserPassword = async (req: userIdExtend, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+  const userID = req.userId;
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    const user = await userService.changeUserPassowrd(userID, currentPassword, newPassword);
+    return res.status(httpStatus.OK).json(user);
+  } catch (error: any) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+};
+
+export const changeEmail = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  const { currentEmail, newMail, emailOtp } = req.body;
+
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    await loginEmailVerificationService.checkloginEmailVerificationOtp(emailOtp, newMail);
+    let userProfile = await userService.changeUserEmail(userID, currentEmail, newMail);
+    return res.status(200).json(userProfile);
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+export const deActivateUserAccount = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  const { userName, email, Password } = req.body;
+
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    let userProfile = await userService.deActivateUserAccount(userID, userName, email, Password);
+    return res.status(200).json(userProfile);
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

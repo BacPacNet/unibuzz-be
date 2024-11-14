@@ -21,10 +21,11 @@ export const sendMessge = async (req: userIdExtend, res: Response) => {
       if (!doesUserExist || chat?.isBlock) {
         throw new ApiError(httpStatus.NOT_FOUND, 'you are not authorized');
       }
+
       if (!chat?.isRequestAccepted && chat?.groupAdmin.toString() !== UserID && !chat?.isGroupChat) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Please accept the request to send message');
       }
-      if (chat?.groupAdmin.toString() !== UserID && !user?.isRequestAccepted) {
+      if (chat?.groupAdmin.toString() !== UserID && !user?.isRequestAccepted && chat?.isGroupChat) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Please accept the request to send message');
       }
 

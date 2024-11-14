@@ -10,20 +10,71 @@ import { userFollowService } from '../userFollow';
 import { parse } from 'date-fns';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
-  const { dob, country, city, ...body } = req.body;
+  const {
+    dob,
+    country,
+    city,
+    universityEmail,
+    universityName,
+    year,
+    degree,
+    major,
+    occupation,
+    department,
+    universityId,
+    ...body
+  } = req.body;
 
   const user = await userService.registerUser(body);
-  const userProfile = await userProfileService.createUserProfile(user._id, dob, country, city, 23);
+  const userProfile = await userProfileService.createUserProfile(
+    user._id,
+    dob,
+    country,
+    city,
+    universityEmail,
+    universityName,
+    year,
+    degree,
+    major,
+    occupation,
+    department,
+    universityId
+  );
   const tokens = await tokenService.generateAuthTokens(user);
   res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
 });
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
-  const { birthDate, country, universityEmail, ...body } = req.body;
-  let universityName = '';
+  const {
+    birthDate,
+    country,
+    universityEmail,
+    universityName,
+    universityId,
+    year,
+    degree,
+    major,
+    occupation,
+    department,
+    ...body
+  } = req.body;
+
   const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
   const user = await userService.registerUser(body);
-  await userProfileService.createUserProfile(user._id, dob, country, '', 23, universityEmail, universityName);
+  await userProfileService.createUserProfile(
+    user._id,
+    dob,
+    country,
+    '',
+    universityEmail,
+    universityName,
+    year,
+    degree,
+    major,
+    occupation,
+    department,
+    universityId
+  );
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
 

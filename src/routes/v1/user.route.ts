@@ -12,6 +12,10 @@ router
 
 router.route('/connections').get(userController.getAllUser);
 router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
+router.route('/changeUserPassword').put(userIdAuth, userController.changeUserPassword);
+router.route('/changeUserName').put(userIdAuth, userController.changeUserName);
+router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
+router.route('/deActivateUserAccount').put(userIdAuth, userController.deActivateUserAccount);
 router
   .route('/:userId')
   .get(userIdAuth, validate(userValidation.getUser), userController.getUser)

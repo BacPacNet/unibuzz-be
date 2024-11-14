@@ -12,9 +12,14 @@ export const createUserProfile = async (
   dob: Date,
   country: string,
   city: string = '',
-  percent: number = 0,
   universityEmail: string = '',
-  universityName: string = 'test'
+  universityName: string = '',
+  year: string,
+  degree: string,
+  major: string,
+  occupation: string,
+  department: string,
+  universityId: string
 ) => {
   let emailField = [];
 
@@ -27,7 +32,13 @@ export const createUserProfile = async (
     dob,
     country,
     city,
-    totalFilled: percent,
+    degree,
+    major,
+    occupation,
+    affiliation: department,
+    university_id: universityId,
+    university_name: universityName,
+    study_year: year,
     ...(emailField.length > 0 && { email: emailField }),
   });
 };
@@ -68,24 +79,8 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
     }
   }
 
-  const { email, totalFilled, ...updateData } = userProfileBody;
+  const { email, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
-
-  let filledPropertiesCount = Object.entries(userProfileToUpdate.toObject()).filter(
-    ([key, value]) =>
-      key !== '_id' &&
-      key !== '__v' &&
-      key !== 'users_id' &&
-      key !== 'totalFilled' &&
-      key !== 'email' &&
-      value !== null &&
-      value !== undefined &&
-      value !== ''
-  ).length;
-
-  let ProfilePercentage = Math.ceil((filledPropertiesCount / 13) * 100);
-
-  userProfileToUpdate.totalFilled = ProfilePercentage;
 
   await userProfileToUpdate.save();
 
@@ -261,4 +256,14 @@ export const getBlockedUsers = async (userId: string) => {
     .populate('users_id')
     .select('firstName lastName _id');
   return allUsers;
+};
+
+export const addUniversityEmail = async (userId: string, universityEmail: string, universityName: string) => {
+  const updatedUseProfile = await UserProfile.findOneAndUpdate(
+    { users_id: userId },
+    { $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } } },
+    { new: true }
+  );
+
+  return updatedUseProfile;
 };

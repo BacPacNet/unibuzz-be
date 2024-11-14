@@ -4,6 +4,7 @@ import * as userProfileService from './userProfile.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { userIdExtend } from 'src/config/userIDType';
+import { universityVerificationEmailService } from '../universityVerificationEmail';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -101,6 +102,19 @@ export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
       let blockedUsers = await userProfileService.getBlockedUsers(userID);
       return res.status(200).json({ blockedUsers });
     }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  const { universityName, universityEmail, UniversityOtp } = req.body;
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
+    let userProfile = await userProfileService.addUniversityEmail(userID, universityEmail, universityName);
+    return res.status(200).json(userProfile);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
