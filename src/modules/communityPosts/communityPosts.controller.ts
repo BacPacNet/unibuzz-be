@@ -73,7 +73,7 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 };
 
 //get all community post
-export const getAllCommunityPost = async (req: any, res: Response, next: NextFunction) => {
+export const getAllCommunityPost = async (req: any, res: Response) => {
   let communityPosts: any;
   const { page, limit } = req.query;
   let access = CommunityType.Public;
@@ -124,9 +124,9 @@ export const getAllCommunityPost = async (req: any, res: Response, next: NextFun
     );
 
     return res.status(200).json(communityPosts);
-  } catch (error) {
+  } catch (error: any) {
     console.log(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
