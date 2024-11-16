@@ -75,13 +75,14 @@ export const getUsersWithProfileData = async (req: userIdExtend, res: Response) 
 
 export const joinCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityId } = req.params;
-  const { communityName } = req.body;
+  const { communityName } = req.query as { communityName: string };
 
   try {
     if (typeof communityId == 'string') {
       if (!mongoose.Types.ObjectId.isValid(communityId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
+      if (!communityName) return next(new ApiError(httpStatus.BAD_REQUEST, 'community Name Required'));
       let user = await userService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId, communityName);
       return res.status(200).json({ message: 'joined Successfully', user });
     }

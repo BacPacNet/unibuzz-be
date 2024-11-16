@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { userIdExtend } from 'src/config/userIDType';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
+import { userService } from '../user';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -114,7 +115,9 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
     let userProfile = await userProfileService.addUniversityEmail(userID, universityEmail, universityName);
-    return res.status(200).json(userProfile);
+    let user = await userService.joinCommunityAfterEmailVerification(new mongoose.Types.ObjectId(userID), universityName);
+
+    return res.status(200).json({ userProfile, user });
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

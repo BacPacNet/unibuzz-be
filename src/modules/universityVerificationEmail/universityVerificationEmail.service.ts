@@ -34,7 +34,8 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid OTP!');
   }
 
-  universityVerificationEmail.isEmailVerified = true;
+  // universityVerificationEmail.isEmailVerified = true;
 
-  await universityVerificationEmail.save();
+  // await universityVerificationEmail.save();
+  await universityVerificationEmail.deleteOne();
 };
