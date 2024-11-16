@@ -263,13 +263,6 @@ export const getBlockedUsers = async (userId: string) => {
 };
 
 export const addUniversityEmail = async (userId: string, universityEmail: string, universityName: string) => {
-  // const updatedUseProfile = await UserProfile.findOneAndUpdate(
-  //   { users_id: userId },
-  //   { $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } } },
-  //   { new: true }
-  // );
-
-  // return updatedUseProfile;
   const updatedUserProfile = await UserProfile.findOneAndUpdate(
     {
       users_id: userId,
