@@ -51,7 +51,5 @@ export const checkloginEmailVerificationOtp = async (otp: string, email: string)
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid OTP!');
   }
 
-  loginEmailVerification.isEmailVerified = true;
-
-  await loginEmailVerification.save();
+  await loginEmailVerification.deleteOne();
 };

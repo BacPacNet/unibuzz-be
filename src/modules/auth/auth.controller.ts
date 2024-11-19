@@ -75,6 +75,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     department,
     universityId
   );
+  await userService.joinCommunityAfterEmailVerification(user._id, universityName);
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
 

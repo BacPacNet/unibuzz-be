@@ -50,6 +50,10 @@ export const getUserProfile = async (id: string) => {
   });
   return userProfile;
 };
+export const getUserProfileById = async (id: string) => {
+  const userProfile = await UserProfile.findOne({ users_id: id });
+  return userProfile;
+};
 
 export const getUserProfiles = async (userIds: any) => {
   return await UserProfile.find({ users_id: { $in: userIds } });
@@ -259,11 +263,20 @@ export const getBlockedUsers = async (userId: string) => {
 };
 
 export const addUniversityEmail = async (userId: string, universityEmail: string, universityName: string) => {
-  const updatedUseProfile = await UserProfile.findOneAndUpdate(
-    { users_id: userId },
-    { $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } } },
+  const updatedUserProfile = await UserProfile.findOneAndUpdate(
+    {
+      users_id: userId,
+      'email.UniversityEmail': { $ne: universityEmail },
+    },
+    {
+      $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } },
+    },
     { new: true }
   );
 
-  return updatedUseProfile;
+  if (!updatedUserProfile) {
+    throw new Error('This university email already exists for the user.');
+  }
+
+  return updatedUserProfile;
 };

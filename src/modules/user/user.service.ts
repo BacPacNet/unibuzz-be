@@ -4,9 +4,9 @@ import User from './user.model';
 import ApiError from '../errors/ApiError';
 import { IOptions, QueryResult } from '../paginate/paginate';
 import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser, IUser } from './user.interfaces';
-import { UserProfile } from '../userProfile';
+import { UserProfile, userProfileService } from '../userProfile';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
-import { communityService } from '../community';
+import { communityModel, communityService } from '../community';
 
 /**
  * Create a user
@@ -209,13 +209,14 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
 
 // join community
 
-export const joinCommunity = async (
-  userId: mongoose.Types.ObjectId,
-  cummunityId: string,
-  communityName: string,
-  isAllowed: boolean = false
-) => {
+export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId: string, communityName: string) => {
   const user = await getUserById(userId);
+  const userProfile = await userProfileService.getUserProfileById(String(userId));
+  let isAllowed: boolean = false;
+  const universityEmails = userProfile?.email.map((item) => item.UniversityName);
+  if (universityEmails?.includes(communityName)) {
+    isAllowed = true;
+  }
 
   const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
   const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
@@ -247,10 +248,41 @@ export const joinCommunity = async (
       { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
       { new: true }
     );
-    await communityService.communityMemberToggle(cummunityId, false);
+    await communityService.communityMemberToggle(cummunityId, true);
   }
 
   return updatedUser;
+};
+
+// join during verification
+export const joinCommunityAfterEmailVerification = async (userId: mongoose.Types.ObjectId, communityName: string) => {
+  const user = await getUserById(userId);
+  let community = await communityModel.findOne({ name: communityName });
+  const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+  let status = { isUniversityCommunity: false, isAlreadyJoined: false };
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  if (!community) {
+    return status;
+  }
+
+  if (userVerifiedCommunityIds.includes(community._id.toString())) {
+    status.isUniversityCommunity = true;
+    status.isAlreadyJoined = true;
+    return status;
+  }
+
+  const updatedUser = await User.findOneAndUpdate(
+    { _id: userId },
+    { $push: { userVerifiedCommunities: { communityName: communityName, communityId: community._id.toString() } } },
+    { new: true }
+  );
+
+  status.isUniversityCommunity = true;
+
+  return { updatedUser, status };
 };
 
 //leave community
@@ -276,7 +308,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   }
 
   const updatedUser = await User.findOneAndUpdate({ _id: userId }, updateQuery, { new: true });
-
+  await communityService.communityMemberToggle(communityId, false);
   return updatedUser;
 };
 
