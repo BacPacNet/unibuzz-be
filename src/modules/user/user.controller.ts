@@ -11,6 +11,8 @@ import { io } from '../../index';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { userIdExtend } from 'src/config/userIDType';
 import { loginEmailVerificationService } from '../loginEmailVerification';
+import { communityService } from '../community';
+import { communityGroupService } from '../communityGroup';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -155,6 +157,10 @@ export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Respo
       if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
+      const communityGroup = await communityGroupService.getCommunityGroup(communityGroupId);
+      if (userID !== String(communityGroup?.adminUserId)) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
+      }
       let user = await userService.updateUserCommunityGroupRole(id, communityGroupId, role);
       const notifications = {
         sender_id: userID,
@@ -175,7 +181,7 @@ export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Respo
 
 export const updateUserCommunityRole = async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { communityId, role, userID } = req.body;
-  // const userID = req.userId;
+  const adminID = req.userId;
 
   try {
     if (typeof communityId == 'string') {
@@ -183,6 +189,10 @@ export const updateUserCommunityRole = async (req: userIdExtend, res: Response, 
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
       }
       if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+      const community = await communityService.getCommunity(communityId);
+      if (adminID !== String(community?.adminId)) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
+      }
       let user = await userService.updateUserCommunityRole(userID, communityId, role);
 
       return res.status(200).json({ user });

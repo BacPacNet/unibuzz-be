@@ -14,7 +14,7 @@ const communityPostSchema = new Schema<communityPostsInterface>(
     content: { type: String },
     imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
-    communityPostsType: { type: String, enum: ['Private', 'Public'], default: CommunityType.Public },
+    communityPostsType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC'], default: CommunityType.PUBLIC },
   },
   { timestamps: true }
 );

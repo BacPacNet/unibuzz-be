@@ -12,7 +12,7 @@ const userPostSchema = new Schema<userPostInterface>(
     content: { type: String },
     imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
-    PostType: { type: String, enum: ['Private', 'Public'], default: userPostType.Public },
+    PostType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC', 'MUTUAL', 'ONLY_ME'], default: userPostType.PUBLIC },
   },
   { timestamps: true }
 );

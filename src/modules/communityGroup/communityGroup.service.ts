@@ -4,7 +4,7 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
-import { CommunityType } from '../../config/community.type';
+import { communityGroupType } from '../../config/community.type';
 
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
   const newGroup = { ...body, communityId: communityId, adminUserId: userID };
@@ -28,7 +28,10 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
 };
 
 export const getAllCommunityGroup = async (communityId: string, access: string) => {
-  const accessType = access === CommunityType.Public ? CommunityType.Public : [CommunityType.Public, CommunityType.Private];
+  const accessType =
+    access === communityGroupType.Public
+      ? communityGroupType.Public
+      : [communityGroupType.Public, communityGroupType.Private];
   return await communityGroupModel
     .find({ communityId, communityGroupType: accessType })
     .populate({ path: 'adminUserId', select: 'firstName lastName _id' });
@@ -54,6 +57,9 @@ export const getAllCommunityGroupWithUserProfiles = async (communityId: string, 
 
 export const getCommunityGroupByUserId = async (userId: string) => {
   return await communityGroupModel.find({ adminUserId: userId });
+};
+export const getCommunityGroupByCommunity = async (communityId: string) => {
+  return await communityGroupModel.findOne({ communityId: communityId });
 };
 
 export const getCommunityGroup = async (groupId: string) => {

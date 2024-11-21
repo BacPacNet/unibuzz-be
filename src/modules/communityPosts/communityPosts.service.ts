@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { userService } from '../user';
+import { User, userService } from '../user';
 import { communityPostsInterface } from './communityPosts.interface';
 import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
@@ -7,11 +7,12 @@ import httpStatus from 'http-status';
 import { communityPostsModel } from '.';
 import { communityGroupService } from '../communityGroup';
 import { CommunityType } from '../../config/community.type';
+import { UserProfile } from '../userProfile';
 
 export const createCommunityPost = async (post: communityPostsInterface, adminId: mongoose.Types.ObjectId) => {
   const postData = { ...post, user_id: adminId };
   const admin = await userService.getUserById(adminId);
-  const adminCommunityGroup = await communityGroupService.getCommunityGroup(String(post.communityId));
+  const adminCommunityGroup: any = await communityGroupService.getCommunityGroupByCommunity(String(post.communityId));
 
   const verifiedCommunityGroups: any = admin?.userVerifiedCommunities.flatMap((c) =>
     c.communityGroups.map((group) => group)
@@ -20,20 +21,17 @@ export const createCommunityPost = async (post: communityPostsInterface, adminId
     c.communityGroups.map((group) => group)
   );
 
-  const isCommunityUser = verifiedCommunityGroups?.find((group: any) => {
-    if (group.communityGroupId === String(adminCommunityGroup?._id)) {
-      return group;
-    }
-  });
-  const isUnVeriCommunityUser = unVerifiedCommunityGroups?.find((group: any) => {
-    if (group.communityGroupId === String(adminCommunityGroup?._id)) {
-      return group;
-    }
-  });
+  const isCommunityUser = verifiedCommunityGroups?.find(
+    (group: any) => group.communityGroupId === String(adminCommunityGroup?._id)
+  );
+  const isUnVeriCommunityUser = unVerifiedCommunityGroups?.find(
+    (group: any) => group.communityGroupId === String(adminCommunityGroup?._id)
+  );
 
   if (isCommunityUser?.role == 'Member' || isUnVeriCommunityUser?.role == 'Member') {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not admin/moderator of the group!');
   }
+
   return await CommunityPostModel.create(postData);
 };
 
@@ -68,26 +66,52 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
 };
 
 export const getAllCommunityPost = async (
-  access: string,
+  FollowinguserIds: mongoose.Schema.Types.ObjectId[] = [],
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
   limit: number = 10
 ) => {
   try {
-    const accessType =
-      access === CommunityType.Public ? CommunityType.Public : [CommunityType.Public, CommunityType.Private];
+    const FollowingIds = FollowinguserIds.map((item) => new mongoose.Types.ObjectId(item as any));
+
+    const matchConditions: any = [];
+
+    // Default conditions when communityGroupId is not provided
+    if (!communityGroupId || communityGroupId.length === 0) {
+      matchConditions.push(
+        {
+          communityId: new mongoose.Types.ObjectId(communityId),
+          communityPostsType: CommunityType.PUBLIC,
+          communiyGroupId: { $exists: false },
+        },
+        {
+          communityId: new mongoose.Types.ObjectId(communityId),
+          communityPostsType: CommunityType.FOLLOWER_ONLY,
+          user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          communiyGroupId: { $exists: false },
+        }
+      );
+    } else {
+      // Conditions when communityGroupId is provided
+      matchConditions.push(
+        {
+          communityId: new mongoose.Types.ObjectId(communityId),
+          communiyGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityPostsType: CommunityType.PUBLIC,
+        },
+        {
+          communityId: new mongoose.Types.ObjectId(communityId),
+          communiyGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityPostsType: CommunityType.FOLLOWER_ONLY,
+          user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        }
+      );
+    }
 
     const matchStage: any = {
-      communityId: new mongoose.Types.ObjectId(communityId),
-      communityPostsType: Array.isArray(accessType) ? { $in: accessType } : accessType,
+      $or: matchConditions,
     };
-
-    if (communityGroupId && communityGroupId.length > 0) {
-      matchStage.communiyGroupId = new mongoose.Types.ObjectId(communityGroupId);
-    } else {
-      matchStage.communiyGroupId = { $exists: false };
-    }
 
     const totalPost = await CommunityPostModel.countDocuments(matchStage);
     const totalPages = Math.ceil(totalPost / limit);
@@ -170,10 +194,10 @@ export const getAllCommunityPost = async (
       ]).exec()) || [];
 
     return {
-      finalPost, // The actual paginated comments
-      currentPage: page, // Current page for React Query
-      totalPages, // Total number of pages
-      totalPost, // Total number of comments/posts
+      finalPost,
+      currentPage: page,
+      totalPages,
+      totalPost,
     };
   } catch (error) {
     console.error('Error fetching user posts:', error);
@@ -181,78 +205,109 @@ export const getAllCommunityPost = async (
   }
 };
 
-export const getcommunityPost = async (postId: string) => {
+export const getcommunityPost = async (postId: string, myUserId: string) => {
   try {
-    const communityPostResponse = await communityPostsModel.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(postId) } },
+    const user = await User.findById(myUserId);
+    const userProfile = await UserProfile.findOne({ users_id: myUserId });
+    const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
+    const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
+    const userId = new mongoose.Types.ObjectId(myUserId);
+    const postIdToGet = new mongoose.Types.ObjectId(postId);
+
+    const verifiedCommunityIds = user?.userVerifiedCommunities?.map((item) => item.communityId) || [];
+    const unverifiedCommunityIds = user?.userUnVerifiedCommunities?.map((item) => item.communityId) || [];
+    const allCommunityIds = [...verifiedCommunityIds, ...unverifiedCommunityIds].map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+
+    const pipeline = [
+      { $match: { _id: postIdToGet } },
+
       {
         $lookup: {
-          from: 'users', // replace with actual collection name for users
+          from: 'users',
           localField: 'user_id',
           foreignField: '_id',
           as: 'user',
         },
       },
       { $unwind: '$user' },
+
       {
         $lookup: {
-          from: 'userprofiles', // replace with actual collection name for profiles
+          from: 'userprofiles',
           localField: 'user._id',
           foreignField: 'users_id',
           as: 'profile',
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+
       {
         $lookup: {
-          from: 'communitypostcomments', // replace with actual collection name for comments
+          from: 'communitypostcomments',
           localField: '_id',
           foreignField: 'communityId',
           as: 'comments',
         },
       },
       { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
+
       {
         $lookup: {
-          from: 'users', // replace with actual collection name for commenters
+          from: 'users',
           localField: 'comments.commenterId',
           foreignField: '_id',
           as: 'commenter',
         },
       },
       { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
+
       {
-        $group: {
-          _id: '$_id',
-          user_id: { $first: '$user_id' },
-          content: { $first: '$content' },
-          imageUrl: { $first: '$imageUrl' },
-          likeCount: { $first: '$likeCount' },
-          createdAt: { $first: '$createdAt' },
-          updatedAt: { $first: '$updatedAt' },
-          user: { $first: { firstName: '$user.firstName', lastName: '$user.lastName' } },
-          profile: { $first: '$profile' },
-          comments: {
-            $push: {
-              _id: '$comments._id',
-              content: '$comments.content',
-              commenterId: '$comments.commenterId',
-              likeCount: '$comments.likeCount',
-              imageUrl: '$comments.imageUrl',
-              replies: '$comments.replies',
-              level: '$comments.level',
-              commenter: {
-                firstName: '$commenter.firstName',
-                lastName: '$commenter.lastName',
-              },
-              createdAt: '$comments.createdAt',
-            },
+        $addFields: {
+          isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
+          isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
+
+          isCommunityMember: {
+            $or: [{ $eq: ['$user_id', userId] }, { $in: ['$communityId', allCommunityIds] }],
           },
+
+          isFollowing: {
+            $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
+          },
+
+          comments: { $ifNull: ['$comments', []] },
         },
       },
-    ]);
 
-    return communityPostResponse[0];
+      {
+        $match: {
+          $or: [{ isPublic: true }, { isFollowerOnly: true, isCommunityMember: true, isFollowing: true }],
+        },
+      },
+
+      {
+        $project: {
+          _id: 1,
+          user_id: 1,
+          communityId: 1,
+          communityPostsType: 1,
+          content: 1,
+          imageUrl: 1,
+          likeCount: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          user: {
+            firstName: '$user.firstName',
+            lastName: '$user.lastName',
+          },
+          profile: '$profile',
+          commentCount: { $size: '$comments' }, // Total comment count
+        },
+      },
+    ];
+
+    return await communityPostsModel.aggregate(pipeline);
   } catch (error) {
     console.error('Error fetching user posts:', error);
     throw new Error(error as string);
