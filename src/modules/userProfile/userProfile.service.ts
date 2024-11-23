@@ -129,7 +129,7 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
 };
 export const getFollowingUsers = async (userId: string) => {
   const user = await UserProfile.findById(userId).populate('following.userId', 'email profile_dp').exec();
-  console.log('Following:', user);
+
   return user!.following;
 };
 export const getFollow = async (name: string = '', userId: string) => {

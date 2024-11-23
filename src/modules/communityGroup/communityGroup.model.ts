@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { communityGroupInterface } from './communityGroup.interface';
-import { CommunityType } from '../../config/community.type';
+import { communityGroupType } from '../../config/community.type';
 
 const communityGroupSchema = new Schema<communityGroupInterface>({
   adminUserId: {
@@ -29,7 +29,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
   communityGroupType: {
     type: String,
     enum: ['Private', 'Public'],
-    default: CommunityType.Public,
+    default: communityGroupType.Public,
   },
 });
 

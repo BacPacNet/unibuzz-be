@@ -6,8 +6,6 @@ import { ApiError } from '../errors';
 import { User } from '../user';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
-import { CommunityType, userPostType } from '../../config/community.type';
-import UserProfile from '../userProfile/userProfile.model';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -25,6 +23,7 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
 
       if (req.body.communityId && !req.body.communiyGroupId) {
         const community = await communityService.getCommunity(req.body.communityId);
+
         if (adminId !== String(community?.adminId)) {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
         }
@@ -76,23 +75,24 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 export const getAllCommunityPost = async (req: any, res: Response) => {
   let communityPosts: any;
   const { page, limit } = req.query;
-  let access = CommunityType.Public;
+  // let access = CommunityType.PUBLIC;
+
   try {
     const user = await User.findById(req.userId);
+    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(req.userId);
 
     if (req.params.communityId) {
       const isVerifiedMember = user?.userVerifiedCommunities?.map((item) => item.communityId);
       const isUnVerifiedMember = user?.userUnVerifiedCommunities?.map((item) => item.communityId);
-      if (!isVerifiedMember) {
+      if (!isVerifiedMember?.includes(req.params.communityId) && !isUnVerifiedMember?.includes(req.params.communityId)) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
       }
-      if (isVerifiedMember?.includes(req.params.communityId)) {
-        access = CommunityType.Private;
-      }
-      if (isUnVerifiedMember?.includes(req.params.communityId)) {
-        access = CommunityType.Public;
-      }
-      // console.log("cc",isVerifiedMember?.includes( req.params.communityId));
+      // if (isVerifiedMember?.includes(req.params.communityId)) {
+      //   access = CommunityType.FOLLOWER_ONLY;
+      // }
+      // if (isUnVerifiedMember?.includes(req.params.communityId)) {
+      //   access = CommunityType.PUBLIC;
+      // }
     }
     if (req.params.communityId && req.params.communityGroupId) {
       const userVerifiedCommunityIds =
@@ -105,18 +105,19 @@ export const getAllCommunityPost = async (req: any, res: Response) => {
         !userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId)) &&
         !userVerifiedCommunityIds.includes(String(req.params.communityGroupId))
       ) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community Group to view the posts!');
       }
 
-      if (userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
-        access = CommunityType.Public;
-      }
-      if (userVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
-        access = CommunityType.Private;
-      }
+      // if (userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
+      //   access = CommunityType.PUBLIC;
+      // }
+      // if (userVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
+      //   access = CommunityType.FOLLOWER_ONLY;
+      // }
     }
+
     communityPosts = await communityPostsService.getAllCommunityPost(
-      access,
+      followingAndSelfUserIds,
       req.params.communityId,
       req.params.communityGroupId,
       Number(page),
@@ -149,64 +150,27 @@ export const getPost = async (req: extendedRequest, res: Response) => {
   const { isType } = req.query;
   let post: any;
 
+  if (!req.userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
+  }
+
   try {
-    const user = await User.findById(req.userId);
     if (postId) {
       if (isType == 'Community') {
-        post = await communityPostsService.getcommunityPost(postId);
+        const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
 
-        // console.log("post",post);
-        if (post) {
-          const isVerifiedMember = user?.userVerifiedCommunities?.some(
-            (item) => item.communityId == String(post?.communityId)
-          );
+        post = postResult[0];
 
-          const userVerifiedCommunityIds =
-            user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-          // console.log("isveri",isVerifiedMember,userVerifiedCommunityIds.includes(String(post?.communiyGroupId)));
-
-          if (!isVerifiedMember && post?.communityId && post?.communityPostsType == CommunityType.Private) {
-            throw new ApiError(
-              httpStatus.UNAUTHORIZED,
-              'This is a private post to view please join the community as verified user!'
-            );
-          }
-          if (
-            !isVerifiedMember &&
-            userVerifiedCommunityIds.includes(String(post?.communiyGroupId)) &&
-            post?.communiyGroupId &&
-            post?.communityPostsType == CommunityType.Private
-          ) {
-            throw new ApiError(
-              httpStatus.UNAUTHORIZED,
-              'This is a private post to view please join the community as verified user!'
-            );
-          }
-        }
-      } else if (isType == 'Timeline') {
-        const userProfile = await UserProfile.findOne({ users_id: req.userId });
-        const followingIds = (userProfile && userProfile.following.map((user) => user.userId.toString())) || [];
-
-        post = await userPostService.getUserPost(postId);
-        // console.log([req.userId,...followingIds],post.PostType,post.user_id._id.toString());
-
-        if (
-          (post.PostType == userPostType.Public || post.PostType == undefined) &&
-          ![req.userId, ...followingIds].includes(post.user_id._id.toString())
-        ) {
+        if (!postResult.length) {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
+      } else if (isType == 'Timeline') {
+        const postResult = await userPostService.getUserPost(postId, req.userId);
 
-        if (post.PostType == userPostType.Private && post.user_id._id) {
-          const postAdminUser = await User.findById(post.user_id._id);
-          const verifiedCommunityID = user?.userVerifiedCommunities?.map((item) => item.communityId);
-          const adminCommunityId = postAdminUser?.userVerifiedCommunities.map((item) => item.communityId);
-          const isCommunityIncluded = adminCommunityId?.some((id) => verifiedCommunityID?.includes(id));
-          // console.log("post",adminCommunityId,"your",verifiedCommunityID,isCommunityIncluded);
-          if (!isCommunityIncluded) {
-            throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
-          }
+        post = postResult[0];
+
+        if (!postResult.length) {
+          throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
       } else {
         throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');

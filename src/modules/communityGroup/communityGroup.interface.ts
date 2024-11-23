@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CommunityType } from '../../config/community.type';
+import { communityGroupType } from '../../config/community.type';
 
 interface communityGroupInterface {
   adminUserId: mongoose.Types.ObjectId;
@@ -9,7 +9,7 @@ interface communityGroupInterface {
   title: string;
   description: string;
   memberCount: number;
-  communityGroupType: CommunityType;
+  communityGroupType: communityGroupType;
 }
 
 export { communityGroupInterface };

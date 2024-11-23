@@ -7,7 +7,7 @@ import { User, userService } from '../user';
 import { notificationService } from '../Notification';
 import { communityGroupRoleAccess } from '../user/user.interfaces';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { CommunityType } from '../../config/community.type';
+import { communityGroupType } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -86,7 +86,7 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
   const { communityId } = req.params;
   const { communityGroupId } = req.query;
   let groups;
-  let access = CommunityType.Public;
+  let access = communityGroupType.Public;
   try {
     if (communityId) {
       const user = await User.findById(req.userId);
@@ -102,10 +102,10 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       }
 
       if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
-        access = CommunityType.Public;
+        access = communityGroupType.Public;
       }
       if (userVerifiedCommunityIds.includes(String(communityId))) {
-        access = CommunityType.Private;
+        access = communityGroupType.Private;
       }
       groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
 
