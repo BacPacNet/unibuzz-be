@@ -17,7 +17,7 @@ interface UserProfileDocument {
   cover_dp?: { imageUrl: string; publicId: string };
   bio?: string;
   phone_number?: string;
-  dob?: Date;
+  dob?: string;
   country?: string;
   city?: string;
   university_name?: string;

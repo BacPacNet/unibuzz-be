@@ -12,7 +12,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   cover_dp: { imageUrl: String, publicId: String },
   bio: String,
   phone_number: String,
-  dob: Date,
+  dob: String,
   country: String,
   city: String,
   university_name: String,

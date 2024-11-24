@@ -9,7 +9,7 @@ import { io } from '../../index';
 
 export const createUserProfile = async (
   user: any,
-  dob: Date,
+  dob: string,
   country: string,
   city: string = '',
   universityEmail: string = '',
