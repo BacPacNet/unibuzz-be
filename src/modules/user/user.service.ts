@@ -4,9 +4,9 @@ import User from './user.model';
 import ApiError from '../errors/ApiError';
 import { IOptions, QueryResult } from '../paginate/paginate';
 import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser, IUser } from './user.interfaces';
-import { UserProfile, userProfileService } from '../userProfile';
+import { UserProfile } from '../userProfile';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
-import { communityModel, communityService } from '../community';
+import { communityModel } from '../community';
 
 /**
  * Create a user
@@ -209,51 +209,6 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
 
 // join community
 
-export const joinCommunity = async (userId: mongoose.Types.ObjectId, cummunityId: string, communityName: string) => {
-  const user = await getUserById(userId);
-  const userProfile = await userProfileService.getUserProfileById(String(userId));
-  let isAllowed: boolean = false;
-  const universityEmails = userProfile?.email.map((item) => item.UniversityName);
-  if (universityEmails?.includes(communityName)) {
-    isAllowed = true;
-  }
-
-  const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-  const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-
-  if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-  }
-
-  if (userVerifiedCommunityIds.includes(cummunityId) || userUnverifiedVerifiedCommunityIds.includes(cummunityId)) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Already Joined!');
-  }
-
-  if (userUnverifiedVerifiedCommunityIds.length >= 1 && !isAllowed && user.role != 'admin') {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Already joined at 1 UnVerified university');
-  }
-
-  let updatedUser;
-  if (isAllowed) {
-    updatedUser = await User.findOneAndUpdate(
-      { _id: userId },
-      { $push: { userVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
-      { new: true }
-    );
-
-    await communityService.communityMemberToggle(cummunityId, true);
-  } else {
-    updatedUser = await User.findOneAndUpdate(
-      { _id: userId },
-      { $push: { userUnVerifiedCommunities: { communityName: communityName, communityId: cummunityId } } },
-      { new: true }
-    );
-    await communityService.communityMemberToggle(cummunityId, true);
-  }
-
-  return updatedUser;
-};
-
 // join during verification
 export const joinCommunityAfterEmailVerification = async (userId: mongoose.Types.ObjectId, communityName: string) => {
   const user = await getUserById(userId);
@@ -283,33 +238,6 @@ export const joinCommunityAfterEmailVerification = async (userId: mongoose.Types
   status.isUniversityCommunity = true;
 
   return { updatedUser, status };
-};
-
-//leave community
-export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
-  const user = await getUserById(userId);
-
-  const userUnverifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-  const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-
-  if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-  }
-
-  if (!userUnverifiedCommunityIds.includes(communityId) && !userVerifiedCommunityIds.includes(communityId)) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not joined in this community!');
-  }
-
-  let updateQuery = {};
-  if (userUnverifiedCommunityIds.includes(communityId)) {
-    updateQuery = { $pull: { userUnVerifiedCommunities: { communityId } } };
-  } else if (userVerifiedCommunityIds.includes(communityId)) {
-    updateQuery = { $pull: { userVerifiedCommunities: { communityId } } };
-  }
-
-  const updatedUser = await User.findOneAndUpdate({ _id: userId }, updateQuery, { new: true });
-  await communityService.communityMemberToggle(communityId, false);
-  return updatedUser;
 };
 
 export const findUsersByCommunityId = async (

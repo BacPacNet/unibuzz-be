@@ -262,18 +262,22 @@ export const getBlockedUsers = async (userId: string) => {
   return allUsers;
 };
 
-export const addUniversityEmail = async (userId: string, universityEmail: string, universityName: string) => {
-  const updatedUserProfile = await UserProfile.findOneAndUpdate(
+export const addUniversityEmail = async (
+  userId: string,
+  universityEmail: string,
+  universityName: string,
+  communityId: string
+) => {
+  const updatedUserProfile = await UserProfile.updateOne(
     {
-      users_id: userId,
-      'email.UniversityEmail': { $ne: universityEmail },
+      users_id: new mongoose.Types.ObjectId(userId),
     },
     {
-      $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail } },
+      $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId } },
     },
     { new: true }
   );
-
+  console.log(updatedUserProfile, 'updatedUserProfile');
   if (!updatedUserProfile) {
     throw new Error('This university email already exists for the user.');
   }

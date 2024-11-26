@@ -3,6 +3,7 @@ import { Schema } from 'mongoose';
 interface userProfileEmail {
   UniversityName: string;
   UniversityEmail: string;
+  communityId: string;
 }
 
 interface following {

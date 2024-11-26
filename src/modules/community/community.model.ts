@@ -11,6 +11,16 @@ const communitySchema = new Schema<communityInterface>({
   numberOfStudent: Number,
   numberOfFaculty: Number,
   about: { type: String },
+  users: [
+    {
+      id: { type: Schema.Types.ObjectId, ref: 'User' },
+      firstName: String,
+      lastName: String,
+      year: String,
+      degree: String,
+      major: String,
+    },
+  ],
 });
 
 const communityModel = model<communityInterface>('community', communitySchema);

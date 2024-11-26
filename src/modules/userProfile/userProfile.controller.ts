@@ -4,8 +4,8 @@ import * as userProfileService from './userProfile.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { userIdExtend } from 'src/config/userIDType';
+import { communityModel, communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
-import { userService } from '../user';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -113,11 +113,22 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
   const { universityName, universityEmail, UniversityOtp } = req.body;
   try {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
-    let userProfile = await userProfileService.addUniversityEmail(userID, universityEmail, universityName);
-    let user = await userService.joinCommunityAfterEmailVerification(new mongoose.Types.ObjectId(userID), universityName);
 
-    return res.status(200).json({ userProfile, user });
+    await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
+    let community = await communityModel.findOne({ name: universityName });
+    if (!community) throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+
+    const { _id: communityId } = community;
+
+    let userProfile = await userProfileService.addUniversityEmail(
+      userID,
+      universityEmail,
+      universityName,
+      communityId.toString()
+    );
+    await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString());
+
+    return res.status(200).json({ userProfile });
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

@@ -11,13 +11,13 @@ export const communityGroupRoleAccess = {
 
 export const communityGroupRole = Object.keys(communityGroupRoleAccess);
 
-interface communityGroupsInterface {
+export interface communityGroupsInterface {
   communityGroupName: String;
   communityGroupId: String;
   role: string;
 }
 
-interface verifiedInterface {
+export interface verifiedInterface {
   communityId: string;
   communityName: string;
   role: string;

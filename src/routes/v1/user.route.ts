@@ -22,7 +22,7 @@ router
   .patch(validate(userValidation.updateUser), userController.updateUser)
   .delete(validate(userValidation.deleteUser), userController.deleteUser);
 
-router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
+//router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
 
 router.route('/user/GroupRole').put(userIdAuth, userController.updateUserCommunityGroupRole);
 router.route('/user/CommunityRole').put(userIdAuth, userController.updateUserCommunityRole);
@@ -30,7 +30,7 @@ router.route('/user/CommunityRole').put(userIdAuth, userController.updateUserCom
 router.route('/communityUsers/:communityId').get(userIdAuth, userController.findUsersByCommunityId);
 router.route('/communityGroupUsers/:communityGroupId').get(userIdAuth, userController.findUsersByCommunityGroupId);
 
-router.route('/leave/:communityId').put(userIdAuth, userController.leaveCommunity);
+//router.route('/leave/:communityId').put(userIdAuth, userController.leaveCommunity);
 
 export default router;
 

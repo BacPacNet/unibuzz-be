@@ -15,6 +15,8 @@ router
   .delete(communityGroupController.deleteCommunityGroup);
 
 router.route('/togglegroup/:groupId').put(userIdAuth, communityGroupController.Join_leave_CommunityGroup);
+router.route('/:groupId/join').put(userIdAuth, communityGroupController.joinCommunityGroup);
+router.route('/:groupId/leave').delete(userIdAuth, communityGroupController.leaveCommunityGroup);
 
 export default router;
 

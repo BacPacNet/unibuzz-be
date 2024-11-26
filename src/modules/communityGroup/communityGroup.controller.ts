@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User, userService } from '../user';
 import { notificationService } from '../Notification';
-import { communityGroupRoleAccess } from '../user/user.interfaces';
+//import { communityGroupRoleAccess } from '../user/user.interfaces';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { communityGroupType } from '../../config/community.type';
 
@@ -18,9 +18,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response, 
   const { communityId } = req.params;
   let group;
   let userData;
-  if (!req.body.title) {
-    return next(new ApiError(httpStatus.NOT_FOUND, 'title required!'));
-  }
+
   try {
     if (userID && communityId) {
       const user = await User.findById(req.userId);
@@ -28,11 +26,11 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response, 
       const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
 
       if (!userVerifiedCommunityIds.includes(String(communityId))) {
-        return next(new ApiError(httpStatus.UNAUTHORIZED, ' only verified user can create Groups!'));
+        return next(new ApiError(httpStatus.UNAUTHORIZED, 'Only verified user can create group'));
       }
 
       group = await communityGroupService.createCommunityGroup(userID, communityId, req.body);
-      await communityGroupService.joinLeaveCommunityGroup(userID, String(group._id), communityGroupRoleAccess.Admin);
+      await communityGroupService.joinCommunityGroup(userID, String(group._id));
       userData = await userService.getUserById(new mongoose.Types.ObjectId(userID));
       if (req.body.selectedUsersId.length >= 1 && group._id) {
         await notificationService.createManyNotification(
@@ -124,23 +122,34 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
   }
 };
 
-export const Join_leave_CommunityGroup = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
+export const joinCommunityGroup = async (req: extendedRequest, res: Response) => {
+  const userID = req.userId as string;
   const { groupId } = req.params;
-
-  let status;
   try {
-    if (userID && groupId) {
-      status = await communityGroupService.joinLeaveCommunityGroup(userID, groupId, communityGroupRoleAccess.Member);
-      return res.status(200).json(status);
-    }
-  } catch (error: any) {
-    if (error instanceof ApiError) {
-      return res.status(error.statusCode).json({ message: error.message });
-    } else {
-      console.log(error);
+    const updatedCommunity = await communityGroupService.joinCommunityGroup(userID, groupId as string);
 
-      return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: 'An internal server error occurred' });
-    }
+    res.status(200).json({
+      success: true,
+      message: 'Successfully joined the community group',
+      data: updatedCommunity,
+    });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const leaveCommunityGroup = async (req: extendedRequest, res: Response) => {
+  const userID = req.userId as string;
+  const { groupId } = req.params;
+  try {
+    const updatedCommunity = await communityGroupService.leaveCommunityGroup(userID, groupId as string);
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully left the community group',
+      data: updatedCommunity,
+    });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
