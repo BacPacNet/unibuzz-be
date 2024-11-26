@@ -31,6 +31,17 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
     enum: ['Private', 'Public'],
     default: communityGroupType.Public,
   },
+  users: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      isRequestAccepted: { type: Boolean, default: false },
+      firstName: String,
+      lastName: String,
+      year: String,
+      degree: String,
+      major: String,
+    },
+  ],
 });
 
 const communityGroupModel = model<communityGroupInterface>('communityGroup', communityGroupSchema);

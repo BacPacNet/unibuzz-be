@@ -81,3 +81,32 @@ export const CreateCommunity = async (req: any, res: Response) => {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const joinCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { communityId } = req.params;
+
+  try {
+    if (typeof communityId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(communityId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      }
+      let user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+      return res.status(200).json({ message: 'Joined Successfully', user });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const leaveCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { communityId } = req.params;
+  try {
+    if (!communityId) {
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'community ID Required'));
+    }
+    let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+    return res.status(200).json({ message: 'Left the community', user });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};

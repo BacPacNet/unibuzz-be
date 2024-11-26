@@ -1,10 +1,14 @@
-import mongoose from 'mongoose';
+import mongoose, { Types, Document } from 'mongoose';
 import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
 import { communityGroupType } from '../../config/community.type';
+import { communityGroupInterface } from './communityGroup.interface';
+import { userProfileService } from '../userProfile';
+
+type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
   const newGroup = { ...body, communityId: communityId, adminUserId: userID };
@@ -62,82 +66,94 @@ export const getCommunityGroupByCommunity = async (communityId: string) => {
   return await communityGroupModel.findOne({ communityId: communityId });
 };
 
-export const getCommunityGroup = async (groupId: string) => {
-  return await communityGroupModel.findById(groupId);
+export const getCommunityGroup = async (groupId: string): Promise<CommunityGroupDocument | null> => {
+  // Validate the ObjectId
+  if (!Types.ObjectId.isValid(groupId)) {
+    return null;
+  }
+
+  // Find the community group and return it
+  return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
-export const joinLeaveCommunityGroup = async (userID: string, groupId: string, role: string) => {
+export const joinCommunityGroup = async (userID: string, groupId: string) => {
   try {
-    const user: any = await getUserById(new mongoose.Types.ObjectId(userID));
-    const community: any = await getCommunityGroup(groupId);
+    const user = await getUserById(new mongoose.Types.ObjectId(userID));
+    if (!user) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    }
+    const userProfile = await userProfileService.getUserProfileById(String(userID));
 
-    const communityIdStr = community?.communityId.toString();
-    let message;
-    const communityGroup: any = {
-      communityGroupName: community?.title,
-      communityGroupId: community?._id,
-      role: role,
-    };
-
-    if (!user.userVerifiedCommunities) {
-      user.userVerifiedCommunities = [];
+    if (!userProfile) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
     }
 
-    const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
+    const communityGroup = await getCommunityGroup(groupId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    }
+    const userVerifiedCommunityIds = user.userVerifiedCommunities.map((community) => community.communityId.toString()) || [];
 
     const userUnverifiedVerifiedCommunityIds =
-      user?.userUnVerifiedCommunities.map((c: any) => c.communityId.toString()) || [];
+      user.userUnVerifiedCommunities.map((community) => community.communityId.toString()) || [];
+    if (
+      !userVerifiedCommunityIds.includes(communityGroup.communityId.toString()) &&
+      !userUnverifiedVerifiedCommunityIds.includes(communityGroup.communityId.toString())
+    ) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
+    }
+    // Check if the user is already a member of the communityGroup
+    const userAlreadyMember = communityGroup.users.some((user) => user.userId.toString() === userID);
 
-    if (userUnverifiedVerifiedCommunityIds.includes(communityIdStr) && community.communityGroupType == 'private') {
-      throw new ApiError(httpStatus.NOT_FOUND, ' only verified community users can join!');
+    if (userAlreadyMember) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a member of this community');
     }
 
-    if (!userVerifiedCommunityIds.includes(communityIdStr) && !userUnverifiedVerifiedCommunityIds.includes(communityIdStr)) {
-      throw new ApiError(httpStatus.NOT_FOUND, ' not part of university!');
+    communityGroup.users.push({
+      userId: new mongoose.Types.ObjectId(userID),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      year: userProfile.study_year as string,
+      degree: userProfile.degree as string,
+      major: userProfile.major as string,
+      isRequestAccepted: true,
+    });
+
+    await communityGroup.save();
+    return communityGroup;
+  } catch (error: any) {
+    console.error(error);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error);
+  }
+};
+
+export const leaveCommunityGroup = async (userID: string, groupId: string) => {
+  try {
+    const user = await getUserById(new mongoose.Types.ObjectId(userID));
+    if (!user) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
-    // for verified Communities
-    user.userVerifiedCommunities = user.userVerifiedCommunities.map((c: any) => {
-      if (c.communityId.toString() === communityIdStr) {
-        const groupIndex = c.communityGroups.findIndex((g: any) => g.communityGroupId === groupId);
-        if (groupIndex !== -1) {
-          c.communityGroups.splice(groupIndex, 1);
-          community.memberCount = community.memberCount - 1;
-          message = 'left Group';
-          return c;
-        } else {
-          c.communityGroups.push(communityGroup);
-          community.memberCount = community.memberCount + 1;
-          message = 'joined Group';
-          return c;
-        }
-      }
-      return c;
-    });
 
-    // for unverified communities
-    user.userUnVerifiedCommunities = user.userUnVerifiedCommunities.map((c: any) => {
-      if (c.communityId.toString() === communityIdStr) {
-        const groupIndex = c.communityGroups.findIndex((g: any) => g.communityGroupId === groupId);
-        if (groupIndex !== -1) {
-          c.communityGroups.splice(groupIndex, 1);
-          community.memberCount = community.memberCount - 1;
-          message = 'left Group';
-          return c;
-        } else {
-          c.communityGroups.push(communityGroup);
-          community.memberCount = community.memberCount + 1;
-          message = 'joined Group';
-          return c;
-        }
-      }
-      return c;
-    });
+    const communityGroup = await getCommunityGroup(groupId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    }
 
-    await user.save();
-    await community.save();
-    return { message, user };
-  } catch (err) {
-    console.log(err);
-    throw err;
+    // Check if the user is a member of the communityGroup
+    const userIndex = communityGroup.users.findIndex((groupUser) => groupUser.userId.toString() === userID);
+
+    if (userIndex === -1) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
+    }
+
+    // Remove the user from the community's users array
+    communityGroup.users.splice(userIndex, 1);
+
+    // Save the updated communityGroup
+    await communityGroup.save();
+    return communityGroup;
+  } catch (error: any) {
+    console.error(error);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };

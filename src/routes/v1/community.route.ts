@@ -10,4 +10,7 @@ router
   .post(userIdAuth, communityController.CreateCommunity);
 router.route('/:communityId').get(communityController.getCommunity).put(communityController.updateCommunity);
 
+router.route('/:communityId/join').put(userIdAuth, communityController.joinCommunity);
+router.route('/:communityId/leave').delete(userIdAuth, communityController.leaveCommunity);
+
 export default router;

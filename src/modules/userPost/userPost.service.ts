@@ -43,7 +43,7 @@ export const updateUserPost = async (id: mongoose.Types.ObjectId, post: userPost
 };
 
 export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
-  return await UserPostModel.findByIdAndDelete(id);
+  return await UserPostModel.deleteOne(id);
 };
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
   const user = await User.findById(id);
