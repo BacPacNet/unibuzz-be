@@ -37,9 +37,11 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
       isRequestAccepted: { type: Boolean, default: false },
       firstName: String,
       lastName: String,
+      universityName: String,
       year: String,
       degree: String,
       major: String,
+      profileImageUrl: String || null,
     },
   ],
 });

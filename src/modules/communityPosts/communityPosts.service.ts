@@ -1,36 +1,15 @@
 import mongoose from 'mongoose';
-import { User, userService } from '../user';
+import { User } from '../user';
 import { communityPostsInterface } from './communityPosts.interface';
 import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { communityPostsModel } from '.';
-import { communityGroupService } from '../communityGroup';
 import { CommunityType } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 
-export const createCommunityPost = async (post: communityPostsInterface, adminId: mongoose.Types.ObjectId) => {
-  const postData = { ...post, user_id: adminId };
-  const admin = await userService.getUserById(adminId);
-  const adminCommunityGroup: any = await communityGroupService.getCommunityGroupByCommunity(String(post.communityId));
-
-  const verifiedCommunityGroups: any = admin?.userVerifiedCommunities.flatMap((c) =>
-    c.communityGroups.map((group) => group)
-  );
-  const unVerifiedCommunityGroups: any = admin?.userUnVerifiedCommunities.flatMap((c) =>
-    c.communityGroups.map((group) => group)
-  );
-
-  const isCommunityUser = verifiedCommunityGroups?.find(
-    (group: any) => group.communityGroupId === String(adminCommunityGroup?._id)
-  );
-  const isUnVeriCommunityUser = unVerifiedCommunityGroups?.find(
-    (group: any) => group.communityGroupId === String(adminCommunityGroup?._id)
-  );
-
-  if (isCommunityUser?.role == 'Member' || isUnVeriCommunityUser?.role == 'Member') {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not admin/moderator of the group!');
-  }
+export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
+  const postData = { ...post, user_id: userId };
 
   return await CommunityPostModel.create(postData);
 };

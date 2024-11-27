@@ -2,6 +2,13 @@ import mongoose from 'mongoose';
 
 interface User {
   id: mongoose.Types.ObjectId;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string;
+  universityName: string;
+  year: string;
+  degree: string;
+  major: string;
 }
 
 interface communityInterface {
@@ -11,7 +18,6 @@ interface communityInterface {
   name: string;
   adminId: mongoose.Types.ObjectId;
   collegeID: mongoose.Types.ObjectId;
-  numberOfUser: number;
   numberOfStudent: number;
   numberOfFaculty: number;
   about: string;

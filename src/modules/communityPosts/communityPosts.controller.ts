@@ -3,9 +3,10 @@ import * as communityPostsService from './communityPosts.service';
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
-import { User } from '../user';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
+import { userProfileService } from '../userProfile';
+import { communityGroupService } from '../communityGroup';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -13,25 +14,34 @@ interface extendedRequest extends Request {
 
 // create community post
 export const createCommunityPost = async (req: extendedRequest, res: Response) => {
-  const adminId = req.userId;
-  let adminObjectId;
-  let post;
-
+  const userId = req.userId as string;
+  const { communityId, communiyGroupId } = req.body.communityId;
   try {
-    if (adminId && mongoose.Types.ObjectId.isValid(adminId)) {
-      adminObjectId = new mongoose.Types.ObjectId(adminId);
-
-      if (req.body.communityId && !req.body.communiyGroupId) {
-        const community = await communityService.getCommunity(req.body.communityId);
-
-        if (adminId !== String(community?.adminId)) {
-          throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
-        }
+    if (communityId) {
+      const community = await communityService.getCommunity(req.body.communityId);
+      if (!community) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
       }
-      post = await communityPostsService.createCommunityPost(req.body, adminObjectId);
-
-      return res.status(httpStatus.CREATED).send(post);
+      const isAdmin = community.adminId.toString() === userId;
+      if (!isAdmin) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create post');
+      }
     }
+
+    if (communiyGroupId) {
+      const communityGroup = await communityGroupService.getCommunityGroupById(communiyGroupId);
+      if (!communityGroup) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+      }
+
+      const isAdmin = communityGroup.adminUserId.toString() === userId;
+      if (!isAdmin) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
+      }
+    }
+    const post = await communityPostsService.createCommunityPost(req.body, new mongoose.Types.ObjectId(userId));
+
+    return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
     console.log(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -73,53 +83,37 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 
 //get all community post
 export const getAllCommunityPost = async (req: any, res: Response) => {
-  let communityPosts: any;
   const { page, limit } = req.query;
+  const { communityId, communityGroupId } = req.params;
   // let access = CommunityType.PUBLIC;
 
   try {
-    const user = await User.findById(req.userId);
+    const userProfile = await userProfileService.getUserProfileById(req.userId);
+    if (!userProfile) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'User profile not found' });
+    }
     const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(req.userId);
+    const checkIfUserIsVerified = userProfile?.email.some((emailItem) => emailItem.communityId === communityId);
 
-    if (req.params.communityId) {
-      const isVerifiedMember = user?.userVerifiedCommunities?.map((item) => item.communityId);
-      const isUnVerifiedMember = user?.userUnVerifiedCommunities?.map((item) => item.communityId);
-      if (!isVerifiedMember?.includes(req.params.communityId) && !isUnVerifiedMember?.includes(req.params.communityId)) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the posts!');
-      }
-      // if (isVerifiedMember?.includes(req.params.communityId)) {
-      //   access = CommunityType.FOLLOWER_ONLY;
-      // }
-      // if (isUnVerifiedMember?.includes(req.params.communityId)) {
-      //   access = CommunityType.PUBLIC;
-      // }
-    }
-    if (req.params.communityId && req.params.communityGroupId) {
-      const userVerifiedCommunityIds =
-        user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
+    const community = await communityService.getCommunity(communityId);
 
-      const userUnverifiedVerifiedCommunityIds =
-        user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-      if (
-        !userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId)) &&
-        !userVerifiedCommunityIds.includes(String(req.params.communityGroupId))
-      ) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Join the community Group to view the posts!');
-      }
-
-      // if (userUnverifiedVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
-      //   access = CommunityType.PUBLIC;
-      // }
-      // if (userVerifiedCommunityIds.includes(String(req.params.communityGroupId))) {
-      //   access = CommunityType.FOLLOWER_ONLY;
-      // }
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
 
-    communityPosts = await communityPostsService.getAllCommunityPost(
+    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === req.userId.toString());
+
+    if (!checkIfUserIsVerified || !checkIfUserJoinedCommunity) {
+      res.status(httpStatus.FORBIDDEN).json({
+        sucess: false,
+        message: 'You are not a verified member of this community',
+      });
+    }
+
+    const communityPosts = await communityPostsService.getAllCommunityPost(
       followingAndSelfUserIds,
-      req.params.communityId,
-      req.params.communityGroupId,
+      communityId,
+      communityGroupId,
       Number(page),
       Number(limit)
     );

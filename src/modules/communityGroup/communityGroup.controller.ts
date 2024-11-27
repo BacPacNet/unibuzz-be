@@ -3,49 +3,32 @@ import httpStatus from 'http-status';
 import { communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
-import { User, userService } from '../user';
-import { notificationService } from '../Notification';
+import { User } from '../user';
 //import { communityGroupRoleAccess } from '../user/user.interfaces';
-import { notificationRoleAccess } from '../Notification/notification.interface';
 import { communityGroupType } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
 }
 
-export const CreateCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
-  const userID = req.userId;
+export const CreateCommunityGroup = async (req: extendedRequest, res: Response) => {
+  const userId = req.userId;
   const { communityId } = req.params;
-  let group;
-  let userData;
 
   try {
-    if (userID && communityId) {
-      const user = await User.findById(req.userId);
-
-      const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-
-      if (!userVerifiedCommunityIds.includes(String(communityId))) {
-        return next(new ApiError(httpStatus.UNAUTHORIZED, 'Only verified user can create group'));
-      }
-
-      group = await communityGroupService.createCommunityGroup(userID, communityId, req.body);
-      await communityGroupService.joinCommunityGroup(userID, String(group._id));
-      userData = await userService.getUserById(new mongoose.Types.ObjectId(userID));
-      if (req.body.selectedUsersId.length >= 1 && group._id) {
-        await notificationService.createManyNotification(
-          group.adminUserId,
-          group._id,
-          req.body.selectedUsersId,
-          notificationRoleAccess.GROUP_INVITE,
-          'recieved an invitation to join group'
-        );
-      }
+    if (!communityId || !userId) {
+      return new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
     }
-    return res.status(httpStatus.CREATED).json({ group, userData });
+
+    const createCommunityGroup = await communityGroupService.createCommunityGroup(req.body, communityId, userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully created the community group',
+      data: createCommunityGroup,
+    });
   } catch (error: any) {
     console.log(error);
-
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -77,6 +60,21 @@ export const deleteCommunityGroup = async (req: Request, res: Response, next: Ne
     return res.status(200).json({ message: 'deleted' });
   } catch (error) {
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
+  }
+};
+
+export const getCommunityGroupById = async (req: extendedRequest, res: Response) => {
+  //  const { communityId } = req.params;
+  const { communityGroupId } = req.query;
+
+  try {
+    const communityGroup = await communityGroupService.getCommunityGroupById(communityGroupId as string);
+    if (!communityGroup) {
+      return res.status(httpStatus.NOT_FOUND).json({ success: false, message: 'Community group not found' });
+    }
+    return res.status(httpStatus.OK).json(communityGroup);
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
