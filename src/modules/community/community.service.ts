@@ -83,12 +83,6 @@ export const updateCommunity = async (id: string, community: any) => {
   return communityToUpadate;
 };
 
-export const communityMemberToggle = async (communityId: string, isMember: boolean) => {
-  const incrementValue = isMember ? 1 : -1;
-
-  await communityModel.findOneAndUpdate({ _id: communityId }, { $inc: { numberOfUser: incrementValue } });
-};
-
 export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
   const user = await getUserById(userId);
   const userProfile = await userProfileService.getUserProfileById(String(userId));
@@ -110,6 +104,8 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
           id: userId,
           firstName: user.firstName,
           lastName: user.lastName,
+          profileImageUrl: userProfile.profile_dp?.imageUrl || null,
+          universityName: userProfile.university_name,
           year: userProfile.study_year,
           degree: userProfile.degree,
           major: userProfile.major,

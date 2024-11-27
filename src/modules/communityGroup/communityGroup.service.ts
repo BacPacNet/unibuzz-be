@@ -7,13 +7,11 @@ import { getUserProfiles } from '../userProfile/userProfile.service';
 import { communityGroupType } from '../../config/community.type';
 import { communityGroupInterface } from './communityGroup.interface';
 import { userProfileService } from '../userProfile';
+import { communityGroupService } from '.';
+import { notificationService } from '../Notification';
+import { notificationRoleAccess } from '../Notification/notification.interface';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
-
-export const createCommunityGroup = async (userID: string, communityId: any, body: any) => {
-  const newGroup = { ...body, communityId: communityId, adminUserId: userID };
-  return await communityGroupModel.create(newGroup);
-};
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
   let communityGroupToUpadate;
@@ -76,6 +74,40 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
   return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
+export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
+  const userProfile = await userProfileService.getUserProfileById(String(userId));
+  if (!userProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+  }
+  const isUserAllowtoCreateGroup = userProfile?.email.some((item) => item.communityId === communityId);
+
+  if (!isUserAllowtoCreateGroup) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'User is not allowed to create group');
+  }
+  const createdGroup = await communityGroupModel.create({ ...body, communityId: communityId, adminUserId: userId });
+
+  await communityGroupService.joinCommunityGroup(userId, createdGroup._id.toString());
+
+  if (body.selectedUsersId.length >= 1 && createdGroup._id) {
+    await notificationService.createManyNotification(
+      createdGroup.adminUserId,
+      createdGroup._id,
+      body.selectedUsersId,
+      notificationRoleAccess.GROUP_INVITE,
+      'recieved an invitation to join group'
+    );
+  }
+  return createdGroup;
+};
+
+export const getCommunityGroupById = async (groupId: string) => {
+  const communityGroup = await communityGroupModel.findById(groupId);
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+  }
+  return communityGroup;
+};
+
 export const joinCommunityGroup = async (userID: string, groupId: string) => {
   try {
     const user = await getUserById(new mongoose.Types.ObjectId(userID));
@@ -92,16 +124,15 @@ export const joinCommunityGroup = async (userID: string, groupId: string) => {
     if (!communityGroup) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
-    const userVerifiedCommunityIds = user.userVerifiedCommunities.map((community) => community.communityId.toString()) || [];
 
-    const userUnverifiedVerifiedCommunityIds =
-      user.userUnVerifiedCommunities.map((community) => community.communityId.toString()) || [];
-    if (
-      !userVerifiedCommunityIds.includes(communityGroup.communityId.toString()) &&
-      !userUnverifiedVerifiedCommunityIds.includes(communityGroup.communityId.toString())
-    ) {
+    const isUserVerifiedToJoin = userProfile.email.some(
+      (community) => community.communityId.toString() === communityGroup.communityId.toString()
+    );
+
+    if (!isUserVerifiedToJoin) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
     }
+
     // Check if the user is already a member of the communityGroup
     const userAlreadyMember = communityGroup.users.some((user) => user.userId.toString() === userID);
 
@@ -113,6 +144,8 @@ export const joinCommunityGroup = async (userID: string, groupId: string) => {
       userId: new mongoose.Types.ObjectId(userID),
       firstName: user.firstName,
       lastName: user.lastName,
+      profileImageUrl: userProfile.profile_dp?.imageUrl || null,
+      universityName: userProfile.university_name as string,
       year: userProfile.study_year as string,
       degree: userProfile.degree as string,
       major: userProfile.major as string,

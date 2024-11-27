@@ -6,7 +6,7 @@ const router: Router = express.Router();
 
 router
   .route('/:communityId')
-  .get(userIdAuth, communityGroupController.getAllCommunityGroup)
+  .get(userIdAuth, communityGroupController.getCommunityGroupById)
   .post(userIdAuth, communityGroupController.CreateCommunityGroup);
 
 router

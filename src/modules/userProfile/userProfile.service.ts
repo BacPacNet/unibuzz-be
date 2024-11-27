@@ -115,10 +115,6 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
     return updatedUseProfile;
   } else {
     await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
-    notifications.message = 'Un-followed you';
-    await notificationService.CreateNotification(notifications);
-    io.emit(`notification_${userToFollow}`, { type: notificationRoleAccess.FOLLOW });
-
     updatedUseProfile = await UserProfile.findOneAndUpdate(
       { users_id: userId },
       { $pull: { following: { userId: userToFollow } } },

@@ -9,6 +9,8 @@ interface users {
   year: String;
   degree: String;
   major: String;
+  profileImageUrl: String | null;
+  universityName: String;
 }
 
 interface communityGroupInterface {
