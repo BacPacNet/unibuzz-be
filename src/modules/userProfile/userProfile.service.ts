@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
+import { communityModel } from '../community';
 
 export const createUserProfile = async (
   user: any,
@@ -21,13 +22,9 @@ export const createUserProfile = async (
   department: string,
   universityId: string
 ) => {
-  let emailField = [];
+  const emailField = universityEmail ? await buildEmailField(universityEmail, universityName, universityId) : null;
 
-  if (universityEmail) {
-    emailField.push({ UniversityName: universityName, UniversityEmail: universityEmail });
-  }
-
-  return await UserProfile.create({
+  const userProfileData = {
     users_id: user,
     dob,
     country,
@@ -39,8 +36,19 @@ export const createUserProfile = async (
     university_id: universityId,
     university_name: universityName,
     study_year: year,
-    ...(emailField.length > 0 && { email: emailField }),
-  });
+    ...(emailField && { email: [emailField] }),
+  };
+
+  return await UserProfile.create(userProfileData);
+};
+
+const buildEmailField = async (universityEmail: string, universityName: string, universityId: string) => {
+  const community = await communityModel.findOne({ collegeID: universityId });
+  return {
+    UniversityName: universityName,
+    UniversityEmail: universityEmail,
+    communityId: community?._id || null,
+  };
 };
 
 export const getUserProfile = async (id: string) => {

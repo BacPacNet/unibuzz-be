@@ -102,7 +102,8 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
   const { communityId } = req.params;
   try {
     if (!communityId) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'community ID Required'));
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      ``;
     }
     let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
     return res.status(200).json({ message: 'Left the community', user });
