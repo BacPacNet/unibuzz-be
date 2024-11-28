@@ -72,6 +72,20 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
       },
     },
     {
+      $lookup: {
+        from: 'colleges', // Collection name for universities
+        localField: 'profile.university_id', // The field in the UserProfile schema
+        foreignField: '_id', // The field in the University schema
+        as: 'university', // Name of the resulting array
+      },
+    },
+    {
+      $unwind: {
+        path: '$university', // Unwind the university array to get a single object
+        preserveNullAndEmptyArrays: true, // Include profiles without a matching university
+      },
+    },
+    {
       $project: {
         password: 0, // Exclude the password field
       },
