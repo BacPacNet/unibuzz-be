@@ -49,3 +49,5 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
 const communityGroupModel = model<communityGroupInterface>('communityGroup', communityGroupSchema);
 
 export default communityGroupModel;
+
+// {"academy":["a","b"]}

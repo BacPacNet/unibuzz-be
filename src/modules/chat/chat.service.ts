@@ -67,17 +67,37 @@ export const getUserChats = async (userId: string) => {
     .populate('latestMessage')
     .lean();
 
-  const userIds = chats.flatMap((chat) =>
-    chat.users.map((user) => {
-      if (typeof user?.userId === 'object' && user?.userId?._id) {
-        return user?.userId?._id?.toString();
+  const filteredChats = chats.filter((chat) => {
+    const isValidChat = chat.users.every((user) => {
+      if (!user?.userId) {
+        return false;
       }
+      if (typeof user.userId === 'object' && user.userId._id) {
+        return true;
+      }
+      return typeof user.userId === 'string' || typeof user.userId === 'number';
+    });
 
-      return user?.userId?.toString();
-    })
-  );
+    return isValidChat;
+  });
 
-  const chatIds = chats.map((chat) => chat._id.toString());
+  const userIds = filteredChats
+    .flatMap((chat) =>
+      chat.users.map((user) => {
+        if (!user?.userId) {
+          return null;
+        }
+
+        if (typeof user.userId === 'object' && user.userId._id) {
+          return user.userId._id.toString();
+        }
+
+        return user.userId.toString();
+      })
+    )
+    .filter((id) => id !== null);
+
+  const chatIds = filteredChats.map((chat) => chat._id.toString());
   const uniqueUserIds = [...new Set(userIds)];
 
   const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
@@ -119,7 +139,7 @@ export const getUserChats = async (userId: string) => {
     return unreadCount;
   }
 
-  const allChats = chats.map((chat) => {
+  const allChats = filteredChats.map((chat) => {
     let profileDp: string | null = null;
 
     if (!chat.isGroupChat) {
