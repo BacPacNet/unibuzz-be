@@ -32,6 +32,7 @@ export const Create_Get_Chat = async (req: userIdExtend, res: Response) => {
 
 export const getUserChats = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
+
   try {
     if (userID) {
       const chats = await chatService.getUserChats(userID);
