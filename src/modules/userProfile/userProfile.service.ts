@@ -72,7 +72,7 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   const bioLength = userProfileBody.bio?.trim().split(/\s+/).filter(Boolean).length || 0;
   userProfileToUpdate = await UserProfile.findById(id);
 
-  if (bioLength > 1) {
+  if (bioLength > 10) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Bio must not exceed 10 words');
   }
 
