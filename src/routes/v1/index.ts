@@ -17,6 +17,7 @@ import chatRoute from './chat.route';
 import messageRoute from './message.route';
 import loginEmailVerificationRoute from './loginEmailVerification.route';
 import universityEmailVerificationRoute from './universityVerificationEmail.route';
+import eventRoute from './events.route';
 
 const router = express.Router();
 
@@ -89,6 +90,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/message',
     route: messageRoute,
+  },
+  {
+    path: '/eventpost',
+    route: eventRoute,
   },
 ];
 
