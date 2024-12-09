@@ -285,7 +285,6 @@ export const addUniversityEmail = async (
     },
     { new: true }
   );
-  console.log(updatedUserProfile, 'updatedUserProfile');
   if (!updatedUserProfile) {
     throw new Error('This university email already exists for the user.');
   }

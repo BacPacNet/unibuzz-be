@@ -7,6 +7,7 @@ import * as authService from './auth.service';
 import { emailService } from '../email';
 import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
+
 // import { parse } from 'date-fns';
 
 export const register = catchAsync(async (req: Request, res: Response) => {
@@ -75,7 +76,9 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     department,
     universityId
   );
-  await userService.joinCommunityAfterEmailVerification(user._id, universityName);
+  await userService.joinCommunityAfterEmailVerification(user._id, universityName, universityEmail);
+
+  // await communityService.joinCommunity(new mongoose.Types.ObjectId(user._id), communityId.toString());
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
 

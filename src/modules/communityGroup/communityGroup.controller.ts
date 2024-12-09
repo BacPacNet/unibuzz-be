@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
 //import { communityGroupRoleAccess } from '../user/user.interfaces';
-import { communityGroupType } from '../../config/community.type';
+import { communityGroupAccess } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -82,7 +82,7 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
   const { communityId } = req.params;
   const { communityGroupId } = req.query;
   let groups;
-  let access = communityGroupType.Public;
+  let access = communityGroupAccess.Public;
   try {
     if (communityId) {
       const user = await User.findById(req.userId);
@@ -98,10 +98,10 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       }
 
       if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
-        access = communityGroupType.Public;
+        access = communityGroupAccess.Public;
       }
       if (userVerifiedCommunityIds.includes(String(communityId))) {
-        access = communityGroupType.Private;
+        access = communityGroupAccess.Private;
       }
       groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
 
@@ -126,7 +126,7 @@ export const joinCommunityGroup = async (req: extendedRequest, res: Response) =>
   try {
     const updatedCommunity = await communityGroupService.joinCommunityGroup(userID, groupId as string);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Successfully joined the community group',
       data: updatedCommunity,

@@ -3,6 +3,10 @@ export enum CommunityType {
   FOLLOWER_ONLY = 'FOLLOWER_ONLY',
 }
 export enum communityGroupType {
+  CASUAL = 'CASUAL',
+  OFFICIAL = 'OFFICIAL',
+}
+export enum communityGroupAccess {
   Public = 'Public',
   Private = 'Private',
 }

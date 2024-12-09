@@ -26,7 +26,14 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
     throw new ApiError(httpStatus.NOT_FOUND, 'Verification data not found');
   }
 
-  if (universityVerificationEmail.otpValidTill.getTime() < Date.now()) {
+  const otpValidTillUTC = new Date(universityVerificationEmail.otpValidTill).toISOString();
+  const currentUTC = new Date(Date.now()).toISOString();
+
+  // if (universityVerificationEmail.otpValidTill.getTime() < Date.now()) {
+  //   throw new ApiError(httpStatus.UNAUTHORIZED, 'OTP has expired!');
+  // }
+
+  if (new Date(otpValidTillUTC).getTime() < new Date(currentUTC).getTime()) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'OTP has expired!');
   }
 
