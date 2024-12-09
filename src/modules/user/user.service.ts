@@ -276,35 +276,6 @@ export const joinCommunityAfterEmailVerification = async (
 
   return { status, updateUser };
 };
-// export const joinCommunityAfterEmailVerification = async (userId: mongoose.Types.ObjectId, communityName: string) => {
-//   const user = await getUserById(userId);
-//   let community = await communityModel.findOne({ name: communityName });
-//   const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-//   let status = { isUniversityCommunity: false, isAlreadyJoined: false };
-
-//   if (!user) {
-//     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-//   }
-//   if (!community) {
-//     return status;
-//   }
-
-//   if (userVerifiedCommunityIds.includes(community._id.toString())) {
-//     status.isUniversityCommunity = true;
-//     status.isAlreadyJoined = true;
-//     return status;
-//   }
-
-//   const updatedUser = await User.findOneAndUpdate(
-//     { _id: userId },
-//     { $push: { userVerifiedCommunities: { communityName: communityName, communityId: community._id.toString() } } },
-//     { new: true }
-//   );
-
-//   status.isUniversityCommunity = true;
-
-//   return { updatedUser, status };
-// };
 
 export const findUsersByCommunityId = async (
   communityId: string,

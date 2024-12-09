@@ -10,26 +10,6 @@ export const allowedCategories = new Set([
   'Others',
 ]);
 
-// export const allowedSubcategories: Record<string, string[]> = {
-//   'Academic Focus': [
-//     'Science & Technology',
-//     'Arts & Humanities',
-//     'Social Sciences',
-//     'Education',
-//     'Business & Economics',
-//     'Health & Medicine',
-//     'Environmental Studies',
-//     'Law & Policy',
-//     'Mathematics & Statistics',
-//     'Engineering',
-//   ],
-//   'Recreation and Hobbies': ['Sports', 'Music', 'Travel', 'Gaming'],
-//   'Advocacy and Awareness': ['Human Rights', 'Climate Action', 'Animal Welfare'],
-//   'Personal Growth': ['Self-Improvement', 'Mental Wellness', 'Fitness'],
-//   'Professional Development': ['Networking', 'Skill Building', 'Career Guidance'],
-//   'Others': [],
-// };
-
 export const allowedSubcategories: Record<string, string[]> = {
   'Academic Focus': [
     'Science & Technology',

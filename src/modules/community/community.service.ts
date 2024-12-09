@@ -69,98 +69,6 @@ export const getUserCommunities = async (userID: string) => {
     throw error;
   }
 };
-// export const getUserFilteredCommunities = async (userID:string, filters:any) => {
-//   try {
-//     const { selectedType, selectedFilters } = filters;
-// console.log("fill",selectedFilters,"type",selectedType);
-
-//     // Fetch user and their communities
-//     const user = await User.findById(userID).lean();
-//     if (!user) throw new Error('User not found');
-
-//     const userProfile = await userProfileService.getUserProfileById(userID);
-//     if (!userProfile) throw new Error('User Profile not found');
-
-//     const getAllUserCommunityIds = userProfile.email
-//       .map((emailItem) => new mongoose.Types.ObjectId(emailItem?.communityId))
-//       .filter(Boolean);
-
-//     // Define the match conditions for selectedType
-//     const typeConditions = [];
-//     if (selectedType.includes('Private')) typeConditions.push({ communityGroupAccess: 'Private' });
-//     if (selectedType.includes('Public')) typeConditions.push({ communityGroupAccess: 'Public' });
-//     if (selectedType.includes('Official')) typeConditions.push({ communityGroupType: 'Official' });
-//     if (selectedType.includes('Casual')) typeConditions.push({ communityGroupType: 'Casual' });
-
-//     const communities = await communityModel.aggregate([
-//       // Match user communities
-//       {
-//         $match: { _id: { $in: getAllUserCommunityIds } },
-//       },
-//       // Lookup community groups
-//       {
-//         $lookup: {
-//           from: 'communitygroups',
-//           localField: '_id',
-//           foreignField: 'communityId',
-//           as: 'communityGroups',
-//         },
-//       },
-//       // Filter community groups based on selectedType
-//       {
-//         $addFields: {
-//           communityGroups: {
-//             $filter: {
-//               input: '$communityGroups',
-//               as: 'group',
-//               cond: {
-//                 $and: [
-//                   { $or: typeConditions.map((condition) => ({ $eq: [`$$group.${Object.keys(condition)[0]}`, Object.values(condition)[0]] })) },
-//                 ],
-//               },
-//             },
-//           },
-//         },
-//       },
-//       // Apply filters to the nested `communityGroups.communityGroupCategory`
-//       {
-//         $addFields: {
-//           communityGroups: {
-//             $filter: {
-//               input: '$communityGroups',
-//               as: 'group',
-//               cond: {
-//                 $or: Object.entries(selectedFilters).map(([key, subcategories]) => ({
-//                   $anyElementTrue: {
-//                     $map: {
-//                       input: { $objectToArray: '$$group.communityGroupCategory' },
-//                       as: 'category',
-//                       in: {
-//                         $and: [
-//                           { $eq: ['$$category.k', key] },
-//                           { $anyElementTrue: { $map: { input: subcategories, as: 'sub', in: { $in: ['$$sub', '$$category.v'] } } } },
-//                         ],
-//                       },
-//                     },
-//                   },
-//                 })),
-//               },
-//             },
-//           },
-//         },
-//       },
-//       // Only return communities with matched groups
-//       {
-//         $match: { 'communityGroups.0': { $exists: true } },
-//       },
-//     ]);
-
-//     return communities;
-//   } catch (error) {
-//     console.error('Error fetching user communities:', error);
-//     throw error;
-//   }
-// };
 
 export const getUserFilteredCommunities = async (
   userID: string,
@@ -292,40 +200,6 @@ export const updateCommunity = async (id: string, community: any) => {
   return communityToUpadate;
 };
 
-// export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
-//   const user = await getUserById(userId);
-//   const userProfile = await userProfileService.getUserProfileById(String(userId));
-//   if (!user || !userProfile) {
-//     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-//   }
-
-//   const checkIfUserIsVerified = userProfile?.email.some((emailItem) => emailItem.communityId);
-
-//   if (!checkIfUserIsVerified) {
-//     throw new ApiError(httpStatus.FORBIDDEN, 'User is already a member of this community');
-//   }
-
-//   const updateUser = await communityModel.updateOne(
-//     { _id: communityId },
-//     {
-//       $push: {
-//         users: {
-//           id: userId,
-//           firstName: user.firstName,
-//           lastName: user.lastName,
-//           profileImageUrl: userProfile.profile_dp?.imageUrl || null,
-//           universityName: userProfile.university_name,
-//           year: userProfile.study_year,
-//           degree: userProfile.degree,
-//           major: userProfile.major,
-//         },
-//       },
-//     }
-//   );
-
-//   return updateUser;
-// };
-
 export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
   const user = await getUserById(userId);
   const userProfile = await userProfileService.getUserProfileById(String(userId));
@@ -340,8 +214,6 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
   }
 
-  // const isUserVerified = userProfile?.email.some((emailItem) => emailItem.communityId);
-
   const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
 
   const userSet = new Set(communityIds);
@@ -349,9 +221,6 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   if (!userSet.has(communityId)) {
     throw new ApiError(httpStatus.FORBIDDEN, 'User is not verified to join this community');
   }
-  // if (!isUserVerified) {
-  //   throw new ApiError(httpStatus.FORBIDDEN, 'User is not verified to join this community');
-  // }
 
   const updateUser = await communityModel.updateOne(
     { _id: communityId },

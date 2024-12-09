@@ -108,26 +108,3 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
 const communityGroupModel = model<communityGroupInterface>('communityGroup', communityGroupSchema);
 
 export default communityGroupModel;
-
-// category: {
-//   type: String,
-//   required: true,
-//   enum: [
-//     'Academic Focus',
-//     'Recreation and Hobbies',
-//     'Advocacy and Awareness',
-//     'Personal Growth',
-//     'Professional Development',
-//     'Others',
-//   ],
-// },
-// subcategories: {
-//   type: [String],
-//   required: true,
-//   validate: {
-//     validator: function (subcategories) {
-//       return subcategories.length > 0;
-//     },
-//     message: 'At least one subcategory is required',
-//   },
-// },

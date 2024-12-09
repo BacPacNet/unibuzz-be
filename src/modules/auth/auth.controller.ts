@@ -78,7 +78,6 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   );
   await userService.joinCommunityAfterEmailVerification(user._id, universityName, universityEmail);
 
-  // await communityService.joinCommunity(new mongoose.Types.ObjectId(user._id), communityId.toString());
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
 
