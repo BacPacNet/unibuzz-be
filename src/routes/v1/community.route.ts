@@ -8,6 +8,8 @@ router
   .route('/')
   .get(userIdAuth, communityController.getAllUserCommunity)
   .post(userIdAuth, communityController.CreateCommunity);
+
+router.route('/filtered/:communityId').post(userIdAuth, communityController.getFilteredUserCommunity);
 router.route('/:communityId').get(communityController.getCommunity).put(communityController.updateCommunity);
 
 router.route('/:communityId/join').put(userIdAuth, communityController.joinCommunity);

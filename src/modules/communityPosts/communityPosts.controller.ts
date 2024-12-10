@@ -104,7 +104,7 @@ export const getAllCommunityPost = async (req: any, res: Response) => {
     const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === req.userId.toString());
 
     if (!checkIfUserIsVerified || !checkIfUserJoinedCommunity) {
-      res.status(httpStatus.FORBIDDEN).json({
+      return res.status(httpStatus.FORBIDDEN).json({
         sucess: false,
         message: 'You are not a verified member of this community',
       });

@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
-import { communityGroupInterface } from './communityGroup.interface';
-import { communityGroupType } from '../../config/community.type';
+import { allowedCategories, allowedSubcategories, communityGroupInterface } from './communityGroup.interface';
+import { communityGroupAccess, communityGroupType } from '../../config/community.type';
 
 const communityGroupSchema = new Schema<communityGroupInterface>({
   adminUserId: {
@@ -26,10 +26,69 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
     type: Number,
     default: 0,
   },
-  communityGroupType: {
+  communityGroupAccess: {
     type: String,
     enum: ['Private', 'Public'],
-    default: communityGroupType.Public,
+    default: communityGroupAccess.Public,
+  },
+  communityGroupType: {
+    type: String,
+    enum: ['Casual', 'Official'],
+    default: communityGroupType.CASUAL,
+  },
+  communityGroupCategory: {
+    type: Map,
+    of: [String],
+    required: true,
+    validate: [
+      {
+        validator: function (value: Map<string, string[]>): boolean {
+          return value.size === 1;
+        },
+        message: 'Only one category can be specified.',
+      },
+      {
+        validator: function (value: Map<string, string[]>): boolean {
+          for (const key of value.keys()) {
+            if (!allowedCategories.has(key)) {
+              return false;
+            }
+          }
+          return true;
+        },
+        message: `Invalid category key.`,
+      },
+      {
+        validator: function (value: Map<string, string[]>): boolean {
+          for (const [key, subcategories] of value.entries()) {
+            const allowedSubs = allowedSubcategories[key];
+            if (key !== 'Others' && subcategories.length === 0) {
+              return false;
+            }
+            if (!allowedSubs) {
+              if (subcategories.length > 0) {
+                return false;
+              }
+            } else {
+              const subSet = new Set(allowedSubs);
+              for (const sub of subcategories) {
+                if (!subSet.has(sub)) {
+                  return false;
+                }
+              }
+            }
+          }
+          return true;
+        },
+        message: function (props: { value: Map<string, string[]> }): string {
+          const [key] = Array.from(props.value.keys());
+          if (!key) {
+            return 'Invalid key.';
+          }
+          return `Invalid subcategory for "${key}".}`;
+        },
+      },
+    ],
   },
   users: [
     {
@@ -49,5 +108,3 @@ const communityGroupSchema = new Schema<communityGroupInterface>({
 const communityGroupModel = model<communityGroupInterface>('communityGroup', communityGroupSchema);
 
 export default communityGroupModel;
-
-// {"academy":["a","b"]}

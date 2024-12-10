@@ -20,6 +20,22 @@ export const getAllUserCommunity = async (req: userIdExtend, res: Response, next
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
 };
+export const getFilteredUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const userID = req.userId as string;
+  const { communityId } = req.params;
+
+  try {
+    if (!communityId) {
+      throw new Error('communityId not found');
+    }
+
+    const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body);
+    res.status(httpStatus.OK).json(communities);
+  } catch (error) {
+    console.error('Error fetching user communities:', error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
+  }
+};
 
 //get community
 export const getCommunity = async (req: any, res: Response, next: NextFunction) => {
