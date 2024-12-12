@@ -73,6 +73,7 @@ export const getUserCommunities = async (userID: string) => {
 export const getUserFilteredCommunities = async (
   userID: string,
   communityId: string = '',
+  sortBy: string,
   filters?: {
     selectedType?: string[];
     selectedFilters?: Record<string, string[]>;
@@ -178,6 +179,77 @@ export const getUserFilteredCommunities = async (
     }
 
     pipeline.push({ $project: { communityGroups: 1 } });
+
+    switch (sortBy) {
+      case 'name':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { lowerTitle: 1 } },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.lowerTitle',
+        });
+        break;
+
+      case 'users':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: ['$$group', { userCount: { $size: '$$group.users' } }],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { userCount: -1 } },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.userCount',
+        });
+        break;
+
+      case 'latest':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { createdAt: -1 } },
+            },
+          },
+        });
+        break;
+
+      default:
+        break;
+    }
 
     const communities = await communityModel.aggregate(pipeline);
     return communities.length ? communities[0] : { _id: communityId, communityGroups: [] };

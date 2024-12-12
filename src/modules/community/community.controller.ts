@@ -5,9 +5,6 @@ import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from 'src/config/userIDType';
-// import { communityGroupService } from '../communityGroup';
-// import { userService } from '../user';
-// import { communityGroupRoleAccess } from '../user/user.interfaces';
 
 // get all userCommunity
 export const getAllUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
@@ -29,7 +26,7 @@ export const getFilteredUserCommunity = async (req: userIdExtend, res: Response,
       throw new Error('communityId not found');
     }
 
-    const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body);
+    const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body.sort, req.body);
     res.status(httpStatus.OK).json(communities);
   } catch (error) {
     console.error('Error fetching user communities:', error);
