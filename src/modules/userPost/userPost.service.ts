@@ -46,19 +46,6 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
   return await UserPostModel.deleteOne(id);
 };
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
-  // const user = await User.findById(id);
-  // const userVerifiedCommunityId = user?.userVerifiedCommunities.map((item) => item.communityId) || [];
-  // const userUnVerifiedCommunityId = user?.userUnVerifiedCommunities.map((item) => item.communityId) || [];
-
-  // const userVerifiedCommunityGroupId =
-  //   user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-  // const userUNVerifiedCommunityGroupId =
-  //   user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-  // const allCommunityId = [...userVerifiedCommunityId, ...userUnVerifiedCommunityId];
-  // const allCommunityGroupId = [...userVerifiedCommunityGroupId, ...userUNVerifiedCommunityGroupId];
-
-  // return [allCommunityId, allCommunityGroupId];
 
   const userProfile = await userProfileService.getUserProfileById(String(id));
   const allCommunityId = userProfile?.email.map((item) => item.communityId);
@@ -68,7 +55,6 @@ export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.Object
 export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {
   // Get user IDs of the user and their followers
   const [followingAndSelfUserIds = [], followersAndSelfUserIds = []] = await getFollowingAndSelfUserIds(userId);
-  // const [allCommunityId, allCommunityGroupId] = (await getUserJoinedCommunityIds(userId)) || [];
   const allCommunityId = (await getUserJoinedCommunityIds(userId)) || [];
   const mutualIds = followingAndSelfUserIds
     .map((id) => id.toString())
@@ -78,7 +64,6 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
 
   const totalUserPosts = await countUserPostsForUserIds(followingAndSelfUserIds!);
 
-  // const totalCommunityPosts = await countCommunityPostsForUserIds(allCommunityId, allCommunityGroupId);
   const totalCommunityPosts = await countCommunityPostsForUserIds(allCommunityId);
 
   const totalPosts = totalUserPosts + totalCommunityPosts;
@@ -87,16 +72,9 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
 
   const remainingLimit = Math.max(0, 5 - UsersPosts.length);
 
-  // const CommunityPosts = await getCommunityPostsForUser(
-  //   allCommunityId,
-  //   allCommunityGroupId,
-  //   followingAndSelfUserIds,
-  //   limit + remainingLimit,
-  //   skip
-  // );
+
   const CommunityPosts = await getCommunityPostsForUser(
     allCommunityId,
-
     followingAndSelfUserIds,
     limit + remainingLimit,
     skip

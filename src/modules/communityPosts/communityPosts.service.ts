@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-// import { User } from '../user';
 import { communityPostsInterface } from './communityPosts.interface';
 import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
@@ -184,118 +183,7 @@ export const getAllCommunityPost = async (
     throw new Error('Failed to Get User Posts');
   }
 };
-// const communityGroup = await communityGroupModel.findOne({ _id: postId, 'users.userId': myUserId });
-// export const getcommunityPost = async (postId: string, myUserId: string) => {
-//   try {
-//     // const user = await User.findById(myUserId);
-//     const userProfile = await UserProfile.findOne({ users_id: myUserId });
-//     const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
-//     const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
-//     const userId = new mongoose.Types.ObjectId(myUserId);
-//     const postIdToGet = new mongoose.Types.ObjectId(postId);
 
-//     // const verifiedCommunityIds = user?.userVerifiedCommunities?.map((item) => item.communityId) || [];
-//     // const unverifiedCommunityIds = user?.userUnVerifiedCommunities?.map((item) => item.communityId) || [];
-//     // const allCommunityIds = [...verifiedCommunityIds, ...unverifiedCommunityIds].map(
-//     //   (id) => new mongoose.Types.ObjectId(id)
-//     // );
-//     const allCommunityIds = userProfile?.email.map(
-//       (item) => new mongoose.Types.ObjectId(item.communityId)
-//     );
-
-//     const pipeline = [
-//       { $match: { _id: postIdToGet } },
-
-//       {
-//         $lookup: {
-//           from: 'users',
-//           localField: 'user_id',
-//           foreignField: '_id',
-//           as: 'user',
-//         },
-//       },
-//       { $unwind: '$user' },
-
-//       {
-//         $lookup: {
-//           from: 'userprofiles',
-//           localField: 'user._id',
-//           foreignField: 'users_id',
-//           as: 'profile',
-//         },
-//       },
-//       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-
-//       {
-//         $lookup: {
-//           from: 'communitypostcomments',
-//           localField: '_id',
-//           foreignField: 'communityId',
-//           as: 'comments',
-//         },
-//       },
-//       { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
-
-//       {
-//         $lookup: {
-//           from: 'users',
-//           localField: 'comments.commenterId',
-//           foreignField: '_id',
-//           as: 'commenter',
-//         },
-//       },
-//       { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
-
-//       {
-//         $addFields: {
-//           isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
-//           isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
-
-//           isCommunityMember: {
-//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$communityId', allCommunityIds] }],
-//           },
-
-//           isFollowing: {
-//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
-//           },
-
-//           comments: { $ifNull: ['$comments', []] },
-//         },
-//       },
-
-//       {
-//         $match: {
-//           $or: [{ isPublic: true }, { isFollowerOnly: true, isCommunityMember: true, isFollowing: true }],
-//         },
-//       },
-
-//       {
-//         $project: {
-//           _id: 1,
-//           user_id: 1,
-//           communityId: 1,
-//           communityPostsType: 1,
-//           content: 1,
-//           imageUrl: 1,
-//           likeCount: 1,
-//           createdAt: 1,
-//           updatedAt: 1,
-//           user: {
-//             firstName: '$user.firstName',
-//             lastName: '$user.lastName',
-//           },
-//           profile: '$profile',
-//           commentCount: { $size: '$comments' }, // Total comment count
-//         },
-//       },
-//     ];
-
-//     return await communityPostsModel.aggregate(pipeline);
-//   } catch (error) {
-//     console.error('Error fetching user posts:', error);
-//     throw new Error(error as string);
-//   }
-// };
 
 export const getcommunityPost = async (postId: string, myUserId: string) => {
   try {
