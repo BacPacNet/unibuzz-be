@@ -2,108 +2,111 @@ import { Schema, model } from 'mongoose';
 import { allowedCategories, allowedSubcategories, communityGroupInterface } from './communityGroup.interface';
 import { communityGroupAccess, communityGroupType } from '../../config/community.type';
 
-const communityGroupSchema = new Schema<communityGroupInterface>({
-  adminUserId: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  communityId: {
-    type: Schema.Types.ObjectId,
-    ref: 'community',
-    required: true,
-  },
-  communityGroupLogoUrl: { imageUrl: String, publicId: String },
-  communityGroupLogoCoverUrl: { imageUrl: String, publicId: String },
-  title: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: String,
-  },
-  memberCount: {
-    type: Number,
-    default: 0,
-  },
-  communityGroupAccess: {
-    type: String,
-    enum: ['Private', 'Public'],
-    default: communityGroupAccess.Public,
-  },
-  communityGroupType: {
-    type: String,
-    enum: ['Casual', 'Official'],
-    default: communityGroupType.CASUAL,
-  },
-  communityGroupCategory: {
-    type: Map,
-    of: [String],
-    required: true,
-    validate: [
-      {
-        validator: function (value: Map<string, string[]>): boolean {
-          return value.size === 1;
+const communityGroupSchema = new Schema<communityGroupInterface>(
+  {
+    adminUserId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    communityId: {
+      type: Schema.Types.ObjectId,
+      ref: 'community',
+      required: true,
+    },
+    communityGroupLogoUrl: { imageUrl: String, publicId: String },
+    communityGroupLogoCoverUrl: { imageUrl: String, publicId: String },
+    title: {
+      type: String,
+      required: true,
+    },
+    description: {
+      type: String,
+    },
+    memberCount: {
+      type: Number,
+      default: 0,
+    },
+    communityGroupAccess: {
+      type: String,
+      enum: ['Private', 'Public'],
+      default: communityGroupAccess.Public,
+    },
+    communityGroupType: {
+      type: String,
+      enum: ['Casual', 'Official'],
+      default: communityGroupType.CASUAL,
+    },
+    communityGroupCategory: {
+      type: Map,
+      of: [String],
+      required: true,
+      validate: [
+        {
+          validator: function (value: Map<string, string[]>): boolean {
+            return value.size === 1;
+          },
+          message: 'Only one category can be specified.',
         },
-        message: 'Only one category can be specified.',
-      },
-      {
-        validator: function (value: Map<string, string[]>): boolean {
-          for (const key of value.keys()) {
-            if (!allowedCategories.has(key)) {
-              return false;
-            }
-          }
-          return true;
-        },
-        message: `Invalid category key.`,
-      },
-      {
-        validator: function (value: Map<string, string[]>): boolean {
-          for (const [key, subcategories] of value.entries()) {
-            const allowedSubs = allowedSubcategories[key];
-            if (key !== 'Others' && subcategories.length === 0) {
-              return false;
-            }
-            if (!allowedSubs) {
-              if (subcategories.length > 0) {
+        {
+          validator: function (value: Map<string, string[]>): boolean {
+            for (const key of value.keys()) {
+              if (!allowedCategories.has(key)) {
                 return false;
               }
-            } else {
-              const subSet = new Set(allowedSubs);
-              for (const sub of subcategories) {
-                if (!subSet.has(sub)) {
+            }
+            return true;
+          },
+          message: `Invalid category key.`,
+        },
+        {
+          validator: function (value: Map<string, string[]>): boolean {
+            for (const [key, subcategories] of value.entries()) {
+              const allowedSubs = allowedSubcategories[key];
+              if (key !== 'Others' && subcategories.length === 0) {
+                return false;
+              }
+              if (!allowedSubs) {
+                if (subcategories.length > 0) {
                   return false;
+                }
+              } else {
+                const subSet = new Set(allowedSubs);
+                for (const sub of subcategories) {
+                  if (!subSet.has(sub)) {
+                    return false;
+                  }
                 }
               }
             }
-          }
-          return true;
+            return true;
+          },
+          message: function (props: { value: Map<string, string[]> }): string {
+            const [key] = Array.from(props.value.keys());
+            if (!key) {
+              return 'Invalid key.';
+            }
+            return `Invalid subcategory for "${key}".}`;
+          },
         },
-        message: function (props: { value: Map<string, string[]> }): string {
-          const [key] = Array.from(props.value.keys());
-          if (!key) {
-            return 'Invalid key.';
-          }
-          return `Invalid subcategory for "${key}".}`;
-        },
+      ],
+    },
+    users: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: 'User' },
+        isRequestAccepted: { type: Boolean, default: false },
+        firstName: String,
+        lastName: String,
+        universityName: String,
+        year: String,
+        degree: String,
+        major: String,
+        profileImageUrl: String || null,
       },
     ],
   },
-  users: [
-    {
-      userId: { type: Schema.Types.ObjectId, ref: 'User' },
-      isRequestAccepted: { type: Boolean, default: false },
-      firstName: String,
-      lastName: String,
-      universityName: String,
-      year: String,
-      degree: String,
-      major: String,
-      profileImageUrl: String || null,
-    },
-  ],
-});
+  { timestamps: true }
+);
 
 const communityGroupModel = model<communityGroupInterface>('communityGroup', communityGroupSchema);
 

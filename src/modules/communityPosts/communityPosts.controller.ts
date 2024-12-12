@@ -6,7 +6,7 @@ import { ApiError } from '../errors';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
 import { userProfileService } from '../userProfile';
-import { communityGroupService } from '../communityGroup';
+import { communityGroupModel, communityGroupService } from '../communityGroup';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -34,10 +34,10 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
       }
 
-      const isAdmin = communityGroup.adminUserId.toString() === userId;
-      if (!isAdmin) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
-      }
+      // const isAdmin = communityGroup.adminUserId.toString() === userId;
+      // if (!isAdmin) {
+      //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
+      // }
     }
     const post = await communityPostsService.createCommunityPost(req.body, new mongoose.Types.ObjectId(userId));
 
@@ -108,6 +108,13 @@ export const getAllCommunityPost = async (req: any, res: Response) => {
         sucess: false,
         message: 'You are not a verified member of this community',
       });
+    }
+
+    if (communityGroupId) {
+      const communityGroup = await communityGroupModel.findOne({ _id: communityGroupId, 'users.userId': req.userId });
+      if (!communityGroup) {
+        return res.status(httpStatus.NOT_FOUND).json({ message: 'Not a member' });
+      }
     }
 
     const communityPosts = await communityPostsService.getAllCommunityPost(

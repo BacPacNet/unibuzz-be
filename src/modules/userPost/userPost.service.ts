@@ -4,8 +4,8 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
-import { UserProfile } from '../userProfile';
-import User from '../user/user.model';
+import { UserProfile, userProfileService } from '../userProfile';
+
 import { CommunityType, userPostType } from '../../config/community.type';
 
 export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 0, limit: number = 10) => {
@@ -46,25 +46,16 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
   return await UserPostModel.deleteOne(id);
 };
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
-  const user = await User.findById(id);
-  const userVerifiedCommunityId = user?.userVerifiedCommunities.map((item) => item.communityId) || [];
-  const userUnVerifiedCommunityId = user?.userUnVerifiedCommunities.map((item) => item.communityId) || [];
 
-  const userVerifiedCommunityGroupId =
-    user?.userVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-  const userUNVerifiedCommunityGroupId =
-    user?.userUnVerifiedCommunities?.flatMap((x) => x.communityGroups.map((y) => y.communityGroupId.toString())) || [];
-
-  const allCommunityId = [...userVerifiedCommunityId, ...userUnVerifiedCommunityId];
-  const allCommunityGroupId = [...userVerifiedCommunityGroupId, ...userUNVerifiedCommunityGroupId];
-
-  return [allCommunityId, allCommunityGroupId];
+  const userProfile = await userProfileService.getUserProfileById(String(id));
+  const allCommunityId = userProfile?.email.map((item) => item.communityId);
+  return allCommunityId;
 };
 
 export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {
   // Get user IDs of the user and their followers
   const [followingAndSelfUserIds = [], followersAndSelfUserIds = []] = await getFollowingAndSelfUserIds(userId);
-  const [allCommunityId, allCommunityGroupId] = (await getUserJoinedCommunityIds(userId)) || [];
+  const allCommunityId = (await getUserJoinedCommunityIds(userId)) || [];
   const mutualIds = followingAndSelfUserIds
     .map((id) => id.toString())
     .filter((id) => followersAndSelfUserIds.map((fid) => fid.toString()).includes(id));
@@ -73,7 +64,7 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
 
   const totalUserPosts = await countUserPostsForUserIds(followingAndSelfUserIds!);
 
-  const totalCommunityPosts = await countCommunityPostsForUserIds(allCommunityId, allCommunityGroupId);
+  const totalCommunityPosts = await countCommunityPostsForUserIds(allCommunityId);
 
   const totalPosts = totalUserPosts + totalCommunityPosts;
 
@@ -81,9 +72,9 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
 
   const remainingLimit = Math.max(0, 5 - UsersPosts.length);
 
+
   const CommunityPosts = await getCommunityPostsForUser(
     allCommunityId,
-    allCommunityGroupId,
     followingAndSelfUserIds,
     limit + remainingLimit,
     skip
@@ -135,7 +126,7 @@ const countUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[
 //   }
 // };
 
-const countCommunityPostsForUserIds = async (communityIds: string[] = [], allCommunityGroupId: string[] = []) => {
+const countCommunityPostsForUserIds = async (communityIds: string[] = []) => {
   try {
     const matchConditions: any = [
       {
@@ -144,13 +135,6 @@ const countCommunityPostsForUserIds = async (communityIds: string[] = [], allCom
         communiyGroupId: { $exists: false },
       },
     ];
-
-    if (allCommunityGroupId.length > 0) {
-      matchConditions.push({
-        communiyGroupId: { $in: allCommunityGroupId.map((id) => new mongoose.Types.ObjectId(id)) },
-        communityPostsType: CommunityType.PUBLIC,
-      });
-    }
 
     const matchStage: any = {
       $or: matchConditions,
@@ -296,14 +280,12 @@ const getUserPostsForUserIds = async (
 
 export const getCommunityPostsForUser = async (
   communityIds: string[] = [],
-  allCommunityGroupId: string[] = [],
   FollowinguserIds: mongoose.Schema.Types.ObjectId[] = [],
   limit: number,
   skip: number
 ) => {
   try {
     const FollowingIds = FollowinguserIds.map((item) => new mongoose.Types.ObjectId(item as any));
-    const CommunityGroupId = allCommunityGroupId.map((item) => new mongoose.Types.ObjectId(item as any));
 
     const matchConditions: any = [
       {
@@ -318,20 +300,6 @@ export const getCommunityPostsForUser = async (
         user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
       },
     ];
-
-    if (allCommunityGroupId.length > 0) {
-      matchConditions.push(
-        {
-          communiyGroupId: { $in: CommunityGroupId },
-          communityPostsType: CommunityType.PUBLIC,
-        },
-        {
-          communiyGroupId: { $in: CommunityGroupId },
-          communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        }
-      );
-    }
 
     const matchStage: any = {
       $or: matchConditions,
