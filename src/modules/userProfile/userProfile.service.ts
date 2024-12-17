@@ -79,21 +79,6 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   if (!userProfileToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found!');
   }
-  // Check if the updateData contains new email to be added
-  if (userProfileBody.email && userProfileBody.email.length > 0) {
-    for (const newEmailEntry of userProfileBody.email) {
-      // Check if the email already exists
-      const emailExists = userProfileToUpdate.email.some(
-        (existingEmailEntry: any) =>
-          existingEmailEntry.UniversityName === newEmailEntry.UniversityName &&
-          existingEmailEntry.UniversityEmail === newEmailEntry.UniversityEmail
-      );
-
-      if (!emailExists) {
-        userProfileToUpdate.email.push(newEmailEntry);
-      }
-    }
-  }
 
   const { email, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
