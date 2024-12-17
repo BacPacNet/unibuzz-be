@@ -18,7 +18,6 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
   try {
     if (userID && communityPostId) {
       comment = await communityPostCommentsService.createCommunityComment(userID, communityPostId, req.body);
-
     }
     return res.status(httpStatus.CREATED).json({ comment });
   } catch (error: any) {

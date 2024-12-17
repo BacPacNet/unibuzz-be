@@ -9,10 +9,10 @@ interface extendedRequest extends Request {
 
 export const getGroupNotification = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
-  const { page,limit } = req.query;
+  const { page, limit } = req.query;
   try {
     if (userID) {
-      const notification = await notificationService.getUserNotification(userID, Number(page),Number(limit));
+      const notification = await notificationService.getUserNotification(userID, Number(page), Number(limit));
       return res.status(200).json(notification);
     }
   } catch (error: any) {
@@ -21,12 +21,11 @@ export const getGroupNotification = async (req: extendedRequest, res: Response) 
 };
 export const getUserNotification = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
-  const { page,limit } = req.query;
+  const { page, limit } = req.query;
 
-  
   try {
     if (userID) {
-      const notification = await notificationService.getUserNotificationMain(userID, Number(page),Number(limit));
+      const notification = await notificationService.getUserNotificationMain(userID, Number(page), Number(limit));
       return res.status(200).json(notification);
     }
   } catch (error: any) {

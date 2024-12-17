@@ -80,20 +80,13 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
   };
 };
 
-
-export const getUserNotificationMain = async (
-  userID:string,
-  page = 1,
-  limit = 3
-) => {
+export const getUserNotificationMain = async (userID: string, page = 1, limit = 3) => {
   const skip = (page - 1) * limit;
 
-
-  const pipeline:PipelineStage[]  = [
+  const pipeline: PipelineStage[] = [
     {
       $match: {
         receiverId: new mongoose.Types.ObjectId(userID),
-      
       },
     },
     {
@@ -121,7 +114,7 @@ export const getUserNotificationMain = async (
     },
     {
       $lookup: {
-        from: 'userprofiles', 
+        from: 'userprofiles',
         localField: 'sender_id',
         foreignField: 'users_id',
         as: 'userProfile',
@@ -181,10 +174,10 @@ export const getUserNotificationMain = async (
         createdAt: 1,
         isRead: 1,
         receiverId: 1,
-        type:1,
-        message:1,
-        userPostId:1,
-        communityPostId:1,
+        type: 1,
+        message: 1,
+        userPostId: 1,
+        communityPostId: 1,
         'sender_id._id': '$senderDetails._id',
         'sender_id.firstName': '$senderDetails.firstName',
         'sender_id.lastName': '$senderDetails.lastName',

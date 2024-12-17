@@ -29,12 +29,8 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
   await communityGroupToUpdate.save();
   // await usersJoinCommunityGroup(body.selectedUsersId,String(id))
   const communityGroupUsers = communityGroupToUpdate.users.map((item) => item.userId.toString());
-  const userIdForNotification = body.selectedUsersId.filter(
-    (item:string) => !communityGroupUsers.includes(item)
-  );
+  const userIdForNotification = body.selectedUsersId.filter((item: string) => !communityGroupUsers.includes(item));
 
-
-  
   if (userIdForNotification.length >= 1 && id) {
     await notificationService.createManyNotification(
       communityGroupToUpdate.adminUserId,

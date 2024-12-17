@@ -24,11 +24,11 @@ export const likeUnlike = async (id: string, userId: string) => {
     const notifications = {
       sender_id: userId,
       receiverId: post?.user_id,
-      communityPostId:post?._id,
+      communityPostId: post?._id,
       type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
       message: 'Reacted to your Community Post.',
     };
-    if(userId !==  String(post?.user_id)){
+    if (userId !== String(post?.user_id)) {
       await notificationService.CreateNotification(notifications);
       io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST });
     }
@@ -199,7 +199,6 @@ export const getAllCommunityPost = async (
   }
 };
 
-
 export const getcommunityPost = async (postId: string, myUserId: string) => {
   try {
     const userProfile = await UserProfile.findOne({ users_id: myUserId });
@@ -224,11 +223,9 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
       if (!communityGroup) throw new Error('you are not a member');
     }
 
-
-
     const pipeline = [
       { $match: { _id: postIdToGet } },
-    
+
       {
         $lookup: {
           from: 'users',
@@ -238,7 +235,7 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
         },
       },
       { $unwind: '$user' },
-    
+
       {
         $lookup: {
           from: 'userprofiles',
@@ -248,7 +245,7 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-    
+
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -257,13 +254,13 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
           as: 'comments',
         },
       },
-    
+
       {
         $addFields: {
           commentCount: { $size: { $ifNull: ['$comments', []] } }, // Count comments here
           isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
           isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
-    
+
           isCommunityMember: {
             $or: [
               { $eq: ['$user_id', userId] },
@@ -271,17 +268,17 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
               { $literal: isCommunityGroupMember },
             ],
           },
-    
+
           isFollowing: {
             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
           },
-    
+
           comments: { $ifNull: ['$comments', []] },
         },
       },
-    
+
       { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
-    
+
       {
         $lookup: {
           from: 'users',
@@ -291,7 +288,7 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
         },
       },
       { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
-    
+
       {
         $match: {
           $or: [
@@ -304,7 +301,7 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
           ],
         },
       },
-    
+
       {
         $project: {
           _id: 1,

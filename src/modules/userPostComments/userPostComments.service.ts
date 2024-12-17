@@ -10,7 +10,7 @@ export const createUserPostComment = async (userId: string, userPostId: string, 
   // return populatedComment;
   const createdComment = await userPostCommentsModel
     .create(newComment)
-    .then(comment => comment.populate("userPostId", "user_id")); 
+    .then((comment) => comment.populate('userPostId', 'user_id'));
 
   return createdComment;
 };
