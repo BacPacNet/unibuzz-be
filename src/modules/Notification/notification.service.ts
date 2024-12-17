@@ -154,20 +154,6 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         preserveNullAndEmptyArrays: true,
       },
     },
-    // {
-    //   $lookup: {
-    //     from: 'posts',
-    //     localField: 'communityPostId',
-    //     foreignField: '_id',
-    //     as: 'postDetails',
-    //   },
-    // },
-    // {
-    //   $unwind: {
-    //     path: '$postDetails',
-    //     preserveNullAndEmptyArrays: true,
-    //   },
-    // },
     {
       $project: {
         _id: 1,
@@ -187,7 +173,6 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         'communityGroupId.communityGroupLogoUrl': '$communityGroupDetails.communityGroupLogoUrl.imageUrl',
         'communityGroupId.communityId': '$communityGroupDetails.communityId',
         'communityDetails.name': '$communityDetails.name',
-        // 'communityPostId._id': '$postDetails._id',
       },
     },
   ];
