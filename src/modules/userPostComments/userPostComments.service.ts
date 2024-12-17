@@ -5,7 +5,14 @@ import httpStatus from 'http-status';
 
 export const createUserPostComment = async (userId: string, userPostId: string, body: any) => {
   const newComment = { ...body, userPostId, commenterId: userId, level: 0 };
-  return await userPostCommentsModel.create(newComment);
+  // const createdComment = await userPostCommentsModel.create(newComment);
+  // const populatedComment = await createdComment.populate("userPostId");
+  // return populatedComment;
+  const createdComment = await userPostCommentsModel
+    .create(newComment)
+    .then(comment => comment.populate("userPostId", "user_id")); 
+
+  return createdComment;
 };
 
 export const updateUserPostComment = async (commentId: mongoose.Types.ObjectId, comment: any) => {

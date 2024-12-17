@@ -12,13 +12,16 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     sender_id: userID,
     receiverId: body.adminId,
     communityPostId: communityPostId,
-    type: notificationRoleAccess.COMMENT,
-    message: 'commented on your post',
+    type: notificationRoleAccess.COMMUNITY_COMMENT,
+    message: 'commented on your community post',
   };
-
   const comment = await communityPostCommentModel.create(newComment);
+  
+  if(userID !== body.adminId){
   await notificationService.CreateNotification(notifications);
-  io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.COMMENT });
+  io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.COMMUNITY_COMMENT });
+  }
+
   return comment;
 };
 

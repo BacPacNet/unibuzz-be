@@ -7,6 +7,9 @@ import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
 
 import { CommunityType, userPostType } from '../../config/community.type';
+import { notificationRoleAccess } from '../Notification/notification.interface';
+import { notificationService } from '../Notification';
+import { io } from '../../index';
 
 export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 0, limit: number = 10) => {
   const userPosts = await getUserPostsForUserIds(String(userId), [userId], [], page, limit);
@@ -21,6 +24,19 @@ export const likeUnlike = async (id: string, userId: string) => {
   const post = await UserPostModel.findById(id);
 
   if (!post?.likeCount.some((x) => x.userId === userId)) {
+      const notifications = {
+        sender_id: userId,
+        receiverId: post?.user_id,
+        userPostId:post?._id,
+        type: notificationRoleAccess.REACTED_TO_POST,
+        message: 'Reacted to your Post.',
+      };
+
+      if(userId !==  String(post?.user_id)){
+        await notificationService.CreateNotification(notifications);
+        io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_POST });
+      }
+   
     return await post?.updateOne({ $push: { likeCount: { userId } } });
   } else {
     return await post.updateOne({ $pull: { likeCount: { userId } } });

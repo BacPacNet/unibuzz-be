@@ -3,6 +3,9 @@ import httpStatus from 'http-status';
 import { userPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
+import { notificationRoleAccess } from '../Notification/notification.interface';
+import { notificationService } from '../Notification';
+import { io } from '../../index';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -12,15 +15,32 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
   const userID = req.userId;
   const { userPostId } = req.params;
 
-  let comment;
+  
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
   }
   try {
     if (userID && userPostId) {
-      comment = userPostCommentsService.createUserPostComment(userID, userPostId, req.body);
+     const comment:any = await userPostCommentsService.createUserPostComment(userID, userPostId, req.body);
+   
+      
+        const notifications = {
+            sender_id: userID,
+            receiverId: comment.userPostId.user_id,
+            userPostId:comment.userPostId._id,
+            type: notificationRoleAccess.COMMENT,
+            message: 'Commented at your Post.',
+          };
+          if(userID !== comment.userPostId.user_id){
+            await notificationService.CreateNotification(notifications);
+            io.emit(`notification_${comment.userPostId.user_id}`, { type: notificationRoleAccess.COMMENT });
+          }
+
+        
+
+        return res.status(httpStatus.CREATED).json({ comment });
     }
-    return res.status(httpStatus.CREATED).json({ comment });
+
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

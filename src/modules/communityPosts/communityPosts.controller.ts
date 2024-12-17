@@ -155,9 +155,11 @@ export const getPost = async (req: extendedRequest, res: Response) => {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
   }
 
+
   try {
     if (postId) {
       if (isType == 'Community') {
+
         const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
 
         post = postResult[0];
