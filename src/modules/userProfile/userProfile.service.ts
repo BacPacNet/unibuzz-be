@@ -7,6 +7,7 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
 import { communityModel } from '../community';
+import { userFollowService } from '../userFollow';
 
 export const createUserProfile = async (
   user: any,
@@ -98,6 +99,7 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
     type: notificationRoleAccess.FOLLOW,
     message: 'Started following you',
   };
+  await userFollowService.follow_unfollow_User(userId.toString(), userToFollow.toString());
 
   if (!userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString())) {
     await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });

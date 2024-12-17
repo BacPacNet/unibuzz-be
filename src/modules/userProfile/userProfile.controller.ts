@@ -45,10 +45,10 @@ export const toggleFollow = async (req: userIdExtend, res: Response) => {
 };
 
 export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
-  const { name } = req.query as { name?: string };
+  const { name, userId } = req.query as { name: string; userId: string };
   try {
     if (req.userId) {
-      let profile = await userProfileService.getFollow(name, req.userId);
+      let profile = await userProfileService.getFollow(name, userId);
 
       return res.status(200).json({ profile });
     }
@@ -58,10 +58,10 @@ export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
 };
 
 export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
-  const { name } = req.query as { name?: string };
+  const { name, userId } = req.query as { name: string; userId: string };
   try {
     if (req.userId) {
-      let profile = await userProfileService.getFollowers(name, req.userId);
+      let profile = await userProfileService.getFollowers(name, userId);
       return res.status(200).json({ profile });
     }
   } catch (error: any) {
