@@ -7,6 +7,9 @@ import { communityPostsModel } from '.';
 import { CommunityType } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 import { communityGroupModel } from '../communityGroup';
+import { notificationRoleAccess } from '../Notification/notification.interface';
+import { notificationService } from '../Notification';
+import { io } from '../../index';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
   const postData = { ...post, user_id: userId };
@@ -18,6 +21,18 @@ export const likeUnlike = async (id: string, userId: string) => {
   const post = await communityPostsModel.findById(id);
 
   if (!post?.likeCount.some((x) => x.userId === userId)) {
+    const notifications = {
+      sender_id: userId,
+      receiverId: post?.user_id,
+      communityPostId: post?._id,
+      type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
+      message: 'Reacted to your Community Post.',
+    };
+    if (userId !== String(post?.user_id)) {
+      await notificationService.CreateNotification(notifications);
+      io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST });
+    }
+
     return await post?.updateOne({ $push: { likeCount: { userId } } });
   } else {
     return await post.updateOne({ $pull: { likeCount: { userId } } });
@@ -184,7 +199,6 @@ export const getAllCommunityPost = async (
   }
 };
 
-
 export const getcommunityPost = async (postId: string, myUserId: string) => {
   try {
     const userProfile = await UserProfile.findOne({ users_id: myUserId });
@@ -240,20 +254,10 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
           as: 'comments',
         },
       },
-      { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
-
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'comments.commenterId',
-          foreignField: '_id',
-          as: 'commenter',
-        },
-      },
-      { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
 
       {
         $addFields: {
+          commentCount: { $size: { $ifNull: ['$comments', []] } }, // Count comments here
           isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
           isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
 
@@ -272,6 +276,18 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
           comments: { $ifNull: ['$comments', []] },
         },
       },
+
+      { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'comments.commenterId',
+          foreignField: '_id',
+          as: 'commenter',
+        },
+      },
+      { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
 
       {
         $match: {
@@ -302,7 +318,7 @@ export const getcommunityPost = async (postId: string, myUserId: string) => {
             lastName: '$user.lastName',
           },
           profile: '$profile',
-          commentCount: { $size: '$comments' },
+          commentCount: 1, // Use the pre-calculated `commentCount`
         },
       },
     ];

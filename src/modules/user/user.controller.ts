@@ -6,9 +6,9 @@ import ApiError from '../errors/ApiError';
 import pick from '../utils/pick';
 import { IOptions } from '../paginate/paginate';
 import * as userService from './user.service';
-import { notificationService } from '../Notification';
-import { io } from '../../index';
-import { notificationRoleAccess } from '../Notification/notification.interface';
+// import { notificationService } from '../Notification';
+// import { io } from '../../index';
+// import { notificationRoleAccess } from '../Notification/notification.interface';
 import { userIdExtend } from 'src/config/userIDType';
 import { loginEmailVerificationService } from '../loginEmailVerification';
 import { communityService } from '../community';
@@ -129,16 +129,16 @@ export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Respo
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
       }
       let user = await userService.updateUserCommunityGroupRole(id, communityGroupId, role);
-      const notifications = {
-        sender_id: userID,
-        receiverId: id,
-        communityGroupId: communityGroupId,
-        type: notificationRoleAccess.ASSIGN,
-        message: `assigned you as ${role}`,
-      };
+      // const notifications = {
+      //   sender_id: userID,
+      //   receiverId: id,
+      //   communityGroupId: communityGroupId,
+      //   type: notificationRoleAccess.ASSIGN,
+      //   message: `assigned you as ${role}`,
+      // };
 
-      await notificationService.CreateNotification(notifications);
-      io.emit(`notification_${id}`, { type: notificationRoleAccess.ASSIGN });
+      // await notificationService.CreateNotification(notifications);
+      // io.emit(`notification_${id}`, { type: notificationRoleAccess.ASSIGN });
       return res.status(200).json({ user });
     }
   } catch (error: any) {

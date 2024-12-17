@@ -28,12 +28,14 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
 
   await communityGroupToUpdate.save();
   // await usersJoinCommunityGroup(body.selectedUsersId,String(id))
+  const communityGroupUsers = communityGroupToUpdate.users.map((item) => item.userId.toString());
+  const userIdForNotification = body.selectedUsersId.filter((item: string) => !communityGroupUsers.includes(item));
 
-  if (body.selectedUsersId.length >= 1 && id) {
+  if (userIdForNotification.length >= 1 && id) {
     await notificationService.createManyNotification(
       communityGroupToUpdate.adminUserId,
       communityGroupToUpdate._id,
-      body.selectedUsersId,
+      userIdForNotification,
       notificationRoleAccess.GROUP_INVITE,
       'recieved an invitation to join group'
     );

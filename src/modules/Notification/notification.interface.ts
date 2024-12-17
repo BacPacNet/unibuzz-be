@@ -2,10 +2,11 @@ import mongoose from 'mongoose';
 
 export const notificationRoleAccess = {
   GROUP_INVITE: 'GROUP_INVITE',
-  REPLY: 'REPLY',
   FOLLOW: 'FOLLOW',
-  ASSIGN: 'ASSIGN',
   COMMENT: 'COMMENT',
+  COMMUNITY_COMMENT: 'COMMUNITY_COMMENT',
+  REACTED_TO_POST: 'REACTED_TO_POST',
+  REACTED_TO_COMMUNITY_POST: 'REACTED_TO_COMMUNITY_POST',
 };
 
 export const notificationRole = Object.keys(notificationRoleAccess);

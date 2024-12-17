@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
 import { io } from '../../index';
 import { UserProfile } from '../userProfile';
@@ -74,6 +74,120 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
 
   return {
     notifications: userNotificationWithDp,
+    currentPage: page,
+    totalPages,
+    totalNotifications,
+  };
+};
+
+export const getUserNotificationMain = async (userID: string, page = 1, limit = 3) => {
+  const skip = (page - 1) * limit;
+
+  const pipeline: PipelineStage[] = [
+    {
+      $match: {
+        receiverId: new mongoose.Types.ObjectId(userID),
+      },
+    },
+    {
+      $sort: { createdAt: -1 },
+    },
+    {
+      $skip: skip,
+    },
+    {
+      $limit: limit,
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'sender_id',
+        foreignField: '_id',
+        as: 'senderDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$senderDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'sender_id',
+        foreignField: 'users_id',
+        as: 'userProfile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$userProfile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: 'communitygroups',
+        localField: 'communityGroupId',
+        foreignField: '_id',
+        as: 'communityGroupDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$communityGroupDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'communityGroupDetails.communityId',
+        foreignField: '_id',
+        as: 'communityDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$communityDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        createdAt: 1,
+        isRead: 1,
+        receiverId: 1,
+        type: 1,
+        message: 1,
+        userPostId: 1,
+        communityPostId: 1,
+        'sender_id._id': '$senderDetails._id',
+        'sender_id.firstName': '$senderDetails.firstName',
+        'sender_id.lastName': '$senderDetails.lastName',
+        'sender_id.profileDp': '$userProfile.profile_dp.imageUrl',
+        'communityGroupId._id': '$communityGroupDetails._id',
+        'communityGroupId.title': '$communityGroupDetails.title',
+        'communityGroupId.communityGroupLogoUrl': '$communityGroupDetails.communityGroupLogoUrl.imageUrl',
+        'communityGroupId.communityId': '$communityGroupDetails.communityId',
+        'communityDetails.name': '$communityDetails.name',
+      },
+    },
+  ];
+
+  const userNotifications = await notificationModel.aggregate(pipeline);
+
+  const totalNotifications = await notificationModel.countDocuments({
+    receiverId: new mongoose.Types.ObjectId(userID),
+    isRead: false,
+  });
+
+  const totalPages = Math.ceil(totalNotifications / limit);
+
+  return {
+    notifications: userNotifications,
     currentPage: page,
     totalPages,
     totalNotifications,

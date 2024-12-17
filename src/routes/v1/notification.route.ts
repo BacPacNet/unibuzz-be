@@ -9,6 +9,8 @@ router
   .get(userIdAuth, notificationController.getGroupNotification)
   .put(userIdAuth, notificationController.updateGroupNotification);
 
+router.route('/user').get(userIdAuth, notificationController.getUserNotification);
+
 router.route('/join').put(userIdAuth, notificationController.JoinGroup);
 
 export default router;
