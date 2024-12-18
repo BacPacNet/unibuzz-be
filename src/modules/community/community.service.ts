@@ -61,6 +61,19 @@ export const getUserCommunities = async (userID: string) => {
           as: 'communityGroups',
         },
       },
+      {
+        $addFields: {
+          communityGroups: {
+            $cond: {
+              if: {
+                $in: [new mongoose.Types.ObjectId(userID), '$users.id'],
+              },
+              then: '$communityGroups',
+              else: [],
+            },
+          },
+        },
+      },
     ]);
 
     return communities;
