@@ -10,6 +10,7 @@ import { userProfileService } from '../userProfile';
 import { communityGroupService } from '.';
 import { notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
+import { communityService } from '../community';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -135,11 +136,13 @@ export const getCommunityGroupById = async (groupId: string) => {
 
 export const joinCommunityGroup = async (userID: string, groupId: string) => {
   try {
-    const user = await getUserById(new mongoose.Types.ObjectId(userID));
+    const [user, userProfile] = await Promise.all([
+      getUserById(new mongoose.Types.ObjectId(userID)),
+      userProfileService.getUserProfileById(String(userID)),
+    ]);
     if (!user) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
-    const userProfile = await userProfileService.getUserProfileById(String(userID));
 
     if (!userProfile) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
@@ -149,6 +152,13 @@ export const joinCommunityGroup = async (userID: string, groupId: string) => {
     if (!communityGroup) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
+
+    const community = await communityService.getCommunity(String(communityGroup.communityId));
+    const communityUsersID = community?.users.map((item) => item.id.toString());
+
+    const userIDSet = new Set(communityUsersID);
+
+    if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, 'User not found in Community  ');
 
     const isUserVerifiedToJoin = userProfile.email.some((community) => {
       if (!community.communityId) return;
