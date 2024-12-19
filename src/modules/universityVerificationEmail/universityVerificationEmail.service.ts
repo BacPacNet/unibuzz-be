@@ -21,10 +21,10 @@ export const createUniversityEmailVerificationOtp = async (email: string) => {
 
   await sendEmail(
     email,
-    'Verify Your Email Address - OTP Code Inside',
+    'Verify Your university Email Address - OTP Code Inside',
     '',
     `
-    <p>Thank you for registering with <strong>Unibuzz</strong>. To complete your email verification, please enter the following One-Time Password (OTP) on the verification page:</p>
+    <p>Thank you for registering with <strong>Unibuzz</strong>. To complete your university email verification, please enter the following One-Time Password (OTP) on the  university verification page:</p>
     <h2>${data.otp}</h2>
     <p>This OTP is valid for the next <strong>5 minutes</strong>. Please do not share this code with anyone for security reasons.</p>
     <p>If you did not request this verification, please ignore this email.</p>
