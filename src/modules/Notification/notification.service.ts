@@ -6,12 +6,11 @@ import { UserProfile } from '../userProfile';
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
   communityGroupId: mongoose.Types.ObjectId,
-  receiverArr: Array<string>,
+  receiverArr: Array<any>,
   type: String,
   message: string
 ) => {
-  const receiverIds = receiverArr.map((id) => new mongoose.Types.ObjectId(id));
-
+  const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?.id));
   const notifications = receiverIds.map((receiverId) => ({
     sender_id: adminId,
     receiverId: receiverId,

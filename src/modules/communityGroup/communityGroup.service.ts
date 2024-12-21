@@ -15,6 +15,7 @@ import { communityService } from '../community';
 type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
+  const { selectedGroupCategory, groupSubCategory } = body;
   let communityGroupToUpdate;
 
   communityGroupToUpdate = await communityGroupModel.findById(id);
@@ -23,25 +24,12 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
   }
   Object.assign(communityGroupToUpdate, body);
-  if (body.selectedGroupCategory && body.groupSubCategory) {
-    communityGroupToUpdate.communityGroupCategory = new Map([[body.selectedGroupCategory, body.groupSubCategory]]);
+  if (selectedGroupCategory && groupSubCategory) {
+    communityGroupToUpdate.communityGroupCategory = new Map([[selectedGroupCategory, groupSubCategory]]);
   }
 
-  await communityGroupToUpdate.save();
-  // await usersJoinCommunityGroup(body.selectedUsersId,String(id))
-  const communityGroupUsers = communityGroupToUpdate.users.map((item) => item.userId.toString());
-  const userIdForNotification = body.selectedUsersId.filter((item: string) => !communityGroupUsers.includes(item));
-
-  if (userIdForNotification.length >= 1 && id) {
-    await notificationService.createManyNotification(
-      communityGroupToUpdate.adminUserId,
-      communityGroupToUpdate._id,
-      userIdForNotification,
-      notificationRoleAccess.GROUP_INVITE,
-      'recieved an invitation to join group'
-    );
-  }
-  return communityGroupToUpdate;
+  const updatedCommunityGroup = await communityGroupToUpdate.save();
+  return updatedCommunityGroup;
 };
 
 export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
@@ -94,7 +82,8 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
 };
 
 export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
-  const communityGroupCategory = { [body.selectedGroupCategory]: body.groupSubCategory };
+  const { selectedGroupCategory, groupSubCategory, selectedUsers } = body;
+  const communityGroupCategory = { [selectedGroupCategory]: groupSubCategory };
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -114,11 +103,11 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
 
   await communityGroupService.joinCommunityGroup(userId, createdGroup._id.toString());
 
-  if (body.selectedUsersId.length >= 1 && createdGroup._id) {
+  if (selectedUsers.length >= 1 && createdGroup._id) {
     await notificationService.createManyNotification(
       createdGroup.adminUserId,
       createdGroup._id,
-      body.selectedUsersId,
+      selectedUsers,
       notificationRoleAccess.GROUP_INVITE,
       'recieved an invitation to join group'
     );
