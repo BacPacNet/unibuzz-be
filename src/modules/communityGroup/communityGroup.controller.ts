@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import { communityGroupService } from '.';
+import { communityGroupModel, communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
@@ -14,15 +14,18 @@ interface extendedRequest extends Request {
 export const CreateCommunityGroup = async (req: extendedRequest, res: Response) => {
   const userId = req.userId;
   const { communityId } = req.params;
-
+  const { body } = req;
   try {
     if (!communityId || !userId) {
       return new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
     }
+    const getCommunityByName = await communityGroupModel.findOne({ title: body.title });
+    if (getCommunityByName?.title) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group already exists' });
+    }
+    const createCommunityGroup = await communityGroupService.createCommunityGroup(body, communityId, userId);
 
-    const createCommunityGroup = await communityGroupService.createCommunityGroup(req.body, communityId, userId);
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Successfully created the community group',
       data: createCommunityGroup,
@@ -44,22 +47,17 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    res.status(error.statusCode).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
-export const deleteCommunityGroup = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteCommunityGroup = async (req: Request, res: Response) => {
   const { groupId } = req.params;
   try {
-    if (typeof groupId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(groupId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
-      }
-      await communityGroupService.deleteCommunityGroup(new mongoose.Types.ObjectId(groupId));
-    }
-    return res.status(200).json({ message: 'deleted' });
-  } catch (error) {
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
+    const deleteCommunityGroup = await communityGroupService.deleteCommunityGroup(new mongoose.Types.ObjectId(groupId));
+    return res.status(200).json(deleteCommunityGroup);
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
