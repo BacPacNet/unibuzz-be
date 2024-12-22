@@ -51,10 +51,20 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
 
 // get All university
 export const getAllUniversity = async (req: Request, res: Response, next: NextFunction) => {
-  const { page, limit } = req.query;
+  const { page, limit, searchQuery } = req.query;
+  const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
+
   try {
-    let allUniversity = await universityService.getAllUniversity(Number(page), Number(limit));
-    return res.status(200).json({ allUniversity });
+    let allUniversity = await universityService.getAllUniversity(
+      Number(page),
+      Number(limit),
+      searchParams.Search,
+      searchParams.city,
+      searchParams.country,
+      searchParams.region,
+      searchParams.type
+    );
+    return res.status(200).json(allUniversity);
   } catch (error) {
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));

@@ -32,12 +32,57 @@ export const deleteUniversity = async (id: mongoose.Types.ObjectId) => {
   return await universityModal.findByIdAndDelete(id);
 };
 
-export const getAllUniversity = async (page: number, limit: number) => {
-  const Currpage = page ? page : 1;
-  const limitpage = limit ? limit : 10;
-  const startIndex = (Currpage - Number(1)) * Number(limitpage);
+export const getAllUniversity = async (
+  page: number = 1,
+  limit: number = 10,
+  name: string = '',
+  city: string = '',
+  country: string = '',
+  region: string = '',
+  type: string = ''
+) => {
+  const startIndex = (page - 1) * limit;
 
-  return await universityModal.find().skip(startIndex).limit(limitpage);
+  const cityConditions = [];
+  if (city) {
+    cityConditions.push({ 'wikiInfoBox.Location': { $regex: city, $options: 'i' } });
+    cityConditions.push({ 'collegeBoardInfo.Location': { $regex: city, $options: 'i' } });
+  }
+
+  const searchConditions = [];
+  if (name) {
+    searchConditions.push({ name: { $regex: name, $options: 'i' } });
+  }
+  if (country) {
+    searchConditions.push({ country: { $regex: country, $options: 'i' } });
+  }
+  if (region) {
+    searchConditions.push({ region: { $regex: region, $options: 'i' } });
+  }
+  if (type) {
+    searchConditions.push({ 'wikiInfoBox.Type': { $regex: type, $options: 'i' } });
+  }
+
+  const searchQuery: any = {};
+  if (cityConditions.length > 0 && searchConditions.length > 0) {
+    searchQuery.$and = [{ $or: cityConditions }, ...searchConditions];
+  } else if (cityConditions.length > 0) {
+    searchQuery.$or = cityConditions;
+  } else if (searchConditions.length > 0) {
+    searchQuery.$and = searchConditions;
+  }
+
+  const Universities = await universityModal.find(searchQuery).skip(startIndex).limit(limit);
+
+  const totalUniversities = await universityModal.countDocuments(searchQuery);
+  const totalPages = Math.ceil(totalUniversities / limit);
+
+  return {
+    Universities,
+    currentPage: page,
+    totalPages,
+    totalUniversities,
+  };
 };
 
 export const searchUniversityByQuery = async (searchTerm: string) => {
