@@ -3,6 +3,7 @@ import * as userPostService from './userPost.service';
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
+import he from 'he';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -21,12 +22,14 @@ export const getAllUserPosts = async (req: any, res: Response, next: NextFunctio
 };
 
 export const createUserPost = async (req: extendedRequest, res: Response) => {
-  try {
-    let post = await userPostService.createUserPost({ ...req.body, user_id: req.userId });
+  const { body } = req;
+  body.content = he.decode(body.content);
 
-    return res.status(httpStatus.CREATED).send(post);
+  try {
+    let post = await userPostService.createUserPost({ ...body, user_id: req.userId });
+    return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
@@ -43,7 +46,7 @@ export const updateUserPost = async (req: Request, res: Response, next: NextFunc
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
-    res.status(error.statusCode).json({ message: error.message });
+    return res.status(error.statusCode).json({ message: error.message });
   }
 };
 
