@@ -142,7 +142,7 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
       return res.status(200).json({ likeCount });
     }
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
@@ -151,13 +151,12 @@ export const getPost = async (req: extendedRequest, res: Response) => {
   const { isType } = req.query;
   let post: any;
 
-  if (!req.userId) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
-  }
-
   try {
     if (postId) {
       if (isType == 'Community') {
+        if (!req.userId) {
+          throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
+        }
         const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
 
         post = postResult[0];
@@ -180,6 +179,6 @@ export const getPost = async (req: extendedRequest, res: Response) => {
       return res.status(200).json({ post });
     }
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

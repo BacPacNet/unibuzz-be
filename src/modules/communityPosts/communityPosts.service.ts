@@ -199,7 +199,7 @@ export const getAllCommunityPost = async (
   }
 };
 
-export const getcommunityPost = async (postId: string, myUserId: string) => {
+export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
     const userProfile = await UserProfile.findOne({ users_id: myUserId });
     const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];

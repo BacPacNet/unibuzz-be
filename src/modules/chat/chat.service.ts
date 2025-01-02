@@ -405,6 +405,7 @@ export const messageNotification = async (userId: string = '', page: number = 1,
       users: { $elemMatch: { userId: userObjectId } },
       latestMessage: { $exists: true, $ne: null },
     })
+    .sort({ createdAt: -1 })
     .populate({
       path: 'users.userId',
       select: 'firstName lastName',
