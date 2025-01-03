@@ -12,16 +12,40 @@ export const getChat = async (yourId: string, userId: string) => {
       isGroupChat: false,
       $and: [{ users: { $elemMatch: { userId: yourId } } }, { users: { $elemMatch: { userId: userId } } }],
     })
-    .populate([{ path: 'users', select: 'firstName lastName' }, { path: 'latestMessage' }])
+    .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
     .lean();
 
-  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id');
+  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id university_name studyYear degree');
 
-  const ChatWithDp = isChat.map((item) => ({
-    ...item,
-    ProfileDp: userProfiledata.find((profile) => profile.users_id.toString() !== yourId)?.profile_dp?.imageUrl ?? null,
-  }));
 
+  // const ChatWithDp = isChat.map((item) => ({
+  //   ...item,
+  //   ProfileDp: userProfiledata.find((profile) => profile.users_id.toString() !== yourId)?.profile_dp?.imageUrl ?? null,
+  // }));
+
+  const ChatWithDp = isChat.map((chat) => {
+    const updatedUsers = chat.users.map((user) => {
+      const userProfile = userProfiledata.find(
+        (profile) => profile.users_id.toString() !== yourId.toString()
+      );  
+  
+      return {
+        ...user,
+        userId: {
+          ...user.userId,
+          profileDp: userProfile?.profile_dp?.imageUrl ?? null,
+          universityName: userProfile?.university_name ?? null,
+          studyYear: userProfile?.study_year ?? null,
+          degree: userProfile?.degree ?? null,
+        },
+      };
+    });
+  
+    return {
+      ...chat,
+      users: updatedUsers,
+    };
+  });
   return ChatWithDp;
 };
 
@@ -37,20 +61,42 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
     groupAdmin: yourId,
     isRequestAccepted: isRequestAcceptedBoolean,
   };
+console.log("iscrte");
 
   const chat = await chatModel.create(chatToCreate);
 
-  const createdChat: chatInterface[] | null = await chatModel
+  const createdChat: chatInterface | null = await chatModel
     .findById(chat._id)
-    .populate([{ path: 'users', select: 'firstName lastName' }, { path: 'latestMessage' }])
+    .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
     .lean();
 
-  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id');
+  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id university_name studyYear degree');
 
-  const ChatWithDp = {
-    ...createdChat,
-    ProfileDp: userProfiledata.find((profile) => profile.users_id.toString() !== yourId)?.profile_dp?.imageUrl ?? null,
-  };
+  // const ChatWithDp = {
+  //   ...createdChat,
+  //   ProfileDp: userProfiledata.find((profile) => profile.users_id.toString() !== yourId)?.profile_dp?.imageUrl ?? null,
+  // };
+
+
+const ChatWithDp = {
+  ...createdChat,
+  users: createdChat?.users.map((user) => {
+    const userProfile = userProfiledata.find(
+      (profile) => profile.users_id.toString() === user.userId._id.toString()
+    );
+
+    return {
+      ...user,
+      userId: {
+        ...user.userId,
+        profileDp: userProfile?.profile_dp?.imageUrl ?? null,
+        universityName: userProfile?.university_name ?? null,
+        studyYear: userProfile?.study_year ?? null,
+        degree: userProfile?.degree ?? null,
+      },
+    };
+  }),
+};
 
   return ChatWithDp;
 };
