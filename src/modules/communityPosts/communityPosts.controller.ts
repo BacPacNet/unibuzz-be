@@ -17,7 +17,6 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
   const userId = req.userId as string;
   const { communityId, communiyGroupId } = req.body;
 
-  
   try {
     if (communityId && !communiyGroupId) {
       const community = await communityService.getCommunity(req.body.communityId);
@@ -41,11 +40,11 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
       // }
 
-      const userIds = communityGroup.users.map((item)=>item.userId.toString())
-      const userIdSet = new Set(userIds)
-      console.log("userIdSet",userIdSet);
-      
-      if(!userIdSet.has(userId)){
+      const userIds = communityGroup.users.map((item) => item.userId.toString());
+      const userIdSet = new Set(userIds);
+      console.log('userIdSet', userIdSet);
+
+      if (!userIdSet.has(userId)) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
       }
     }

@@ -15,7 +15,6 @@ export const Create_Get_Chat = async (req: userIdExtend, res: Response) => {
 
     const chat: any = await chatService.getChat(YourUserID, userId);
     if (chat.length > 0) {
-      
       return res.status(200).json(chat[0]);
     } else {
       const userProfile = await userProfileService.getUserProfile(YourUserID);

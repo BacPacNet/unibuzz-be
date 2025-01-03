@@ -15,8 +15,9 @@ export const getChat = async (yourId: string, userId: string) => {
     .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
     .lean();
 
-  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id university_name studyYear degree');
-
+  const userProfiledata = await UserProfile.find({ users_id: userId }).select(
+    'profile_dp  users_id university_name studyYear degree'
+  );
 
   // const ChatWithDp = isChat.map((item) => ({
   //   ...item,
@@ -25,10 +26,8 @@ export const getChat = async (yourId: string, userId: string) => {
 
   const ChatWithDp = isChat.map((chat) => {
     const updatedUsers = chat.users.map((user) => {
-      const userProfile = userProfiledata.find(
-        (profile) => profile.users_id.toString() !== yourId.toString()
-      );  
-  
+      const userProfile = userProfiledata.find((profile) => profile.users_id.toString() !== yourId.toString());
+
       return {
         ...user,
         userId: {
@@ -40,7 +39,7 @@ export const getChat = async (yourId: string, userId: string) => {
         },
       };
     });
-  
+
     return {
       ...chat,
       users: updatedUsers,
@@ -61,7 +60,7 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
     groupAdmin: yourId,
     isRequestAccepted: isRequestAcceptedBoolean,
   };
-console.log("iscrte");
+  console.log('iscrte');
 
   const chat = await chatModel.create(chatToCreate);
 
@@ -70,33 +69,32 @@ console.log("iscrte");
     .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
     .lean();
 
-  const userProfiledata = await UserProfile.find({ users_id: userId }).select('profile_dp  users_id university_name studyYear degree');
+  const userProfiledata = await UserProfile.find({ users_id: userId }).select(
+    'profile_dp  users_id university_name studyYear degree'
+  );
 
   // const ChatWithDp = {
   //   ...createdChat,
   //   ProfileDp: userProfiledata.find((profile) => profile.users_id.toString() !== yourId)?.profile_dp?.imageUrl ?? null,
   // };
 
+  const ChatWithDp = {
+    ...createdChat,
+    users: createdChat?.users.map((user) => {
+      const userProfile = userProfiledata.find((profile) => profile.users_id.toString() === user.userId._id.toString());
 
-const ChatWithDp = {
-  ...createdChat,
-  users: createdChat?.users.map((user) => {
-    const userProfile = userProfiledata.find(
-      (profile) => profile.users_id.toString() === user.userId._id.toString()
-    );
-
-    return {
-      ...user,
-      userId: {
-        ...user.userId,
-        profileDp: userProfile?.profile_dp?.imageUrl ?? null,
-        universityName: userProfile?.university_name ?? null,
-        studyYear: userProfile?.study_year ?? null,
-        degree: userProfile?.degree ?? null,
-      },
-    };
-  }),
-};
+      return {
+        ...user,
+        userId: {
+          ...user.userId,
+          profileDp: userProfile?.profile_dp?.imageUrl ?? null,
+          universityName: userProfile?.university_name ?? null,
+          studyYear: userProfile?.study_year ?? null,
+          degree: userProfile?.degree ?? null,
+        },
+      };
+    }),
+  };
 
   return ChatWithDp;
 };
