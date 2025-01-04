@@ -15,9 +15,10 @@ interface extendedRequest extends Request {
 // create community post
 export const createCommunityPost = async (req: extendedRequest, res: Response) => {
   const userId = req.userId as string;
-  const { communityId, communiyGroupId } = req.body.communityId;
+  const { communityId, communiyGroupId } = req.body;
+
   try {
-    if (communityId) {
+    if (communityId && !communiyGroupId) {
       const community = await communityService.getCommunity(req.body.communityId);
       if (!community) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
@@ -28,7 +29,7 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       }
     }
 
-    if (communiyGroupId) {
+    if (communityId && communiyGroupId) {
       const communityGroup = await communityGroupService.getCommunityGroupById(communiyGroupId);
       if (!communityGroup) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
@@ -38,6 +39,14 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       // if (!isAdmin) {
       //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
       // }
+
+      const userIds = communityGroup.users.map((item) => item.userId.toString());
+      const userIdSet = new Set(userIds);
+      console.log('userIdSet', userIdSet);
+
+      if (!userIdSet.has(userId)) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
+      }
     }
     const post = await communityPostsService.createCommunityPost(req.body, new mongoose.Types.ObjectId(userId));
 
@@ -142,7 +151,7 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
       return res.status(200).json({ likeCount });
     }
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
@@ -151,13 +160,12 @@ export const getPost = async (req: extendedRequest, res: Response) => {
   const { isType } = req.query;
   let post: any;
 
-  if (!req.userId) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
-  }
-
   try {
     if (postId) {
       if (isType == 'Community') {
+        if (!req.userId) {
+          throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
+        }
         const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
 
         post = postResult[0];
@@ -180,6 +188,6 @@ export const getPost = async (req: extendedRequest, res: Response) => {
       return res.status(200).json({ post });
     }
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

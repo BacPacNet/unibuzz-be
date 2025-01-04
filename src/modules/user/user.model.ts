@@ -40,11 +40,15 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       required: true,
       trim: true,
       minlength: 8,
-      // validate(value: string) {
-      //   if (!value.match(/\d/) || !value.match(/[a-zA-Z]/)) {
-      //     throw new Error('Password must contain at least one letter and one number');
-      //   }
-      // },
+
+      validate: {
+        validator: function (value: string) {
+          const pattern = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+          return pattern.test(value);
+        },
+        message:
+          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+      },
       private: true, // used by the toJSON plugin
     },
 

@@ -2,6 +2,7 @@ import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
 import { io } from '../../index';
 import { UserProfile } from '../userProfile';
+import { notificationRoleAccess } from './notification.interface';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
@@ -86,6 +87,11 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
     {
       $match: {
         receiverId: new mongoose.Types.ObjectId(userID),
+        $nor: [
+          {
+            $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
+          },
+        ],
       },
     },
     {
@@ -181,6 +187,11 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
   const totalNotifications = await notificationModel.countDocuments({
     receiverId: new mongoose.Types.ObjectId(userID),
     isRead: false,
+    $nor: [
+      {
+        $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
+      },
+    ],
   });
 
   const totalPages = Math.ceil(totalNotifications / limit);

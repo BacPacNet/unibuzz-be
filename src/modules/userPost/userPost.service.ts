@@ -388,23 +388,164 @@ export const getCommunityPostsForUser = async (
     throw new Error('Failed to Get User Posts');
   }
 };
-export const getUserPost = async (postId: string, myUserId: string) => {
+
+// export const getUserPost = async (postId: string, myUserId: string="") => {
+//   try {
+//     const userProfile = await UserProfile.findOne({ users_id: myUserId });
+//     const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
+//     const followertsIds = userProfile?.followers.map((user) => user.userId.toString()) || [];
+//     const mutualIds = followertsIds
+//       .map((id) => id.toString())
+//       .filter((id) => followertsIds.map((fid) => fid.toString()).includes(id));
+//     const mutualId = mutualIds.map((item) => new mongoose.Types.ObjectId(item as any));
+//     const userId = new mongoose.Types.ObjectId(myUserId);
+//     const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
+
+//     const postIdToGet = new mongoose.Types.ObjectId(postId);
+
+//     const pipeline = [
+//       { $match: { _id: postIdToGet } },
+
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'user_id',
+//           foreignField: '_id',
+//           as: 'postOwner',
+//         },
+//       },
+//       { $unwind: { path: '$postOwner', preserveNullAndEmptyArrays: true } },
+
+//       {
+//         $addFields: {
+//           isPublic: { $eq: ['$PostType', userPostType.PUBLIC] },
+//           isFollowerOnly: { $eq: ['$PostType', userPostType.FOLLOWER_ONLY] },
+//           isMutual: { $eq: ['$PostType', userPostType.MUTUAL] },
+//           isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
+
+//           isAuthorizedUser: {
+//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
+//           },
+//           isAuthorizedUserAndMutual: {
+//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', mutualId] }],
+//           },
+//         },
+//       },
+
+//       {
+//         $match: {
+//           $or: [
+//             { isPublic: true },
+//             { isFollowerOnly: true, isAuthorizedUser: true },
+//             { isMutual: true, isAuthorizedUserAndMutual: true },
+//             { isOnlyMe: true, user_id: userId },
+//           ],
+//         },
+//       },
+
+//       {
+//         $lookup: {
+//           from: 'userprofiles',
+//           localField: 'user_id',
+//           foreignField: 'users_id',
+//           as: 'profile',
+//         },
+//       },
+//       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+
+//       {
+//         $lookup: {
+//           from: 'userpostcomments',
+//           localField: '_id',
+//           foreignField: 'userPostId',
+//           as: 'comments',
+//         },
+//       },
+
+//       {
+//         $addFields: {
+//           commentCount: { $size: '$comments' },
+//         },
+//       },
+
+//       {
+//         $project: {
+//           _id: 1,
+//           user_id: 1,
+//           PostType: 1,
+//           content: 1,
+//           imageUrl: 1,
+//           likeCount: 1,
+//           createdAt: 1,
+//           updatedAt: 1,
+//           user: {
+//             firstName: '$postOwner.firstName',
+//             lastName: '$postOwner.lastName',
+//           },
+//           profile: '$profile',
+//           commentCount: 1,
+//         },
+//       },
+//     ];
+
+//     return await UserPostModel.aggregate(pipeline);
+//   } catch (error) {
+//     console.error('Error fetching getUserPost', error);
+//     throw new Error(error as string);
+//   }
+// };
+
+export const getUserPost = async (postId: string, myUserId: string = '') => {
   try {
-    const userProfile = await UserProfile.findOne({ users_id: myUserId });
+    const userProfile = myUserId ? await UserProfile.findOne({ users_id: myUserId }) : null;
     const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
     const followertsIds = userProfile?.followers.map((user) => user.userId.toString()) || [];
     const mutualIds = followertsIds
       .map((id) => id.toString())
       .filter((id) => followertsIds.map((fid) => fid.toString()).includes(id));
     const mutualId = mutualIds.map((item) => new mongoose.Types.ObjectId(item as any));
-    const userId = new mongoose.Types.ObjectId(myUserId);
+    const userId = myUserId ? new mongoose.Types.ObjectId(myUserId) : null;
     const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
 
     const postIdToGet = new mongoose.Types.ObjectId(postId);
 
-    const pipeline = [
-      { $match: { _id: postIdToGet } },
+    const pipeline: any[] = [{ $match: { _id: postIdToGet } }];
 
+    if (!myUserId) {
+      pipeline.push({
+        $match: { PostType: userPostType.PUBLIC },
+      });
+    } else {
+      pipeline.push(
+        {
+          $addFields: {
+            isPublic: { $eq: ['$PostType', userPostType.PUBLIC] },
+            isFollowerOnly: { $eq: ['$PostType', userPostType.FOLLOWER_ONLY] },
+            isMutual: { $eq: ['$PostType', userPostType.MUTUAL] },
+            isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
+
+            isAuthorizedUser: {
+              $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
+            },
+            isAuthorizedUserAndMutual: {
+              $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', mutualId] }],
+            },
+          },
+        },
+        {
+          $match: {
+            $or: [
+              { isPublic: true },
+              { isFollowerOnly: true, isAuthorizedUser: true },
+              { isMutual: true, isAuthorizedUserAndMutual: true },
+              { isOnlyMe: true, user_id: userId },
+            ],
+          },
+        }
+      );
+    }
+
+    pipeline.push(
       {
         $lookup: {
           from: 'users',
@@ -414,34 +555,6 @@ export const getUserPost = async (postId: string, myUserId: string) => {
         },
       },
       { $unwind: { path: '$postOwner', preserveNullAndEmptyArrays: true } },
-
-      {
-        $addFields: {
-          isPublic: { $eq: ['$PostType', userPostType.PUBLIC] },
-          isFollowerOnly: { $eq: ['$PostType', userPostType.FOLLOWER_ONLY] },
-          isMutual: { $eq: ['$PostType', userPostType.MUTUAL] },
-          isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
-
-          isAuthorizedUser: {
-            $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
-          },
-          isAuthorizedUserAndMutual: {
-            $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', mutualId] }],
-          },
-        },
-      },
-
-      {
-        $match: {
-          $or: [
-            { isPublic: true },
-            { isFollowerOnly: true, isAuthorizedUser: true },
-            { isMutual: true, isAuthorizedUserAndMutual: true },
-            { isOnlyMe: true, user_id: userId },
-          ],
-        },
-      },
-
       {
         $lookup: {
           from: 'userprofiles',
@@ -484,8 +597,8 @@ export const getUserPost = async (postId: string, myUserId: string) => {
           profile: '$profile',
           commentCount: 1,
         },
-      },
-    ];
+      }
+    );
 
     return await UserPostModel.aggregate(pipeline);
   } catch (error) {
