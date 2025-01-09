@@ -257,13 +257,35 @@ export const getBlockedUsers = async (userId: string) => {
   return allUsers;
 };
 
+// export const addUniversityEmail = async (
+//   userId: string,
+//   universityEmail: string,
+//   universityName: string,
+//   communityId: string
+// ) => {
+//   const updatedUserProfile = await UserProfile.updateOne(
+//     {
+//       users_id: new mongoose.Types.ObjectId(userId),
+//     },
+//     {
+//       $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId } },
+//     },
+//     { new: true }
+//   );
+//   if (!updatedUserProfile) {
+//     throw new Error('This university email already exists for the user.');
+//   }
+
+//   return updatedUserProfile;
+// };
+
 export const addUniversityEmail = async (
   userId: string,
   universityEmail: string,
   universityName: string,
   communityId: string
 ) => {
-  const updatedUserProfile = await UserProfile.updateOne(
+  const updatedUserProfile = await UserProfile.findOneAndUpdate(
     {
       users_id: new mongoose.Types.ObjectId(userId),
     },
@@ -272,6 +294,7 @@ export const addUniversityEmail = async (
     },
     { new: true }
   );
+
   if (!updatedUserProfile) {
     throw new Error('This university email already exists for the user.');
   }

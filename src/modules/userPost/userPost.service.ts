@@ -37,10 +37,13 @@ export const likeUnlike = async (id: string, userId: string) => {
       io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_POST });
     }
 
-    return await post?.updateOne({ $push: { likeCount: { userId } } });
+    await post?.updateOne({ $push: { likeCount: { userId } } });
   } else {
-    return await post.updateOne({ $pull: { likeCount: { userId } } });
+    await post.updateOne({ $pull: { likeCount: { userId } } });
   }
+
+  const updatedPost = await UserPostModel.findById(id).select('likeCount');
+  return { likeCount: updatedPost?.likeCount };
 };
 
 export const updateUserPost = async (id: mongoose.Types.ObjectId, post: userPostInterface) => {

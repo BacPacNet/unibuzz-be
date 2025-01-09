@@ -90,7 +90,7 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
         return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid post ID type' });
       }
       let likeCount = await userPostService.likeUnlike(postId, req.userId);
-      return res.status(200).json({ likeCount });
+      return res.status(201).json(likeCount);
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
