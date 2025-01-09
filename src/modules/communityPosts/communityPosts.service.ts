@@ -33,10 +33,13 @@ export const likeUnlike = async (id: string, userId: string) => {
       io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST });
     }
 
-    return await post?.updateOne({ $push: { likeCount: { userId } } });
+    await post?.updateOne({ $push: { likeCount: { userId } } });
   } else {
-    return await post.updateOne({ $pull: { likeCount: { userId } } });
+    await post.updateOne({ $pull: { likeCount: { userId } } });
   }
+
+  const updatedPost = await communityPostsModel.findById(id).select('likeCount');
+  return { likeCount: updatedPost?.likeCount };
 };
 
 export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community: communityPostsInterface) => {

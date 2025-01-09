@@ -148,7 +148,7 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
   try {
     if (postId && req.userId) {
       let likeCount = await communityPostsService.likeUnlike(postId, req.userId);
-      return res.status(200).json({ likeCount });
+      return res.status(200).json(likeCount);
     }
   } catch (error: any) {
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
