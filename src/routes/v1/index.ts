@@ -18,6 +18,7 @@ import messageRoute from './message.route';
 import loginEmailVerificationRoute from './loginEmailVerification.route';
 import universityEmailVerificationRoute from './universityVerificationEmail.route';
 import eventRoute from './events.route';
+import endorseRoute from './endorsementAI.route';
 
 const router = express.Router();
 
@@ -94,6 +95,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/eventpost',
     route: eventRoute,
+  },
+  {
+    path: '/endorsementAI',
+    route: endorseRoute,
   },
 ];
 
