@@ -5,7 +5,7 @@ import EndorseAIModel from './endorsementAI.model';
 export const CreateEndorseAI = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.body;
-    const checkEndorsement = await EndorseAIModel.find({ userId: req.userId });
+    const checkEndorsement = await EndorseAIModel.find({ userId: req.userId, communityId: communityId });
     if (checkEndorsement.length > 0) {
       return res.status(400).json({ message: 'You have already endorsed this community' });
     }
