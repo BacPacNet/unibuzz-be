@@ -7,7 +7,7 @@ export const CreateEndorseAI = async (req: userIdExtend, res: Response) => {
     const { communityId } = req.body;
     const checkEndorsement = await EndorseAIModel.find({ userId: req.userId, communityId: communityId });
     if (checkEndorsement.length > 0) {
-      return res.status(400).json({ message: 'You have already endorsed this community' });
+      return res.status(400).json({ isAlreadyEndorse: true, message: 'You have already endorsed this community' });
     }
 
     const endorsement = new EndorseAIModel({
@@ -24,6 +24,10 @@ export const CreateEndorseAI = async (req: userIdExtend, res: Response) => {
 export const GetEndorseAIByCommunityId = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
+    const { checkUserEndorse } = req.query;
+    if (checkUserEndorse) {
+      await GetEndorseAIByUserId(req, res);
+    }
     const endorsements = await EndorseAIModel.find({ communityId }).select('totalGoal numberOfUsersEndorsed');
 
     const totalGoal = 100;
@@ -35,6 +39,22 @@ export const GetEndorseAIByCommunityId = async (req: userIdExtend, res: Response
       totalGoal,
       totalUsersEndorsed,
       percentage: percentage.toFixed(0),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const GetEndorseAIByUserId = async (req: userIdExtend, res: Response) => {
+  try {
+    const { communityId } = req.params;
+    const endorsements = await EndorseAIModel.find({ userId: req.userId, communityId: communityId });
+    if (endorsements.length > 0) {
+      return res.status(200).json({ isAlreadyEndorse: true, message: 'You have already endorsed this community' });
+    }
+
+    res.status(200).json({
+      isAlreadyEndorse: false,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
