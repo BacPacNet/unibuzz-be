@@ -61,6 +61,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   } = req.body;
 
   // const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
+
   const user = await userService.registerUser(body);
   await userProfileService.createUserProfile(
     user._id,
@@ -83,6 +84,8 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const { email, password } = req.body;
+
+  
   const user = await authService.loginUserWithEmailAndPassword(email, password);
   const userProfile = await userProfileService.getUserProfile(user.id);
   const Following = await userFollowService.getFollowCounts(user.id);
