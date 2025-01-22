@@ -1,4 +1,4 @@
-import { EndorseAIController } from '@/modules/endorsementAI';
+import { EndorseAIController } from '../../modules/endorsementAI';
 import { userIdAuth } from '../../modules/user';
 import express, { Router } from 'express';
 
