@@ -1,5 +1,5 @@
 # development stage
-FROM node:14 as base
+FROM node:16.20.0 as base
 
 WORKDIR /usr/src/app
 
