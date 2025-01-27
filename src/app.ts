@@ -12,10 +12,17 @@ import { jwtStrategy } from './modules/auth';
 import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
+import OpenAI from 'openai';
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
 
 const app: Express = express();
+
+// Set up OpenAI Client
+export const openai = new OpenAI({
+  defaultHeaders: { 'OpenAI-Beta': 'assistants=v1' },
+  apiKey: config.OPENAI_API_KEY,
+});
 
 if (config.env !== 'test') {
   app.use(morgan.successHandler);
