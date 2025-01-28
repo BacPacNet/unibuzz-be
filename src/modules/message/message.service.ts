@@ -45,7 +45,7 @@ export const getMessages = async (chatId: string) => {
       { path: 'sender', select: 'firstName lastName _id' },
       { path: 'senderProfile', select: '  profile_dp' },
     ])
-    .sort({ created_at: -1 });
+    .sort({ createdAt: 1 });
 
   return messages;
 };

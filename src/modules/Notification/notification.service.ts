@@ -98,6 +98,25 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       $sort: { createdAt: -1 },
     },
     {
+      $group: {
+        _id: {
+          type: '$type',
+          sender_id: '$sender_id',
+          receiverId: '$receiverId',
+        },
+        latestNotification: { $first: '$$ROOT' }, // Get the latest notification (sorted by createdAt)
+        createdAt: { $first: '$createdAt' }, // Keep track of the latest createdAt for the group
+      },
+    },
+    {
+      $replaceRoot: {
+        newRoot: '$latestNotification', // Replace the document with the latest notification in the group
+      },
+    },
+    {
+      $sort: { createdAt: -1 }, // Sort again after deduplication
+    },
+    {
       $skip: skip,
     },
     {
