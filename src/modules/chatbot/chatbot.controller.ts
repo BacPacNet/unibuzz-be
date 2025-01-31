@@ -1,29 +1,54 @@
 import { userIdExtend } from 'src/config/userIDType';
 import { Response } from 'express';
 import httpStatus from 'http-status';
-import { chatbotService } from './index';
 import { openai } from '../../app';
+import { communityModel } from '../community';
+import { chatbotModel, chatbotService } from '.';
 
 export const createThread = async (_req: userIdExtend, res: Response) => {
   try {
     console.log('Creating a new thread...');
     const thread = await openai.beta.threads.create();
     console.log('thread created', thread);
-    res.status(httpStatus.OK).json(thread);
+    return res.status(httpStatus.OK).json(thread);
   } catch (error: any) {
     console.log(error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
 export const addMessage = async (req: userIdExtend, res: Response) => {
   const { threadId, message } = req.body;
+  const communityId = req.query['communityId'];
   try {
-    const messageRespone = await chatbotService.addMessageService(threadId, message);
-    console.log('messageRespone', messageRespone);
-    res.status(httpStatus.OK).send(messageRespone);
+    const community = await communityModel.findById(communityId);
+
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+    }
+    const { assistantId, collegeID } = community;
+
+    if (!assistantId) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Assistant not found' });
+    }
+    const messageResponse = await chatbotService.addMessageService(threadId, message, assistantId);
+
+    if (messageResponse) {
+      const createResponse = {
+        userId: req.userId,
+        communityId: communityId,
+        collegeID: collegeID,
+        prompt: message,
+        threadId: threadId,
+        response: messageResponse[0][0].text.value,
+      };
+
+      const result = await chatbotModel.create(createResponse);
+
+      return res.status(httpStatus.OK).json(result);
+    }
   } catch (error: any) {
     console.log(error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };

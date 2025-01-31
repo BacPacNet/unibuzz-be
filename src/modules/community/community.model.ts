@@ -10,6 +10,7 @@ const communitySchema = new Schema<communityInterface>({
   numberOfStudent: Number,
   numberOfFaculty: Number,
   about: { type: String },
+  assistantId: { type: String, unique: true, required: false },
   users: [
     {
       id: { type: Schema.Types.ObjectId, ref: 'User' },

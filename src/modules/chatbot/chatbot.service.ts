@@ -1,14 +1,10 @@
 import { openai } from '../../app';
-import config from '../../config/config';
 
-async function runAssistant(threadId: string) {
+async function runAssistant(threadId: string, assistantId: string) {
   console.log('Running assistant for thread: ' + threadId);
   const response = await (openai as any).beta.threads.runs.create(threadId, {
-    assistant_id: config.ASSISTANT_ID,
-    // Make sure to not overwrite the original instruction, unless you want to
+    assistant_id: assistantId,
   });
-
-  console.log(response);
 
   return response;
 }
@@ -27,7 +23,6 @@ async function checkingStatus(threadId: string, runId: string): Promise<any[]> {
           const messagesList: any = await (openai as any).beta.threads.messages.list(threadId);
           const messages: any[] = messagesList.body.data.map((message: { content: any }) => message.content);
 
-          console.log('messages', messages);
           resolve(messages);
         }
       } catch (error) {
@@ -38,7 +33,7 @@ async function checkingStatus(threadId: string, runId: string): Promise<any[]> {
   });
 }
 
-export const addMessageService = async (threadId: string, message: string): Promise<any[]> => {
+export const addMessageService = async (threadId: string, message: string, assistantId: string): Promise<any[]> => {
   console.log('Adding a new message to thread: ' + threadId);
 
   await openai.beta.threads.messages.create(threadId, {
@@ -46,7 +41,7 @@ export const addMessageService = async (threadId: string, message: string): Prom
     content: message,
   });
 
-  const run = await runAssistant(threadId);
+  const run = await runAssistant(threadId, assistantId);
   const runId = run.id;
 
   // Wait for the status to become "completed" and return the messages
