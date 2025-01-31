@@ -22,6 +22,7 @@ interface communityInterface {
   numberOfFaculty: number;
   about: string;
   users: User[];
+  assistantId: string;
 }
 
 export { communityInterface };

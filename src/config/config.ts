@@ -22,7 +22,6 @@ const envVarsSchema = Joi.object()
     EMAIL_FROM: Joi.string().description('the from field in the emails sent by the app'),
     CLIENT_URL: Joi.string().required().description('Client url'),
     OPENAI_API_KEY: Joi.string().required().description('Open AI API key'),
-    ASSISTANT_ID: Joi.string().required().description('Assistant ID'),
   })
   .unknown();
 
@@ -68,7 +67,6 @@ const config = {
   },
   clientUrl: envVars.CLIENT_URL,
   OPENAI_API_KEY: envVars.OPENAI_API_KEY,
-  ASSISTANT_ID: envVars.ASSISTANT_ID,
 };
 
 export default config;

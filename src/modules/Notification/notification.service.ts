@@ -1,7 +1,6 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
 import { io } from '../../index';
-import { UserProfile } from '../userProfile';
 import { notificationRoleAccess } from './notification.interface';
 
 export const createManyNotification = async (
@@ -33,52 +32,177 @@ export const createManyNotification = async (
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
   const skip = (page - 1) * limit;
 
-  const userNotification = await notificationModel
-    .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
-    .populate([
-      { path: 'sender_id', select: 'firstName lastName _id' },
-      { path: 'communityGroupId', select: 'title _id' },
-      { path: 'communityPostId', select: '_id' },
-    ])
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
-
-  const userIDs = userNotification.map((item) => item.sender_id._id.toString());
-  const uniqueUserIDs = [...new Set(userIDs)];
-  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIDs } })
-    .select('profile_dp users_id')
-    .lean();
-
-  const userNotificationWithDp = userNotification.map((item) => {
-    const userProfile = userProfiles.find((profile) => profile.users_id.toString() === item.sender_id._id.toString());
-
-    const profileDp = userProfile?.profile_dp?.imageUrl ?? '';
-
-    return {
-      ...item,
-      sender_id: {
-        ...item.sender_id,
-        profileDp,
+  const pipeline: PipelineStage[] = [
+    {
+      $match: {
+        receiverId: new mongoose.Types.ObjectId(userID),
+        isRead: false,
+        $nor: [
+          {
+            $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
+          },
+        ],
       },
-    };
-  });
+    },
+    {
+      $sort: { createdAt: -1 }, // Sort by createdAt in descending order
+    },
+    {
+      $group: {
+        _id: {
+          type: '$type',
+          senderId: '$sender_id',
+          receiverId: '$receiverId',
+        },
+        latestNotification: { $first: '$$ROOT' }, // Keep the latest notification in each group
+      },
+    },
+    {
+      $replaceRoot: { newRoot: '$latestNotification' }, // Replace the grouped document with the latest notification
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'sender_id',
+        foreignField: '_id',
+        as: 'senderDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$senderDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'sender_id',
+        foreignField: 'users_id',
+        as: 'userProfile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$userProfile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        createdAt: 1,
+        isRead: 1,
+        receiverId: 1,
+        type: 1,
+        message: 1,
+        userPostId: 1,
+        'sender_id._id': '$senderDetails._id',
+        'sender_id.firstName': '$senderDetails.firstName',
+        'sender_id.lastName': '$senderDetails.lastName',
+        'sender_id.profileDp': '$userProfile.profile_dp.imageUrl',
+      },
+    },
+    {
+      $sort: { createdAt: -1 }, // Sort again after grouping
+    },
+    {
+      $skip: skip, // Apply pagination
+    },
+    {
+      $limit: limit,
+    },
+  ];
 
-  const totalNotifications = await notificationModel.countDocuments({
-    receiverId: new mongoose.Types.ObjectId(userID),
-    isRead: false,
-  });
+  // Execute the aggregation pipeline
+  const userNotifications = await notificationModel.aggregate(pipeline);
+
+  // Count total distinct notifications for pagination metadata
+  const totalNotificationsPipeline: PipelineStage[] = [
+    {
+      $match: {
+        receiverId: new mongoose.Types.ObjectId(userID),
+        isRead: false,
+      },
+    },
+    {
+      $group: {
+        _id: {
+          type: '$type',
+          senderId: '$sender_id',
+          receiverId: '$receiverId',
+        },
+      },
+    },
+    {
+      $count: 'total',
+    },
+  ];
+
+  const totalNotificationsResult = await notificationModel.aggregate(totalNotificationsPipeline);
+  const totalNotifications = totalNotificationsResult[0]?.total || 0;
 
   const totalPages = Math.ceil(totalNotifications / limit);
 
   return {
-    notifications: userNotificationWithDp,
+    notifications: userNotifications,
     currentPage: page,
     totalPages,
     totalNotifications,
   };
 };
+
+//export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
+//  const skip = (page - 1) * limit;
+
+//  const userNotification = await notificationModel
+//    .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
+//    .populate([
+//      { path: 'sender_id', select: 'firstName lastName _id' },
+//      { path: 'communityGroupId', select: 'title _id' },
+//      { path: 'communityPostId', select: '_id' },
+//    ])
+//    .sort({ createdAt: -1 })
+//    .skip(skip)
+//    .limit(limit)
+//    .lean();
+
+//    console.log('userNotification', userNotification)
+
+//  const userIDs = userNotification.map((item) => item.sender_id._id.toString());
+//  const uniqueUserIDs = [...new Set(userIDs)];
+//  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIDs } })
+//    .select('profile_dp users_id')
+//    .lean();
+
+//  const userNotificationWithDp = userNotification.map((item) => {
+//    const userProfile = userProfiles.find((profile) => profile.users_id.toString() === item.sender_id._id.toString());
+
+//    const profileDp = userProfile?.profile_dp?.imageUrl ?? '';
+
+//    return {
+//      ...item,
+//      sender_id: {
+//        ...item.sender_id,
+//        profileDp,
+//      },
+//    };
+//  });
+
+//  const totalNotifications = await notificationModel.countDocuments({
+//    receiverId: new mongoose.Types.ObjectId(userID),
+//    isRead: false,
+//  });
+
+//  const totalPages = Math.ceil(totalNotifications / limit);
+
+//  return {
+//    notifications: userNotificationWithDp,
+//    currentPage: page,
+//    totalPages,
+//    totalNotifications,
+//  };
+//};
 
 export const getUserNotificationMain = async (userID: string, page = 1, limit = 3) => {
   const skip = (page - 1) * limit;
@@ -103,6 +227,9 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
           type: '$type',
           sender_id: '$sender_id',
           receiverId: '$receiverId',
+          userPostId: '$userPostId',
+          communityPostId: '$communityPostId',
+          communityGroupId: '$communityGroupId',
         },
         latestNotification: { $first: '$$ROOT' }, // Get the latest notification (sorted by createdAt)
         createdAt: { $first: '$createdAt' }, // Keep track of the latest createdAt for the group
@@ -201,17 +328,34 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
     },
   ];
 
-  const userNotifications = await notificationModel.aggregate(pipeline);
-
-  const totalNotifications = await notificationModel.countDocuments({
-    receiverId: new mongoose.Types.ObjectId(userID),
-    isRead: false,
-    $nor: [
-      {
-        $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
+  // Count total distinct notifications for pagination metadata
+  const totalNotificationsPipeline: PipelineStage[] = [
+    {
+      $match: {
+        receiverId: new mongoose.Types.ObjectId(userID),
       },
-    ],
-  });
+    },
+    {
+      $group: {
+        _id: {
+          type: '$type',
+          senderId: '$sender_id',
+          receiverId: '$receiverId',
+          userPostId: '$userPostId',
+          communityPostId: '$communityPostId',
+          communityGroupId: '$communityGroupId',
+        },
+      },
+    },
+    {
+      $count: 'total',
+    },
+  ];
+
+  const totalNotificationsResult = await notificationModel.aggregate(totalNotificationsPipeline);
+  const totalNotifications = totalNotificationsResult[0]?.total || 0;
+
+  const userNotifications = await notificationModel.aggregate(pipeline);
 
   const totalPages = Math.ceil(totalNotifications / limit);
 

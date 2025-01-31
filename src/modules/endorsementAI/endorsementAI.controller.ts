@@ -26,7 +26,7 @@ export const GetEndorseAIByCommunityId = async (req: userIdExtend, res: Response
     const { communityId } = req.params;
     const { checkUserEndorse } = req.query;
     if (checkUserEndorse) {
-      await GetEndorseAIByUserId(req, res);
+      return await GetEndorseAIByUserId(req, res);
     }
     const endorsements = await EndorseAIModel.find({ communityId }).select('totalGoal numberOfUsersEndorsed');
 
