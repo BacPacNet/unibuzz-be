@@ -5,6 +5,20 @@ import { openai } from '../../app';
 import { communityModel } from '../community';
 import { chatbotModel, chatbotService } from '.';
 
+export const checkAssistant = async (req: userIdExtend, res: Response) => {
+  const communityId = req.query['communityId'];
+  try {
+    const community = await communityModel.findById(communityId);
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+    }
+    return res.status(httpStatus.OK).json({ isAssistantAvailable: !!community.assistantId });
+  } catch (error: any) {
+    console.log(error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 export const createThread = async (_req: userIdExtend, res: Response) => {
   try {
     console.log('Creating a new thread...');
