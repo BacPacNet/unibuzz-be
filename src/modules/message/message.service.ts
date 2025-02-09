@@ -10,7 +10,7 @@ export const createmessage = async (
 ) => {
   let messageBody;
 
-  if (media.flat().length > 0) {
+  if (media?.flat()?.length > 0) {
     messageBody = {
       sender: userId,
       content: content,
