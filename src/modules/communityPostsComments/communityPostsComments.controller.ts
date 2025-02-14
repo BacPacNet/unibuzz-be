@@ -3,6 +3,7 @@ import httpStatus from 'http-status';
 import { communityPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
+import he from 'he';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -12,6 +13,7 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
   const userID = req.userId;
   const { communityPostId } = req.params;
   let comment;
+  req.body.content = he.decode(req.body.content);
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
   }
@@ -116,7 +118,7 @@ export const LikeCommunityPostComments = async (req: extendedRequest, res: Respo
 export const CommunityPostCommentReply = async (req: extendedRequest, res: Response) => {
   const { commentId } = req.params;
   const { level, ...body } = req.body;
-
+  body.content = he.decode(body.content);
   try {
     if (commentId && req.userId) {
       let commentReply = await communityPostCommentsService.commentReply(commentId, req.userId, body, Number(level));

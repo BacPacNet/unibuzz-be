@@ -70,6 +70,7 @@ export const deleteUserPost = async (req: Request, res: Response, next: NextFunc
 export const getAllTimelinePosts = async (req: any, res: Response, next: NextFunction) => {
   let timelinePosts: any;
   const { page, limit } = req.query;
+
   try {
     timelinePosts = await userPostService.getAllTimelinePosts(req.userId, Number(page), Number(limit));
 
