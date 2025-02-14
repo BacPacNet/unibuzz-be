@@ -6,6 +6,7 @@ import { ApiError } from '../errors';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
+import he from 'he';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -14,6 +15,7 @@ interface extendedRequest extends Request {
 export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const userID = req.userId;
   const { userPostId } = req.params;
+  req.body.content = he.decode(req.body.content);
 
   if (!req.body.content) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
@@ -130,7 +132,7 @@ export const getCommentById = async (req: extendedRequest, res: Response) => {
 export const UserPostCommentReply = async (req: extendedRequest, res: Response) => {
   const { commentId } = req.params;
   const { level, ...body } = req.body;
-
+  body.content = he.decode(body.content);
   try {
     if (commentId && req.userId) {
       let commentReply = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));
