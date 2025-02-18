@@ -8,6 +8,7 @@ import { notificationService } from '../Notification';
 import { io } from '../../index';
 import { communityModel } from '../community';
 import { userFollowService } from '../userFollow';
+import User from '../user/user.model';
 
 export const createUserProfile = async (
   user: any,
@@ -127,64 +128,148 @@ export const getFollowingUsers = async (userId: string) => {
 
   return user!.following;
 };
-export const getFollow = async (name: string = '', userId: string) => {
-  // Fetch user profile and get list of following user IDs
-  const profile = await UserProfile.findOne({ users_id: userId });
-  if (!profile || !profile.following) return [];
 
-  const ids = profile.following.map((id: any) => id.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
+export const getFollowing = async (name: string = '', userId: string, page: number = 1, limit: number = 10) => {
+  const startIndex = (page - 1) * limit;
 
-  if (!ids.length) return [];
+  const profile = await UserProfile.findOne({ users_id: userId }, 'following');
+  if (!profile?.following?.length) return { currentPage: page, totalPages: 0, users: [] };
 
-  // Split name if provided
-  const [firstNametoPush, lastNametopush] = name ? name.split(' ') : ['', ''];
+  const ids = profile.following.map((f: any) => f.userId?._id).filter(Boolean);
+  if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
 
-  // Find user profiles based on name and following list
-  const userFollows = await UserProfile.find({
-    users_id: { $in: ids },
-  }).populate({
-    path: 'users_id',
-    match: {
-      $or: [
-        { firstName: { $regex: new RegExp(firstNametoPush || '', 'i') } },
-        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-      ],
+  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+  const nameFilter = {
+    $or: [
+      { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+      ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+    ],
+  };
+
+  const users = await User.aggregate([
+    { $match: { _id: { $in: ids }, ...nameFilter } },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
     },
-    select: '_id firstName lastName',
-  });
+    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    { $skip: startIndex },
+    { $limit: limit },
+  ]);
 
-  // Filter out any profiles without populated users_id
-  return userFollows.filter((profile) => profile.users_id);
+  return { currentPage: page, totalPages: Math.ceil(ids.length / limit), users };
 };
 
-export const getFollowers = async (name: string = '', userId: string) => {
+//export const getFollow = async (name: string = '', userId: string) => {
+//  // Fetch user profile and get list of following user IDs
+//  const profile = await UserProfile.findOne({ users_id: userId });
+//  if (!profile || !profile.following) return [];
+
+//  const ids = profile.following.map((id: any) => id.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
+
+//  if (!ids.length) return [];
+
+//  // Split name if provided
+//  const [firstNametoPush, lastNametopush] = name ? name.split(' ') : ['', ''];
+
+//  // Find user profiles based on name and following list
+//  const userFollows = await UserProfile.find({
+//    users_id: { $in: ids },
+//  }).populate({
+//    path: 'users_id',
+//    match: {
+//      $or: [
+//        { firstName: { $regex: new RegExp(firstNametoPush || '', 'i') } },
+//        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+//      ],
+//    },
+//    select: '_id firstName lastName',
+//  });
+
+//  // Filter out any profiles without populated users_id
+//  return userFollows.filter((profile) => profile.users_id);
+//};
+
+export const getFollowers = async (name: string = '', userId: string, page: number, limit: number) => {
+  const Currpage = page ? page : 1;
+  const limitpage = limit ? limit : 10;
+  const startIndex = (Currpage - 1) * limitpage;
+
   // Fetch user profile and get list of follower user IDs
   const profile = await UserProfile.findOne({ users_id: userId });
-  if (!profile || !profile.followers) return [];
+  if (!profile || !profile.followers) return { currentPage: page, totalPages: 0, users: [] };
 
-  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
+  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean);
+  if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
 
-  if (!ids.length) return [];
-
-  // Split name if provided
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
 
-  // Find user profiles based on name and followers list
-  const userFollows = await UserProfile.find({
-    users_id: { $in: ids },
-  }).populate({
-    path: 'users_id',
-    match: {
-      $or: [
-        { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-      ],
+  const users = await User.aggregate([
+    {
+      $match: {
+        _id: { $in: ids },
+        $or: [
+          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+        ],
+      },
     },
-  });
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$profile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ])
+    .skip(startIndex)
+    .limit(limitpage);
 
-  // Filter out any profiles without populated users_id
-  return userFollows.filter((profile) => profile.users_id);
+  const totalUsers = ids.length;
+  const totalPages = Math.ceil(totalUsers / limit);
+
+  return { currentPage: page, totalPages, users };
 };
+
+//export const getFollowers = async (name: string = '', userId: string) => {
+//  // Fetch user profile and get list of follower user IDs
+//  const profile = await UserProfile.findOne({ users_id: userId });
+//  if (!profile || !profile.followers) return [];
+
+//  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
+
+//  if (!ids.length) return [];
+
+//  // Split name if provided
+//  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+
+//  // Find user profiles based on name and followers list
+//  const userFollows = await UserProfile.find({
+//    users_id: { $in: ids },
+//  }).populate({
+//    path: 'users_id',
+//    match: {
+//      $or: [
+//        { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+//        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+//      ],
+//    },
+//  });
+
+//  // Filter out any profiles without populated users_id
+//  return userFollows.filter((profile) => profile.users_id);
+//};
 
 export const getFollowersAndFollowing = async (name: string = '', userId: string) => {
   let firstNametoPush: any;
