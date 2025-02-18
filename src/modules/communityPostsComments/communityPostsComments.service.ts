@@ -67,12 +67,15 @@ export const getCommunityPostComments = async (postId: string, page: number = 1,
       .find({ communityId: postId })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
-        { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree' },
+        { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree major affiliation occupation' },
         {
           path: 'replies',
           populate: [
             { path: 'commenterId', select: 'firstName lastName _id' },
-            { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree' },
+            {
+              path: 'commenterProfileId',
+              select: 'profile_dp university_name study_year degree major affiliation occupation',
+            },
           ],
         },
       ])

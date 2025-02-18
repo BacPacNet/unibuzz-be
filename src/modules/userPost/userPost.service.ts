@@ -105,6 +105,7 @@ export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId
   const totalPages = Math.ceil(totalPosts / limit);
 
   // Return posts and pagination details
+
   return {
     allPosts,
     currentPage: page,
@@ -283,6 +284,9 @@ const getUserPostsForUserIds = async (
             university_name: 1,
             study_year: 1,
             degree: 1,
+            major: 1,
+            affiliation: 1,
+            occupation: 1,
           },
         },
       },
