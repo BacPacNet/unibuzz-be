@@ -45,12 +45,12 @@ export const toggleFollow = async (req: userIdExtend, res: Response) => {
 };
 
 export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
-  const { name, userId } = req.query as { name: string; userId: string };
+  const { page, limit, name, userId } = req.query as any;
   try {
     if (req.userId) {
-      let profile = await userProfileService.getFollow(name, userId);
+      let profile = await userProfileService.getFollowing(name, userId, Number(page), Number(limit));
 
-      return res.status(200).json({ profile });
+      return res.status(200).json(profile);
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -58,11 +58,11 @@ export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
 };
 
 export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
-  const { name, userId } = req.query as { name: string; userId: string };
+  const { page, limit, name, userId } = req.query as any;
   try {
     if (req.userId) {
-      let profile = await userProfileService.getFollowers(name, userId);
-      return res.status(200).json({ profile });
+      let profile = await userProfileService.getFollowers(name, userId, Number(page), Number(limit));
+      return res.status(200).json(profile);
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
