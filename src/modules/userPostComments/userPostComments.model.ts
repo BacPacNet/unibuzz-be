@@ -22,7 +22,7 @@ const userPostCommentsSchema = new Schema<userPostCommentsInterface>(
       required: true,
     },
     likeCount: [{ userId: String }],
-    imageUrl: { imageUrl: String, publicId: String },
+    imageUrl: [{ imageUrl: String, publicId: String }],
     replies: [
       {
         type: Schema.Types.ObjectId,
