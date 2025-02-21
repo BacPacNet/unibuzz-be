@@ -4,16 +4,18 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import he from 'he';
+import { userIdExtend } from 'src/config/userIDType';
 
 interface extendedRequest extends Request {
   userId?: string;
 }
 
 // get all user posts
-export const getAllUserPosts = async (req: any, res: Response, next: NextFunction) => {
-  const userId = req.query.userId || req.userId;
+export const getAllUserPosts = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { page, limit } = req.query;
+  const userId = req.userId || ('' as string);
   try {
-    const userPosts = await userPostService.getAllUserPosts(userId);
+    const userPosts = await userPostService.getAllUserPosts(userId, Number(page), Number(limit));
     return res.status(200).json(userPosts);
   } catch (error) {
     console.log(error);

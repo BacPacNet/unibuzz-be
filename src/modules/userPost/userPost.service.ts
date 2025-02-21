@@ -11,9 +11,89 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
 
-export const getAllUserPosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 0, limit: number = 10) => {
-  const userPosts = await getUserPostsForUserIds(String(userId), [userId], [], page, limit);
-  return userPosts;
+export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10) => {
+  const skip = (page - 1) * limit;
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+
+  const userPosts = await UserPostModel.aggregate([
+    {
+      $match: {
+        user_id: userObjectId,
+      },
+    },
+    {
+      $sort: { createdAt: -1 },
+    },
+    { $skip: skip },
+    { $limit: limit },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'user_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'user._id',
+        foreignField: 'users_id',
+        as: 'userProfile',
+      },
+    },
+    {
+      $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+    },
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: '_id',
+        foreignField: 'userPostId',
+        as: 'comments',
+      },
+    },
+    {
+      $addFields: {
+        commentCount: { $size: '$comments' },
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        content: 1,
+        createdAt: 1,
+        imageUrl: 1,
+        likeCount: 1,
+        commentCount: 1,
+        user: {
+          _id: 1,
+          firstName: 1,
+          lastName: 1,
+        },
+        userProfile: {
+          profile_dp: 1,
+          university_name: 1,
+          study_year: 1,
+          degree: 1,
+        },
+      },
+    },
+  ]).exec();
+
+  const totalPosts = await UserPostModel.countDocuments({ user_id: userId });
+
+  return {
+    data: userPosts,
+    currentPage: page,
+    totalPages: Math.ceil(totalPosts / limit),
+    totalPosts,
+  };
 };
 
 export const createUserPost = async (post: userPostInterface) => {
@@ -127,22 +207,6 @@ const countUserPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[
     throw new Error('Failed to count user posts');
   }
 };
-
-// Function to count community posts
-// const countCommunityPostsForUserIds = async (userIDs: mongoose.Schema.Types.ObjectId[]) => {
-//   const ids = userIDs.map((item) => new mongoose.Types.ObjectId(item as any));
-
-//   try {
-//     const totalCommunityPosts = await CommunityPostModel.countDocuments({
-//       user_id: { $in: ids },
-//       communityPostsType: 'Public', // Only public posts count
-//     });
-//     return totalCommunityPosts;
-//   } catch (error) {
-//     console.error('Error counting community posts:', error);
-//     throw new Error('Failed to count community posts');
-//   }
-// };
 
 const countCommunityPostsForUserIds = async (communityIds: string[] = []) => {
   try {
@@ -395,112 +459,6 @@ export const getCommunityPostsForUser = async (
     throw new Error('Failed to Get User Posts');
   }
 };
-
-// export const getUserPost = async (postId: string, myUserId: string="") => {
-//   try {
-//     const userProfile = await UserProfile.findOne({ users_id: myUserId });
-//     const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
-//     const followertsIds = userProfile?.followers.map((user) => user.userId.toString()) || [];
-//     const mutualIds = followertsIds
-//       .map((id) => id.toString())
-//       .filter((id) => followertsIds.map((fid) => fid.toString()).includes(id));
-//     const mutualId = mutualIds.map((item) => new mongoose.Types.ObjectId(item as any));
-//     const userId = new mongoose.Types.ObjectId(myUserId);
-//     const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
-
-//     const postIdToGet = new mongoose.Types.ObjectId(postId);
-
-//     const pipeline = [
-//       { $match: { _id: postIdToGet } },
-
-//       {
-//         $lookup: {
-//           from: 'users',
-//           localField: 'user_id',
-//           foreignField: '_id',
-//           as: 'postOwner',
-//         },
-//       },
-//       { $unwind: { path: '$postOwner', preserveNullAndEmptyArrays: true } },
-
-//       {
-//         $addFields: {
-//           isPublic: { $eq: ['$PostType', userPostType.PUBLIC] },
-//           isFollowerOnly: { $eq: ['$PostType', userPostType.FOLLOWER_ONLY] },
-//           isMutual: { $eq: ['$PostType', userPostType.MUTUAL] },
-//           isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
-
-//           isAuthorizedUser: {
-//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
-//           },
-//           isAuthorizedUserAndMutual: {
-//             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', mutualId] }],
-//           },
-//         },
-//       },
-
-//       {
-//         $match: {
-//           $or: [
-//             { isPublic: true },
-//             { isFollowerOnly: true, isAuthorizedUser: true },
-//             { isMutual: true, isAuthorizedUserAndMutual: true },
-//             { isOnlyMe: true, user_id: userId },
-//           ],
-//         },
-//       },
-
-//       {
-//         $lookup: {
-//           from: 'userprofiles',
-//           localField: 'user_id',
-//           foreignField: 'users_id',
-//           as: 'profile',
-//         },
-//       },
-//       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-
-//       {
-//         $lookup: {
-//           from: 'userpostcomments',
-//           localField: '_id',
-//           foreignField: 'userPostId',
-//           as: 'comments',
-//         },
-//       },
-
-//       {
-//         $addFields: {
-//           commentCount: { $size: '$comments' },
-//         },
-//       },
-
-//       {
-//         $project: {
-//           _id: 1,
-//           user_id: 1,
-//           PostType: 1,
-//           content: 1,
-//           imageUrl: 1,
-//           likeCount: 1,
-//           createdAt: 1,
-//           updatedAt: 1,
-//           user: {
-//             firstName: '$postOwner.firstName',
-//             lastName: '$postOwner.lastName',
-//           },
-//           profile: '$profile',
-//           commentCount: 1,
-//         },
-//       },
-//     ];
-
-//     return await UserPostModel.aggregate(pipeline);
-//   } catch (error) {
-//     console.error('Error fetching getUserPost', error);
-//     throw new Error(error as string);
-//   }
-// };
 
 export const getUserPost = async (postId: string, myUserId: string = '') => {
   try {
