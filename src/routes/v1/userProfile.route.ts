@@ -9,7 +9,8 @@ router.route('/').put(userIdAuth, userProfileController.toggleFollow);
 router.route('/me').get(userIdAuth, userProfileController.getUserProfile);
 
 router.route('/followers').get(userIdAuth, userProfileController.getAllUserFollowers);
-router.route('/following').get(userIdAuth, userProfileController.getAllUserFollow);
+router.route('/following').get(userIdAuth, userProfileController.getAllUserFollowing);
+router.route('/mutuals').get(userIdAuth, userProfileController.getAllMututalUsers);
 router.route('/following_and_followers').get(userIdAuth, userProfileController.getAllUserFollowersAndFollowing);
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
 router.route('/addUniversityEmail').put(userIdAuth, userProfileController.addUniversityEmail);

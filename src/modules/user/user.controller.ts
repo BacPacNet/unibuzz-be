@@ -37,10 +37,10 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
-export const getAllUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { page, limit, name } = req.query as any;
   try {
-    let allUsers = await userService.getAllUser(name, Number(page), Number(limit));
+    let allUsers = await userService.getAllUser(name, Number(page), Number(limit), req.userId as string);
     return res.status(200).json(allUsers);
   } catch (error) {
     console.log(error);

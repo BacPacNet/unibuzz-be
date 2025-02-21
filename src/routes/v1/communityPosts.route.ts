@@ -5,7 +5,7 @@ import { noErrorUserIdAuth } from '../../modules/user/user.middleware';
 
 const router: Router = express.Router();
 
-router.route('/post/:postId').get(noErrorUserIdAuth, communityPostsController.getPost);
+router.route('/post/:postId').get(noErrorUserIdAuth, communityPostsController.getPostById);
 router.route('/:communityId/:communityGroupId?').get(userIdAuth, communityPostsController.getAllCommunityPost);
 
 router.route('/').post(userIdAuth, communityPostsController.createCommunityPost);

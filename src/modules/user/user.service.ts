@@ -94,11 +94,16 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
   return userProfile[0];
 };
 
-export const getAllUser = async (name: string = '', page: number, limit: number) => {
+export const getAllUser = async (name: string = '', page: number, limit: number, userId: string) => {
   const Currpage = page ? page : 1;
   const limitpage = limit ? limit : 10;
   const startIndex = (Currpage - Number(1)) * Number(limitpage);
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+
+  // Fetch the logged-in user's following list
+  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following');
+  const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
+
   const users = await User.aggregate([
     {
       $lookup: {
@@ -110,6 +115,7 @@ export const getAllUser = async (name: string = '', page: number, limit: number)
     },
     {
       $match: {
+        _id: { $ne: new mongoose.Types.ObjectId(userId) },
         $or: [
           { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
           ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
@@ -120,6 +126,11 @@ export const getAllUser = async (name: string = '', page: number, limit: number)
       $unwind: {
         path: '$profile', // Unwind the profile array to get a single object
         preserveNullAndEmptyArrays: true, // Include users without a matching profile
+      },
+    },
+    {
+      $addFields: {
+        isFollowing: { $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))] }, // Check if user is in following list
       },
     },
   ])
@@ -214,6 +225,7 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
         return {
           ...user,
           profile,
+          isFollowing: profile && profile.following.find((id) => id.userId.toString() == user._id),
         };
       })
       .filter((user) => user.profile !== undefined);

@@ -155,7 +155,7 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
   }
 };
 
-export const getPost = async (req: extendedRequest, res: Response) => {
+export const getPostById = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
   const { isType } = req.query;
   let post: any;

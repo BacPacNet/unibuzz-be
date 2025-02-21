@@ -157,6 +157,11 @@ export const getFollowing = async (name: string = '', userId: string, page: numb
       },
     },
     { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        isFollowing: true,
+      },
+    },
     { $skip: startIndex },
     { $limit: limit },
   ]);
@@ -203,6 +208,9 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
   const profile = await UserProfile.findOne({ users_id: userId });
   if (!profile || !profile.followers) return { currentPage: page, totalPages: 0, users: [] };
 
+  const followingIds = profile?.following.map((id) => id.userId.toString()) || [];
+  console.log(followingIds);
+
   const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean);
   if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
 
@@ -232,6 +240,11 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
         preserveNullAndEmptyArrays: true,
       },
     },
+    {
+      $addFields: {
+        isFollowing: { $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))] }, // Check if user is in following list
+      },
+    },
   ])
     .skip(startIndex)
     .limit(limitpage);
@@ -242,33 +255,48 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
   return { currentPage: page, totalPages, users };
 };
 
-//export const getFollowers = async (name: string = '', userId: string) => {
-//  // Fetch user profile and get list of follower user IDs
-//  const profile = await UserProfile.findOne({ users_id: userId });
-//  if (!profile || !profile.followers) return [];
+//export const getMutualUsers = async (userId: string, targetUserId: string, page: number = 1, limit: number = 10) => {
+//  const startIndex = (page - 1) * limit;
 
-//  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
+//  // Fetch both users' following lists
+//  const [loggedInUser, targetUser] = await Promise.all([
+//    UserProfile.findOne({ users_id: userId }).select('following').lean(),
+//    UserProfile.findOne({ users_id: targetUserId }).select('following').lean(),
+//  ]);
 
-//  if (!ids.length) return [];
+//  // Extract following user IDs and convert them to ObjectId
+//  const loggedInFollowingIds = new Set(loggedInUser?.following.map(f => f.userId.toString()) || []);
+//  const targetFollowingIds = new Set(targetUser?.following.map(f => f.userId.toString()) || []);
 
-//  // Split name if provided
-//  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+//  // Find mutual user IDs
+//  const mutualUserIds = [...loggedInFollowingIds].filter(id => targetFollowingIds.has(id)).map(id => new mongoose.Types.ObjectId(id));
 
-//  // Find user profiles based on name and followers list
-//  const userFollows = await UserProfile.find({
-//    users_id: { $in: ids },
-//  }).populate({
-//    path: 'users_id',
-//    match: {
-//      $or: [
-//        { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-//        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-//      ],
+//  // Fetch user details of mutual users with pagination
+//  const mutualUsers = await User.aggregate([
+//    { $match: { _id: { $in: mutualUserIds } } },
+//    {
+//      $lookup: {
+//        from: 'userprofiles',
+//        localField: '_id',
+//        foreignField: 'users_id',
+//        as: 'profile',
+//      },
 //    },
-//  });
+//    {
+//      $unwind: {
+//        path: '$profile',
+//        preserveNullAndEmptyArrays: true,
+//      },
+//    },
+//    { $skip: startIndex },
+//    { $limit: limit },
+//  ]);
 
-//  // Filter out any profiles without populated users_id
-//  return userFollows.filter((profile) => profile.users_id);
+//  return {
+//    currentPage: page,
+//    totalPages: Math.ceil(mutualUserIds.length / limit),
+//    mutualUsers,
+//  };
 //};
 
 export const getFollowersAndFollowing = async (name: string = '', userId: string) => {
@@ -342,27 +370,64 @@ export const getBlockedUsers = async (userId: string) => {
   return allUsers;
 };
 
-// export const addUniversityEmail = async (
-//   userId: string,
-//   universityEmail: string,
-//   universityName: string,
-//   communityId: string
-// ) => {
-//   const updatedUserProfile = await UserProfile.updateOne(
-//     {
-//       users_id: new mongoose.Types.ObjectId(userId),
-//     },
-//     {
-//       $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId } },
-//     },
-//     { new: true }
-//   );
-//   if (!updatedUserProfile) {
-//     throw new Error('This university email already exists for the user.');
-//   }
+export const getFollowingAndMutuals = async (name: string, userId: string, page: number = 1, limit: number = 10) => {
+  const startIndex = (page - 1) * limit;
 
-//   return updatedUserProfile;
-// };
+  // Fetch the user's following and followers list
+  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following followers').lean();
+
+  // Extract following and follower IDs
+  const followingIds = new Set(loggedInUser?.following.map((f) => f.userId.toString()) || []);
+  const followerIds = new Set(loggedInUser?.followers.map((f) => f.userId.toString()) || []);
+
+  // Find mutual followers (users present in both sets)
+  const mutualIds = [...followingIds].filter((id) => followerIds.has(id)).map((id) => new mongoose.Types.ObjectId(id));
+
+  // Convert followingIds to ObjectId for MongoDB query
+  //  const followingObjectIds = [...followingIds].map((id) => new mongoose.Types.ObjectId(id));
+
+  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+
+  // Fetch user details of following and mutual followers
+  const users = await User.aggregate([
+    {
+      $match: {
+        _id: { $in: mutualIds },
+        $or: [
+          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
+          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$profile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $addFields: {
+        isMutual: { $in: ['$_id', mutualIds] }, // Check if the user is a mutual follower
+      },
+    },
+    { $skip: startIndex },
+    { $limit: limit },
+  ]);
+
+  return {
+    currentPage: page,
+    totalPages: Math.ceil(followingIds.size / limit),
+    users,
+  };
+};
 
 export const addUniversityEmail = async (
   userId: string,

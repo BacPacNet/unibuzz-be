@@ -37,14 +37,14 @@ export const toggleFollow = async (req: userIdExtend, res: Response) => {
         new mongoose.Types.ObjectId(userId),
         new mongoose.Types.ObjectId(userToFollow)
       );
-      return res.status(200).json({ followed });
+      return res.status(200).json(followed);
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
-export const getAllUserFollow = async (req: userIdExtend, res: Response) => {
+export const getAllUserFollowing = async (req: userIdExtend, res: Response) => {
   const { page, limit, name, userId } = req.query as any;
   try {
     if (req.userId) {
@@ -62,6 +62,18 @@ export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
   try {
     if (req.userId) {
       let profile = await userProfileService.getFollowers(name, userId, Number(page), Number(limit));
+      return res.status(200).json(profile);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getAllMututalUsers = async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, userId } = req.query as any;
+  try {
+    if (req.userId) {
+      let profile = await userProfileService.getFollowingAndMutuals(name, userId, Number(page), Number(limit));
       return res.status(200).json(profile);
     }
   } catch (error: any) {
