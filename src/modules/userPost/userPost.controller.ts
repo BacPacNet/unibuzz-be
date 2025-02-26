@@ -12,9 +12,12 @@ interface extendedRequest extends Request {
 
 // get all user posts
 export const getAllUserPosts = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { page, limit } = req.query;
-  const userId = req.userId || ('' as string);
+  const { page, limit, userId } = req.query as any;
+
   try {
+    if (!userId) {
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID'));
+    }
     const userPosts = await userPostService.getAllUserPosts(userId, Number(page), Number(limit));
     return res.status(200).json(userPosts);
   } catch (error) {
