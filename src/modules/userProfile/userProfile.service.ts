@@ -209,7 +209,6 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
   if (!profile || !profile.followers) return { currentPage: page, totalPages: 0, users: [] };
 
   const followingIds = profile?.following.map((id) => id.userId.toString()) || [];
-  console.log(followingIds);
 
   const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean);
   if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
@@ -415,7 +414,7 @@ export const getFollowingAndMutuals = async (name: string, userId: string, page:
     },
     {
       $addFields: {
-        isMutual: { $in: ['$_id', mutualIds] }, // Check if the user is a mutual follower
+        isFollowing: true, // Check if the user is a mutual follower
       },
     },
     { $skip: startIndex },
