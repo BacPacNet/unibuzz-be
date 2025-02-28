@@ -22,10 +22,13 @@ export const createUserProfile = async (
   major: string,
   occupation: string,
   department: string,
-  universityId: string
+  universityId: any
 ) => {
-  const emailField = universityEmail ? await buildEmailField(universityEmail, universityName, universityId) : null;
-
+  const emailField =
+    universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
+  if (universityId === '') {
+    universityId = null;
+  }
   const userProfileData = {
     users_id: user,
     dob,
