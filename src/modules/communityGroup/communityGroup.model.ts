@@ -37,6 +37,61 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       enum: ['Casual', 'Official'],
       default: communityGroupType.CASUAL,
     },
+    // communityGroupCategory: {
+    //   type: Map,
+    //   of: [String],
+    //   required: true,
+    //   validate: [
+    //     {
+    //       validator: function (value: Map<string, string[]>): boolean {
+    //         return value.size === 1;
+    //       },
+    //       message: 'Only one category can be specified.',
+    //     },
+    //     {
+    //       validator: function (value: Map<string, string[]>): boolean {
+    //         for (const key of value.keys()) {
+    //           if (!allowedCategories.has(key)) {
+    //             return false;
+    //           }
+    //         }
+    //         return true;
+    //       },
+    //       message: `Invalid category key.`,
+    //     },
+    //     {
+    //       validator: function (value: Map<string, string[]>): boolean {
+    //         for (const [key, subcategories] of value.entries()) {
+    //           const allowedSubs = allowedSubcategories[key];
+    //           if (key !== 'Others' && subcategories.length === 0) {
+    //             return false;
+    //           }
+    //           if (!allowedSubs) {
+    //             if (subcategories.length > 0) {
+    //               return false;
+    //             }
+    //           } else {
+    //             const subSet = new Set(allowedSubs);
+    //             for (const sub of subcategories) {
+    //               if (!subSet.has(sub)) {
+    //                 return false;
+    //               }
+    //             }
+    //           }
+    //         }
+    //         return true;
+    //       },
+    //       message: function (props: { value: Map<string, string[]> }): string {
+    //         const [key] = Array.from(props.value.keys());
+    //         if (!key) {
+    //           return 'Invalid key.';
+    //         }
+    //         return `Invalid subcategory for "${key}".}`;
+    //       },
+    //     },
+    //   ],
+    // },
+
     communityGroupCategory: {
       type: Map,
       of: [String],
@@ -44,9 +99,9 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       validate: [
         {
           validator: function (value: Map<string, string[]>): boolean {
-            return value.size === 1;
+            return value.size > 0; // Allow multiple categories
           },
-          message: 'Only one category can be specified.',
+          message: 'At least one category must be specified.',
         },
         {
           validator: function (value: Map<string, string[]>): boolean {
@@ -63,9 +118,6 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
           validator: function (value: Map<string, string[]>): boolean {
             for (const [key, subcategories] of value.entries()) {
               const allowedSubs = allowedSubcategories[key];
-              if (key !== 'Others' && subcategories.length === 0) {
-                return false;
-              }
               if (!allowedSubs) {
                 if (subcategories.length > 0) {
                   return false;
@@ -82,11 +134,13 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
             return true;
           },
           message: function (props: { value: Map<string, string[]> }): string {
-            const [key] = Array.from(props.value.keys());
-            if (!key) {
-              return 'Invalid key.';
+            const invalidEntries = [];
+            for (const [key] of props.value.entries()) {
+              if (!allowedCategories.has(key)) {
+                invalidEntries.push(`"${key}"`);
+              }
             }
-            return `Invalid subcategory for "${key}".}`;
+            return `Invalid categories: ${invalidEntries.join(', ')}.`;
           },
         },
       ],

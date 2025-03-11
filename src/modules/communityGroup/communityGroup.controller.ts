@@ -15,6 +15,9 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
   const userId = req.userId;
   const { communityId } = req.params;
   const { body } = req;
+
+  console.log('body', body);
+
   try {
     if (!communityId || !userId) {
       return new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
