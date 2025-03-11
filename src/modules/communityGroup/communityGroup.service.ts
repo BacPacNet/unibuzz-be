@@ -82,8 +82,7 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
 };
 
 export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
-  const { selectedGroupCategory, groupSubCategory, selectedUsers } = body;
-  const communityGroupCategory = { [selectedGroupCategory]: groupSubCategory };
+  const { communityGroupCategory, selectedUsers } = body;
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -103,7 +102,7 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
 
   await communityGroupService.joinCommunityGroup(userId, createdGroup._id.toString());
 
-  if (selectedUsers.length >= 1 && createdGroup._id) {
+  if (selectedUsers?.length >= 1 && createdGroup?._id) {
     await notificationService.createManyNotification(
       createdGroup.adminUserId,
       createdGroup._id,

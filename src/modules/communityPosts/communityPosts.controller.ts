@@ -7,6 +7,7 @@ import { userPostService } from '../userPost';
 import { communityService } from '../community';
 import { userProfileService } from '../userProfile';
 import { communityGroupModel, communityGroupService } from '../communityGroup';
+import he from 'he';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -16,7 +17,7 @@ interface extendedRequest extends Request {
 export const createCommunityPost = async (req: extendedRequest, res: Response) => {
   const userId = req.userId as string;
   const { communityId, communiyGroupId } = req.body;
-
+  req.body.content = he.decode(req.body.content);
   try {
     if (communityId && !communiyGroupId) {
       const community = await communityService.getCommunity(req.body.communityId);
@@ -42,7 +43,6 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
 
       const userIds = communityGroup.users.map((item) => item.userId.toString());
       const userIdSet = new Set(userIds);
-      console.log('userIdSet', userIdSet);
 
       if (!userIdSet.has(userId)) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');

@@ -22,10 +22,13 @@ export const createUserProfile = async (
   major: string,
   occupation: string,
   department: string,
-  universityId: string
+  universityId: string | null
 ) => {
-  const emailField = universityEmail ? await buildEmailField(universityEmail, universityName, universityId) : null;
-
+  const emailField =
+    universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
+  if (universityId == '' || universityId == null) {
+    universityId = null;
+  }
   const userProfileData = {
     users_id: user,
     dob,
@@ -44,7 +47,7 @@ export const createUserProfile = async (
   return await UserProfile.create(userProfileData);
 };
 
-const buildEmailField = async (universityEmail: string, universityName: string, universityId: string) => {
+const buildEmailField = async (universityEmail: string, universityName: string, universityId: string | null) => {
   const community = await communityModel.findOne({ collegeID: universityId });
   return {
     UniversityName: universityName,
