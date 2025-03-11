@@ -83,7 +83,6 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
 
 export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
   const { communityGroupCategory, selectedUsers } = body;
-  //   const communityGroupCategory = { [selectedGroupCategory]: groupSubCategory };
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
