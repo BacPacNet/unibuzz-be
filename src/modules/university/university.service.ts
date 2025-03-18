@@ -8,7 +8,7 @@ export const createUniversity = async (university: any) => {
 };
 
 export const getUniversityById = async (university_name: string) => {
-  return await universityModal.findOne({ pathUrl: university_name });
+  return await universityModal.findOne({ name: university_name });
 };
 
 export const getUniversityByRealId = async (id: string) => {
