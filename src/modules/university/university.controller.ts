@@ -55,7 +55,6 @@ export const getAllUniversity = async (req: Request, res: Response, next: NextFu
 
   const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
 
-
   try {
     let allUniversity = await universityService.getAllUniversity(
       Number(page),
@@ -77,7 +76,7 @@ export const getAllUniversity = async (req: Request, res: Response, next: NextFu
 export const getUniversityById = async (req: Request, res: Response, next: NextFunction) => {
   const { university_name } = req.params;
   try {
-    let university = await universityService.getUniversityById(university_name as string);
+    let university = await universityService.getUniversityById(decodeURIComponent(university_name as string));
     return res.status(200).json(university);
   } catch (error) {
     console.log(error);

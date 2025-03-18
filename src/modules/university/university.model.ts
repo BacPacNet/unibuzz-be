@@ -1,56 +1,51 @@
 import { Schema, model } from 'mongoose';
-import { College } from './university.interface';
 
-const collogesSchema = new Schema<College>({
-  name: { type: String, required: true },
-  country: { type: String, required: true },
-  wikiInfoBox: {
-    type: Map,
-    of: {
-      type: String,
-      set: (val: any) => val.toString(),
-      get: (val: any) => val.toString(),
-    },
-  },
-  collegeBoardInfo: {
-    name: { type: String },
-    Location: { type: String },
-    PhoneNumber: { type: String },
-    Website: { type: String },
-  },
-  topUniInfo: {
-    name: { type: String },
-    tuitionFee: { type: String, default: null },
-    about: { type: String },
-    studentsAndFacultiesData: [
-      {
-        TotalStudents: { type: String },
-        UGStudents: { type: String },
-        PGStudents: { type: String },
-        InternationalStudents: { type: String },
-        TotalFacultyStaff: { type: String },
-        DomesticStaff: { type: String },
-        IntlStaff: { type: String },
-      },
-    ],
-    programs: [
-      {
-        name: { type: String },
-        courses: [
-          {
-            name: { type: String },
-            degrees: [String],
-          },
-        ],
-      },
-    ],
-  },
-  pathUrl: { type: String },
-  isCommunityCreated: { type: Boolean, require: true, default: false },
-  images: [String],
-  logos: [String],
-});
+// Define an interface for TypeScript
+export interface IUniversity extends Document {
+  name: string;
+  address: string;
+  city: string;
+  email: string;
+  longDescription: string;
+  officeHours: string;
+  phone: string;
+  ranking: string;
+  shortOverview: string;
+  totalStudents: string;
+  tuitionFee: string;
+  campus: string;
+  country: string;
+  countryCode: string;
+  domains: string[];
+  logo: string;
+  stateProvince?: string | null;
+  webPages: string[];
+}
 
-const UniversityModel = model<College>('colleges', collogesSchema);
+const UniversitySchema = new Schema(
+  {
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    city: { type: String, required: true },
+    email: { type: String, required: true },
+    long_description: { type: String, required: true },
+    office_hours: { type: String, required: true },
+    phone: { type: String, required: true },
+    ranking: { type: String, required: true },
+    short_overview: { type: String, required: true },
+    total_students: { type: String, required: true },
+    tuition_fee: { type: String, required: true },
+    campus: { type: String, required: true },
+    country: { type: String, required: true },
+    country_code: { type: String, required: true },
+    domains: { type: [String], required: true },
+    logo: { type: String, required: true },
+    state_province: { type: String, default: null },
+    web_pages: { type: [String], required: true },
+  },
+  { timestamps: true }
+);
+
+const UniversityModel = model<IUniversity>('university', UniversitySchema);
 
 export default UniversityModel;
