@@ -60,7 +60,7 @@ export const getAllUniversity = async (
     searchConditions.push({ region: { $regex: region, $options: 'i' } });
   }
   if (type) {
-    searchConditions.push({ 'wikiInfoBox.Type': { $regex: type, $options: 'i' } });
+    searchConditions.push({ type: { $regex: type, $options: 'i' } });
   }
 
   const searchQuery: any = {};
@@ -87,7 +87,10 @@ export const getAllUniversity = async (
 
 export const searchUniversityByQuery = async (searchTerm: string) => {
   const universities = await universityModal.find({
-    $or: [{ name: { $regex: searchTerm, $options: 'i' } }, { country: { $regex: searchTerm, $options: 'i' } }],
+    $or: [
+      { name: { $regex: searchTerm, $options: 'i' } },
+      { country: { $regex: searchTerm, $options: 'i' }, type: { $regex: searchTerm, $options: 'i' } },
+    ],
   });
 
   return universities;
