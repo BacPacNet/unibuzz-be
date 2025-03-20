@@ -2,24 +2,40 @@ import { Schema, model } from 'mongoose';
 
 // Define an interface for TypeScript
 export interface IUniversity extends Document {
+  _id: string;
   name: string;
+  __v: string;
+  accredited: string;
   address: string;
+  application_deadline: string;
+  average_monthly_cost_of_living: string;
+  campus: string;
+  campus_safety: string;
+  career_services_availability: string;
   city: string;
+  continent: string;
+  country: string;
+  country_code: string;
+  domains: string[];
   email: string;
-  longDescription: string;
-  officeHours: string;
+  'faculty_to_student ratio': { $numberDouble: string };
+  international_programs: string;
+  logo: string;
+  long_description: string;
+  maximum_scholarship_amount: string;
+  office_hours: string;
   phone: string;
   ranking: string;
-  shortOverview: string;
-  totalStudents: string;
-  tuitionFee: string;
-  campus: string;
-  country: string;
-  countryCode: string;
-  domains: string[];
-  logo: string;
-  stateProvince?: string | null;
-  webPages: string[];
+  religion_friendly: string;
+  scholarship_availability: string;
+  short_overview: string;
+  start_date: string;
+  state_province: any;
+  student_housing_availability: string;
+  total_students: { $numberInt: string };
+  tuition_fee: string;
+  type: string;
+  web_pages: string[];
 }
 
 const UniversitySchema = new Schema(
