@@ -20,6 +20,7 @@ import universityEmailVerificationRoute from './universityVerificationEmail.rout
 import eventRoute from './events.route';
 import endorseRoute from './endorsementAI.route';
 import chatbotRoute from './chatbot.route';
+import contactRoute from './contact.route';
 
 const router = express.Router();
 
@@ -104,6 +105,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/chatbot',
     route: chatbotRoute,
+  },
+  {
+    path: '/contact',
+    route: contactRoute,
   },
 ];
 
