@@ -9,6 +9,7 @@ import { IUserDoc, IUserWithTokens } from '../user/user.interfaces';
 import { generateAuthTokens, verifyToken } from '../token/token.service';
 import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 import User from '../user/user.model';
+import { sendEmail } from '../email/email.service';
 
 /**
  * Login with username and password
@@ -100,7 +101,6 @@ export const sendResetOTP = async (email: string) => {
     otp: Math.floor(100000 + Math.random() * 900000),
     otpValidTill: Date.now() + 30 * 10000,
   };
-  console.log(data);
 
   const isEmailExistInResetPassword = await resetPasswordOTPModel.findOne({ email });
 
@@ -110,6 +110,19 @@ export const sendResetOTP = async (email: string) => {
     const updatedData = { ...data };
     await resetPasswordOTPModel.updateOne({ email }, updatedData);
   }
+
+  await sendEmail(
+    data.email,
+    'Password Reset OTP',
+    '',
+    ` <p>Your OTP for password reset is: </p>
+    <h2>${data.otp}</h2>
+    <p>This OTP is valid for the next <strong>5 minutes</strong>. Please do not share this code with anyone for security reasons.</p>
+    <p>If you did not request this verification, please ignore this email.</p>
+    <br>
+    <p>Best regards,<br><strong>Unibuzz</strong> Support Team</p>
+    <p>Contact: info@unibuzz.org</p>`
+  );
 };
 
 /**
