@@ -7,6 +7,7 @@ import * as authService from './auth.service';
 import { emailService } from '../email';
 import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
+import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 
 // import { parse } from 'date-fns';
 
@@ -108,7 +109,45 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
   res.status(httpStatus.NO_CONTENT).send();
 });
 
+export const sendResetPasswordOTP = async (req: Request, res: Response) => {
+  const email = req.query['email'] as string;
+  try {
+    await authService.sendResetOTP(email);
+    return res.status(200).json({ message: 'OTP has been sent successfully' });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
+export const verifyResetPassword = async (req: Request, res: Response) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+  try {
+    const validOTP = await resetPasswordOTPModel.findOne({ email, otp });
+    if (!validOTP) return res.status(400).json({ error: 'Invalid or expired OTP' });
+
+    const generateResetToken = () => {
+      return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    };
+
+    const resetToken = generateResetToken();
+
+    // Store reset token in OTP document
+    await resetPasswordOTPModel.updateOne({ email, otp }, { resetToken });
+
+    res.json({ message: 'OTP verified', resetToken });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message });
+  }
+};
+
 export const resetPassword = catchAsync(async (req: Request, res: Response) => {
-  await authService.resetPassword(req.query['token'], req.body.password);
-  res.status(httpStatus.NO_CONTENT).send();
+  const { email, resetToken, newPassword } = req.body;
+
+  try {
+    await authService.resetPassword(email, resetToken, newPassword);
+    res.status(200).json({ message: 'Password reset successfully' });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message });
+  }
 });

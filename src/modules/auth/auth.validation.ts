@@ -22,7 +22,7 @@ export const login = {
   body: Joi.object().keys({
     email: Joi.string().required(),
     password: Joi.string().required(),
-    rememberme:Joi.boolean()
+    rememberme: Joi.boolean(),
   }),
 };
 
@@ -45,11 +45,10 @@ export const forgotPassword = {
 };
 
 export const resetPassword = {
-  query: Joi.object().keys({
-    token: Joi.string().required(),
-  }),
   body: Joi.object().keys({
-    password: Joi.string().required().custom(password),
+    email: Joi.string().email().required(),
+    resetToken: Joi.string().required(),
+    newPassword: Joi.string().required().custom(password),
   }),
 };
 
