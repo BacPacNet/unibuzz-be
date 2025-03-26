@@ -111,6 +111,7 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
 
 export const sendResetPasswordOTP = async (req: Request, res: Response) => {
   const email = req.query['email'] as string;
+
   try {
     await authService.sendResetOTP(email);
     return res.status(200).json({ message: 'OTP has been sent successfully' });

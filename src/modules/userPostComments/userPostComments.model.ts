@@ -19,7 +19,7 @@ const userPostCommentsSchema = new Schema<userPostCommentsInterface>(
     },
     content: {
       type: String,
-      required: true,
+      //   required: true,
     },
     likeCount: [{ userId: String }],
     imageUrl: [{ imageUrl: String, publicId: String }],
