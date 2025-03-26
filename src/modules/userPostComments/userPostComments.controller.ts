@@ -17,7 +17,7 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
   const { userPostId } = req.params;
   req.body.content = he.decode(req.body.content);
 
-  if (!req.body.content) {
+  if (!req.body.content && !req?.body?.imageUrl?.length) {
     return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
   }
   try {
