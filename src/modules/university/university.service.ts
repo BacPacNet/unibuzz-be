@@ -43,13 +43,11 @@ export const getAllUniversity = async (
 ) => {
   const startIndex = (page - 1) * limit;
 
-  const cityConditions = [];
-  if (city) {
-    cityConditions.push({ 'wikiInfoBox.Location': { $regex: city, $options: 'i' } });
-    cityConditions.push({ 'collegeBoardInfo.Location': { $regex: city, $options: 'i' } });
-  }
+  const searchConditions: any[] = [];
 
-  const searchConditions = [];
+  if (city) {
+    searchConditions.push({ city: { $regex: city, $options: 'i' } });
+  }
   if (name) {
     searchConditions.push({ name: { $regex: name, $options: 'i' } });
   }
@@ -57,23 +55,15 @@ export const getAllUniversity = async (
     searchConditions.push({ country: { $regex: country, $options: 'i' } });
   }
   if (region) {
-    searchConditions.push({ region: { $regex: region, $options: 'i' } });
+    searchConditions.push({ continent: { $regex: region, $options: 'i' } });
   }
   if (type) {
     searchConditions.push({ type: { $regex: type, $options: 'i' } });
   }
 
-  const searchQuery: any = {};
-  if (cityConditions.length > 0 && searchConditions.length > 0) {
-    searchQuery.$and = [{ $or: cityConditions }, ...searchConditions];
-  } else if (cityConditions.length > 0) {
-    searchQuery.$or = cityConditions;
-  } else if (searchConditions.length > 0) {
-    searchQuery.$and = searchConditions;
-  }
+  const searchQuery: any = searchConditions.length > 0 ? { $and: searchConditions } : {};
 
-  const Universities = await universityModal.find(searchQuery).skip(startIndex).limit(limit);
-
+  const Universities = await universityModal.find(searchQuery).sort({ total_students: -1 }).skip(startIndex).limit(limit);
   const totalUniversities = await universityModal.countDocuments(searchQuery);
   const totalPages = Math.ceil(totalUniversities / limit);
 
