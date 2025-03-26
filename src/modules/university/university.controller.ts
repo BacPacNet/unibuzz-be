@@ -52,8 +52,11 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
 // get All university
 export const getAllUniversity = async (req: Request, res: Response, next: NextFunction) => {
   const { page, limit, searchQuery } = req.query;
+  console.log(searchQuery);
 
   const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
+
+  console.log(searchParams.region, 'searchParams.region,');
 
   try {
     let allUniversity = await universityService.getAllUniversity(
