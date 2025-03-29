@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { UserProfileDocument } from './userProfile.interface';
+import { UserProfileDocument, UserRole } from './userProfile.interface';
 
 const userProfileSchema = new Schema<UserProfileDocument>({
   users_id: {
@@ -7,7 +7,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
     ref: 'User',
     required: true,
   },
-  email: [{ UniversityName: String, UniversityEmail: String, communityId: String }],
+  email: [{ UniversityName: String, UniversityEmail: String, communityId: String, logo: String }],
   profile_dp: { imageUrl: String, publicId: String },
   cover_dp: { imageUrl: String, publicId: String },
   bio: String,
@@ -22,6 +22,11 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   major: String,
   affiliation: String,
   occupation: String,
+  role: {
+    type: String,
+    enum: Object.values(UserRole),
+    required: true,
+  },
   following: [
     {
       userId: {

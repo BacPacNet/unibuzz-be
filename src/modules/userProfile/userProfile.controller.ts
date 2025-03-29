@@ -127,7 +127,7 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
 
     await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
-    let community = await communityModel.findOne({ name: universityName });
+    let community: any = await communityModel.findOne({ name: universityName });
     if (!community) throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
 
     const { _id: communityId } = community;
@@ -136,7 +136,8 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
       userID,
       universityEmail,
       universityName,
-      communityId.toString()
+      communityId.toString(),
+      community.communityLogoUrl.imageUrl
     );
     await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString());
 

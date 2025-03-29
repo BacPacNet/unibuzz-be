@@ -12,13 +12,10 @@ export const createCommunity = async (
   collegeID: string,
   numberOfStudent: string,
   numberOfFaculty: string,
-  coverImg: any,
-  logo: any,
+  coverImg: string,
+  logo: string,
   about: string
 ) => {
-  const coverImage = coverImg[0] ? coverImg[0] : '';
-  const logoImage = logo[0] ? logo[0] : '';
-
   const data = {
     name,
     adminId,
@@ -26,8 +23,8 @@ export const createCommunity = async (
     numberOfStudent: numberOfStudent || 0,
     numberOfFaculty: numberOfFaculty || 0,
     numberOfUser: 0,
-    communityCoverUrl: { imageUrl: coverImage },
-    communityLogoUrl: { imageUrl: logoImage },
+    communityCoverUrl: { imageUrl: coverImg },
+    communityLogoUrl: { imageUrl: logo },
     about,
   };
   return await communityModel.create(data);

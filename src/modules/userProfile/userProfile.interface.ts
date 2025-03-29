@@ -1,5 +1,11 @@
 import { Schema } from 'mongoose';
 
+export enum UserRole {
+  STUDENT = 'student',
+  FACULTY = 'faculty',
+  APPLICANT = 'applicant',
+}
+
 interface userProfileEmail {
   UniversityName: string;
   UniversityEmail: string;
@@ -26,6 +32,7 @@ interface UserProfileDocument {
   study_year?: string;
   degree?: string;
   major?: string;
+  role: UserRole;
   affiliation?: string;
   occupation?: string;
   following: following[];

@@ -238,11 +238,11 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
 // join during verification
 export const joinCommunityAfterEmailVerification = async (
   userId: mongoose.Types.ObjectId,
-  communityName: string,
-  universityEmail: string
+  communityName: string
+  //   universityEmail: string
 ) => {
   const user = await getUserById(userId);
-  let community = await communityModel.findOne({ name: communityName });
+  let community: any = await communityModel.findOne({ name: communityName });
   const userProfile = await userProfileService.getUserProfileById(String(userId));
 
   const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
@@ -282,7 +282,13 @@ export const joinCommunityAfterEmailVerification = async (
     }
   );
 
-  await userProfileService.addUniversityEmail(String(userId), universityEmail, communityName, community?._id.toString());
+  //   await userProfileService.addUniversityEmail(
+  //     String(userId),
+  //     universityEmail,
+  //     communityName,
+  //     community?._id.toString(),
+  //     community?.communityLogoUrl?.imageUrl
+  //   );
 
   status.isUniversityCommunity = true;
 
