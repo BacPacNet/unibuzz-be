@@ -22,7 +22,8 @@ export const createUserProfile = async (
   major: string,
   occupation: string,
   department: string,
-  universityId: string | null
+  universityId: string | null,
+  role: string
 ) => {
   const emailField =
     universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
@@ -36,6 +37,7 @@ export const createUserProfile = async (
     city,
     degree,
     major,
+    role,
     occupation,
     affiliation: department,
     university_id: universityId,
@@ -53,6 +55,7 @@ const buildEmailField = async (universityEmail: string, universityName: string, 
     UniversityName: universityName,
     UniversityEmail: universityEmail,
     communityId: community?._id || null,
+    logo: community?.communityLogoUrl.imageUrl,
   };
 };
 
@@ -77,7 +80,7 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   const bioLength = userProfileBody.bio?.trim().split(/\s+/).filter(Boolean).length || 0;
   userProfileToUpdate = await UserProfile.findById(id);
 
-  if (bioLength > 10) {
+  if (bioLength > 30) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Bio must not exceed 10 words');
   }
 
@@ -435,14 +438,17 @@ export const addUniversityEmail = async (
   userId: string,
   universityEmail: string,
   universityName: string,
-  communityId: string
+  communityId: string,
+  communityLogoUrl: string
 ) => {
   const updatedUserProfile = await UserProfile.findOneAndUpdate(
     {
       users_id: new mongoose.Types.ObjectId(userId),
     },
     {
-      $push: { email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId } },
+      $push: {
+        email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId, logo: communityLogoUrl },
+      },
     },
     { new: true }
   );

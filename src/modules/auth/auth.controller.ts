@@ -24,6 +24,7 @@ export const register = catchAsync(async (req: Request, res: Response) => {
     occupation,
     department,
     universityId,
+    userType,
     ...body
   } = req.body;
 
@@ -40,7 +41,8 @@ export const register = catchAsync(async (req: Request, res: Response) => {
     major,
     occupation,
     department,
-    universityId
+    universityId,
+    String(userType).toLowerCase()
   );
   const tokens = await tokenService.generateAuthTokens(user);
   res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
@@ -58,6 +60,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     major,
     occupation,
     department,
+    userType,
     ...body
   } = req.body;
 
@@ -76,9 +79,10 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     major,
     occupation,
     department,
-    universityId
+    universityId,
+    String(userType).toLowerCase()
   );
-  await userService.joinCommunityAfterEmailVerification(user._id, universityName, universityEmail);
+  await userService.joinCommunityAfterEmailVerification(user._id, universityName);
 
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
