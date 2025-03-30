@@ -75,13 +75,32 @@ export const getAllUniversity = async (
   };
 };
 
-export const searchUniversityByQuery = async (searchTerm: string) => {
-  const universities = await universityModal.find({
+export const searchUniversityByQuery = async (searchTerm: string, page: number = 1, limit: number = 10) => {
+  const skip = (page - 1) * limit;
+
+  const universities = await universityModal
+    .find({
+      $or: [
+        { name: { $regex: searchTerm, $options: 'i' } },
+        { country: { $regex: searchTerm, $options: 'i' } },
+        { type: { $regex: searchTerm, $options: 'i' } },
+      ],
+    })
+    .skip(skip)
+    .limit(limit);
+
+  const totalCount = await universityModal.countDocuments({
     $or: [
       { name: { $regex: searchTerm, $options: 'i' } },
-      { country: { $regex: searchTerm, $options: 'i' }, type: { $regex: searchTerm, $options: 'i' } },
+      { country: { $regex: searchTerm, $options: 'i' } },
+      { type: { $regex: searchTerm, $options: 'i' } },
     ],
   });
 
-  return universities;
+  return {
+    universities,
+    totalPages: Math.ceil(totalCount / limit),
+    currentPage: page,
+    totalResults: totalCount,
+  };
 };

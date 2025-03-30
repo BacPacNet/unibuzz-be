@@ -23,7 +23,8 @@ export const createUserProfile = async (
   occupation: string,
   department: string,
   universityId: string | null,
-  role: string
+  role: string,
+  universityLogo: string = ''
 ) => {
   const emailField =
     universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
@@ -43,6 +44,7 @@ export const createUserProfile = async (
     university_id: universityId,
     university_name: universityName,
     study_year: year,
+    universityLogo,
     ...(emailField && { email: [emailField] }),
   };
 
