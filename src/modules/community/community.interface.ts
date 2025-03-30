@@ -9,6 +9,9 @@ interface User {
   year: string;
   degree: string;
   major: string;
+  occupation: string;
+  affiliation: string;
+  role: string;
 }
 
 interface communityInterface {
@@ -17,7 +20,7 @@ interface communityInterface {
   communityLogoUrl: { imageUrl: String; publicId: String };
   name: string;
   adminId: mongoose.Types.ObjectId;
-  collegeID: mongoose.Types.ObjectId;
+  university_id: mongoose.Types.ObjectId;
   numberOfStudent: number;
   numberOfFaculty: number;
   about: string;

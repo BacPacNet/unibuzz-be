@@ -9,7 +9,7 @@ import { getUserById } from '../user/user.service';
 export const createCommunity = async (
   name: string,
   adminId: string,
-  collegeID: string,
+  university_id: string,
   numberOfStudent: string,
   numberOfFaculty: string,
   coverImg: string,
@@ -19,7 +19,7 @@ export const createCommunity = async (
   const data = {
     name,
     adminId,
-    collegeID,
+    university_id,
     numberOfStudent: numberOfStudent || 0,
     numberOfFaculty: numberOfFaculty || 0,
     numberOfUser: 0,

@@ -40,7 +40,7 @@ export const addMessage = async (req: userIdExtend, res: Response) => {
     if (!community) {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
-    const { assistantId, collegeID } = community;
+    const { assistantId, university_id } = community;
 
     if (!assistantId) {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Assistant not found' });
@@ -51,7 +51,7 @@ export const addMessage = async (req: userIdExtend, res: Response) => {
       const createResponse = {
         userId: req.userId,
         communityId: communityId,
-        collegeID: collegeID,
+        university_id: university_id,
         prompt: message,
         threadId: threadId,
         response: messageResponse[0][0].text.value,

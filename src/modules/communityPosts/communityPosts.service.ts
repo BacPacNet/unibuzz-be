@@ -188,6 +188,7 @@ export const getAllCommunityPost = async (
               major: 1,
               affiliation: 1,
               occupation: 1,
+              role: 1,
             },
           },
         },

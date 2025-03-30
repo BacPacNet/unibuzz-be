@@ -10,6 +10,7 @@ interface userProfileEmail {
   UniversityName: string;
   UniversityEmail: string;
   communityId: string;
+  logo: string;
 }
 
 interface following {

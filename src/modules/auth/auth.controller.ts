@@ -18,6 +18,7 @@ export const register = catchAsync(async (req: Request, res: Response) => {
     city,
     universityEmail,
     universityName,
+    universityLogo,
     year,
     degree,
     major,

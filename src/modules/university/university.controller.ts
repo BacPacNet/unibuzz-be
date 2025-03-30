@@ -52,7 +52,6 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
 // get All university
 export const getAllUniversity = async (req: Request, res: Response, next: NextFunction) => {
   const { page, limit, searchQuery } = req.query;
-  console.log(searchQuery);
 
   const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
 
@@ -89,10 +88,10 @@ export const getUniversityById = async (req: Request, res: Response, next: NextF
 
 // search by name or country
 export const searchUniversityByQuery = async (req: Request, res: Response, next: NextFunction) => {
-  const { searchTerm } = req.query;
+  const { searchTerm, page, limit } = req.query;
 
   try {
-    const result = await universityService.searchUniversityByQuery(String(searchTerm));
+    const result = await universityService.searchUniversityByQuery(String(searchTerm), Number(page), Number(limit));
     res.status(200).json({ result });
   } catch (error) {
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'No university Found!'));

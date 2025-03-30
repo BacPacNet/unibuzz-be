@@ -6,6 +6,7 @@ import { ApiError } from '../errors';
 import { userIdExtend } from 'src/config/userIDType';
 import { communityModel, communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
+import universityModel, { IUniversity } from '../university/university.model';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -128,7 +129,19 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
 
     await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
     let community: any = await communityModel.findOne({ name: universityName });
-    if (!community) throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+    if (!community) {
+      const fetchUniversity = await universityModel.findOne({ name: universityName });
+      const { _id: communityId, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
+      community = await communityModel.create({
+        name: universityName,
+        communityLogoUrl: { imageUrl: logo },
+        communityCoverUrl: { imageUrl: campus },
+        total_students: total_students,
+        university_id: communityId,
+        created_by: userID,
+        about: short_overview,
+      });
+    }
 
     const { _id: communityId } = community;
 
