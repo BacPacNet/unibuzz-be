@@ -9,7 +9,7 @@ const chatbotSchema = new Schema<any>(
       ref: 'community',
       required: true,
     },
-    collegeID: { type: Schema.Types.ObjectId, ref: 'colleges', required: true },
+    university_id: { type: Schema.Types.ObjectId, ref: 'colleges', required: true },
     prompt: { type: String, required: true },
     threadId: { type: String, required: true },
     response: {

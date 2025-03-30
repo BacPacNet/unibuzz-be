@@ -50,7 +50,7 @@ export const createUserProfile = async (
 };
 
 const buildEmailField = async (universityEmail: string, universityName: string, universityId: string | null) => {
-  const community = await communityModel.findOne({ collegeID: universityId });
+  const community = await communityModel.findOne({ university_id: universityId });
   return {
     UniversityName: universityName,
     UniversityEmail: universityEmail,

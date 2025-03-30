@@ -68,10 +68,10 @@ export const updateCommunity = async (req: any, res: Response, next: NextFunctio
 export const CreateCommunity = async (req: any, res: Response) => {
   const userID = req.userId;
 
-  const { collegeID }: any = req.body;
+  const { university_id }: any = req.body;
 
   try {
-    const college: any = await universityService.getUniversityByRealId(collegeID);
+    const college: any = await universityService.getUniversityByRealId(university_id);
 
     // if (!college.isCommunityCreated) {
     //   throw new ApiError(httpStatus.BAD_REQUEST, 'community Not Allowed');
@@ -80,7 +80,7 @@ export const CreateCommunity = async (req: any, res: Response) => {
     const community: any = await communityService.createCommunity(
       college.name,
       userID,
-      collegeID,
+      university_id,
       college.total_students || 0,
       college.total_faculty_staff || 0,
       college.campus || '',
