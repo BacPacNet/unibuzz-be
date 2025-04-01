@@ -8,7 +8,7 @@ export const createUniversityEmailOtp = async (req: Request, res: Response) => {
     await universityVerificationEmailService.createUniversityEmailVerificationOtp(email);
     return res.status(200).json({ message: 'created', isAvailable: true });
   } catch (error: any) {
-    console.log('err', error.message);
+    console.error('err', error.message);
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
   }
 };
@@ -20,7 +20,7 @@ export const checkUniversityEmailOtp = async (req: Request, res: Response) => {
     await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
     return res.status(200).json({ message: 'created', isAvailable: true });
   } catch (error: any) {
-    console.log('err', error.message);
+    console.error('err', error.message);
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
   }
 };

@@ -45,7 +45,7 @@ export const getCommunity = async (req: any, res: Response, next: NextFunction) 
     community = await communityService.getCommunity(req.params.communityId);
     return res.status(200).json(community);
   } catch (error) {
-    console.log(error);
+    console.error(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
 };
@@ -60,7 +60,7 @@ export const updateCommunity = async (req: any, res: Response, next: NextFunctio
     community = await communityService.updateCommunity(req.params.communityId, req.body);
     return res.status(200).json({ community });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to update Community'));
   }
 };
@@ -90,22 +90,34 @@ export const CreateCommunity = async (req: any, res: Response) => {
 
     return res.status(201).json({ community });
   } catch (error: any) {
-    console.log(error);
+    console.error(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
-export const joinCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { communityId } = req.params;
+export const joinCommunityFromUniversity = async (req: userIdExtend, res: Response) => {
+  const { universityId } = req.query as any;
+  const userId = req.userId as string;
 
   try {
-    if (typeof communityId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(communityId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      }
-      let user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-      return res.status(200).json({ message: 'Joined Successfully', user });
-    }
+    const community = await communityService.joinCommunityFromUniversity(universityId, userId);
+    return res.status(httpStatus.OK).json(community);
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const joinCommunity = async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params as any;
+
+  if (!mongoose.Types.ObjectId.isValid(communityId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID');
+  }
+
+  try {
+    const user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+
+    return res.status(httpStatus.OK).json({ message: 'Joined Successfully', user });
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
@@ -116,7 +128,6 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
   try {
     if (!communityId) {
       return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      ``;
     }
     let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
     return res.status(200).json({ message: 'Left the community', user });

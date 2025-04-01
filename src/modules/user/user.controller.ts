@@ -26,14 +26,22 @@ export const getUsers = catchAsync(async (req: Request, res: Response) => {
   res.send(result);
 });
 
-export const getUser = catchAsync(async (req: Request, res: Response) => {
-  if (typeof req.params['userId'] === 'string') {
-    const user = await userService.getUserProfileById(new mongoose.Types.ObjectId(req.params['userId']));
-    if (!user) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+export const getUser = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.params['userId'] as string;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
     }
 
-    res.status(200).json(user);
+    const user = await userService.getUserProfileById(new mongoose.Types.ObjectId(userId));
+    if (!user) {
+      return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
+    }
+
+    res.status(httpStatus.OK).json(user);
+  } catch (error) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');
   }
 });
 
@@ -43,7 +51,7 @@ export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, ne
     let allUsers = await userService.getAllUser(name, Number(page), Number(limit), req.userId as string);
     return res.status(200).json(allUsers);
   } catch (error) {
-    console.log(error);
+    console.error(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Users'));
   }
 });

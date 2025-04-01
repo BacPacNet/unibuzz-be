@@ -21,6 +21,7 @@ interface following {
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
+  communities: [string]; // community id
   profile_dp?: { imageUrl: string; publicId: string };
   cover_dp?: { imageUrl: string; publicId: string };
   bio?: string;

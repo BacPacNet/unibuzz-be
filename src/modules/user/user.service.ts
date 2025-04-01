@@ -73,16 +73,10 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
     },
     {
       $lookup: {
-        from: 'colleges', // Collection name for universities
-        localField: 'profile.university_id', // The field in the UserProfile schema
-        foreignField: '_id', // The field in the University schema
-        as: 'university', // Name of the resulting array
-      },
-    },
-    {
-      $unwind: {
-        path: '$university', // Unwind the university array to get a single object
-        preserveNullAndEmptyArrays: true, // Include profiles without a matching university
+        from: 'communities', // Collection name for communities
+        localField: 'profile.communities', // Array of community ObjectIds in profile
+        foreignField: '_id', // Matching field in the communities collection
+        as: 'communityDetails', // Resulting array with community data
       },
     },
     {
@@ -245,9 +239,7 @@ export const joinCommunityAfterEmailVerification = async (
   let community: any = await communityModel.findOne({ name: communityName });
   const userProfile = await userProfileService.getUserProfileById(String(userId));
 
-  const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
-
-  const userSet = new Set(communityIds);
+  const userSet = new Set(userProfile?.communities);
 
   let status = { isUniversityCommunity: false, isAlreadyJoined: false };
 
@@ -277,6 +269,7 @@ export const joinCommunityAfterEmailVerification = async (
           year: userProfile.study_year,
           degree: userProfile.degree,
           major: userProfile.major,
+          isVerified: true,
         },
       },
     }

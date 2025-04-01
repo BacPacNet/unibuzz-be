@@ -21,7 +21,7 @@ export const getAllUserPosts = async (req: userIdExtend, res: Response, next: Ne
     const userPosts = await userPostService.getAllUserPosts(userId, Number(page), Number(limit));
     return res.status(200).json(userPosts);
   } catch (error) {
-    console.log(error);
+    console.error(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get User Posts'));
   }
 };
@@ -81,7 +81,7 @@ export const getAllTimelinePosts = async (req: any, res: Response, next: NextFun
 
     return res.status(200).json(timelinePosts);
   } catch (error) {
-    console.log(error);
+    console.error(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Posts'));
   }
 };

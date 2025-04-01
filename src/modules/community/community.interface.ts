@@ -26,6 +26,7 @@ interface communityInterface {
   about: string;
   users: User[];
   assistantId: string;
+  communityGroups: mongoose.Types.ObjectId[];
 }
 
 export { communityInterface };

@@ -150,8 +150,7 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
 };
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
   const userProfile = await userProfileService.getUserProfileById(String(id));
-  const allCommunityId = userProfile?.email.map((item) => item.communityId);
-  return allCommunityId;
+  return userProfile?.communities;
 };
 
 export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {
@@ -236,7 +235,7 @@ const countCommunityPostsForUserIds = async (communityIds: string[] = []) => {
 };
 
 // Get user IDs of the user and their followers
-export const getFollowingAndSelfUserIds = async (userId: mongoose.Schema.Types.ObjectId) => {
+export const getFollowingAndSelfUserIds = async (userId: any) => {
   const followingUsers = await UserProfile.findOne({ users_id: userId });
   let followingUserIds: mongoose.Schema.Types.ObjectId[] = [];
   let followersUserIds: mongoose.Schema.Types.ObjectId[] = [];

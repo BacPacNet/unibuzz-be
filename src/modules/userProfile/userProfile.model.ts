@@ -22,6 +22,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   major: String,
   affiliation: String,
   occupation: String,
+  communities: [{ type: Schema.Types.ObjectId, ref: 'community' }],
   role: {
     type: String,
     enum: Object.values(UserRole),
