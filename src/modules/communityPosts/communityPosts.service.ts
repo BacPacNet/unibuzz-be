@@ -214,7 +214,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
     const userId = new mongoose.Types.ObjectId(myUserId);
     const postIdToGet = new mongoose.Types.ObjectId(postId);
 
-    const allCommunityIds = userProfile?.email.map((item) => new mongoose.Types.ObjectId(item.communityId));
+    const allCommunityIds = userProfile?.communities;
 
     const post = await communityPostsModel.findOne({ _id: postIdToGet });
     if (!post) throw new Error('Post not found');

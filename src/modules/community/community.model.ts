@@ -11,6 +11,7 @@ const communitySchema = new Schema<communityInterface>({
   numberOfFaculty: Number,
   about: { type: String },
   assistantId: { type: String, unique: true, required: false },
+  communityGroups: [{ type: Schema.Types.ObjectId, ref: 'communityGroup' }],
   users: [
     {
       id: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -24,6 +25,7 @@ const communitySchema = new Schema<communityInterface>({
       occupation: String,
       affiliation: String,
       role: String,
+      isVerified: Boolean,
     },
   ],
 });

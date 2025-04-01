@@ -1,13 +1,13 @@
 import { NextFunction, Request, Response } from 'express';
 import * as communityPostsService from './communityPosts.service';
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { userPostService } from '../userPost';
 import { communityService } from '../community';
-import { userProfileService } from '../userProfile';
 import { communityGroupModel, communityGroupService } from '../communityGroup';
 import he from 'he';
+import { userIdExtend } from 'src/config/userIDType';
+import mongoose from 'mongoose';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -52,7 +52,7 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
 
     return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
-    console.log(error);
+    console.error(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -91,28 +91,25 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 };
 
 //get all community post
-export const getAllCommunityPost = async (req: any, res: Response) => {
+export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
   const { page, limit } = req.query;
-  const { communityId, communityGroupId } = req.params;
+  const { communityId, communityGroupId } = req.params as any;
+  const userId = req.userId as string;
+
   // let access = CommunityType.PUBLIC;
-
+  const userIdObject = new mongoose.Types.ObjectId(userId);
   try {
-    const userProfile = await userProfileService.getUserProfileById(req.userId);
-    if (!userProfile) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'User profile not found' });
-    }
-    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(req.userId);
-    const checkIfUserIsVerified = userProfile?.email.some((emailItem) => emailItem.communityId === communityId);
-
     const community = await communityService.getCommunity(communityId);
 
     if (!community) {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
 
-    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === req.userId.toString());
+    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
 
-    if (!checkIfUserIsVerified || !checkIfUserJoinedCommunity) {
+    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject);
+
+    if (!checkIfUserJoinedCommunity) {
       return res.status(httpStatus.FORBIDDEN).json({
         sucess: false,
         message: 'You are not a verified member of this community',
@@ -136,7 +133,7 @@ export const getAllCommunityPost = async (req: any, res: Response) => {
 
     return res.status(200).json(communityPosts);
   } catch (error: any) {
-    console.log(error);
+    console.error(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

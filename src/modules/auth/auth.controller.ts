@@ -8,46 +8,7 @@ import { emailService } from '../email';
 import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
 import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
-
-// import { parse } from 'date-fns';
-
-export const register = catchAsync(async (req: Request, res: Response) => {
-  const {
-    dob,
-    country,
-    city,
-    universityEmail,
-    universityName,
-    universityLogo,
-    year,
-    degree,
-    major,
-    occupation,
-    department,
-    universityId,
-    userType,
-    ...body
-  } = req.body;
-
-  const user = await userService.registerUser(body);
-  const userProfile = await userProfileService.createUserProfile(
-    user._id,
-    dob,
-    country,
-    city,
-    universityEmail,
-    universityName,
-    year,
-    degree,
-    major,
-    occupation,
-    department,
-    universityId,
-    String(userType).toLowerCase()
-  );
-  const tokens = await tokenService.generateAuthTokens(user);
-  res.status(httpStatus.CREATED).send({ user, tokens, userProfile });
-});
+import { communityService } from '../community';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   const {
@@ -63,14 +24,16 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     department,
     userType,
     isJoinUniversity,
+    isUniversityVerified,
     ...body
   } = req.body;
 
   // const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
 
   const user = await userService.registerUser(body);
+  const { _id: userId } = user;
   await userProfileService.createUserProfile(
-    user._id,
+    userId,
     birthDate,
     country,
     '',
@@ -84,8 +47,9 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     universityId,
     String(userType).toLowerCase()
   );
-  if (isJoinUniversity == true) {
-    await userService.joinCommunityAfterEmailVerification(user._id, universityName);
+
+  if (isUniversityVerified || isJoinUniversity) {
+    await communityService.joinCommunityFromUniversity(userId, universityId, isUniversityVerified);
   }
 
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });

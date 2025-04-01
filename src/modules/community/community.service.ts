@@ -5,6 +5,9 @@ import { User } from '../user';
 import { userProfileService } from '../userProfile';
 import mongoose, { PipelineStage } from 'mongoose';
 import { getUserById } from '../user/user.service';
+import { communityService } from '.';
+import { IUniversity } from '../university/university.model';
+import { universityService } from '../university';
 
 export const createCommunity = async (
   name: string,
@@ -42,9 +45,7 @@ export const getUserCommunities = async (userID: string) => {
     const userProfile = await userProfileService.getUserProfileById(userID);
     if (!userProfile) throw new Error('User Profile not found');
 
-    const getAllUserCommunityIds = userProfile.email
-      .map((emailItem) => new mongoose.Types.ObjectId(emailItem?.communityId))
-      .filter(Boolean);
+    const getAllUserCommunityIds = userProfile.communities;
 
     const communities = await communityModel.aggregate([
       {
@@ -282,7 +283,7 @@ export const updateCommunity = async (id: string, community: any) => {
   return communityToUpadate;
 };
 
-export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
+export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string, isVerfied: boolean = false) => {
   const user = await getUserById(userId);
   const userProfile = await userProfileService.getUserProfileById(String(userId));
 
@@ -296,13 +297,18 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
   }
 
-  const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
-
-  const userSet = new Set(communityIds);
-
-  if (!userSet.has(communityId)) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'User is not verified to join this community');
+  if (!userProfile.communities.includes(communityId)) {
+    userProfile.communities.push(communityId);
+    await userProfile.save();
   }
+
+  //  const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
+
+  //  const userSet = new Set(communityIds);
+
+  //  if (!userSet.has(communityId)) {
+  //    throw new ApiError(httpStatus.FORBIDDEN, 'User is not verified to join this community');
+  //  }
 
   const updateUser = await communityModel.updateOne(
     { _id: communityId },
@@ -317,6 +323,10 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
           year: userProfile.study_year,
           degree: userProfile.degree,
           major: userProfile.major,
+          occupation: userProfile.occupation,
+          affiliation: userProfile.affiliation,
+          role: userProfile.role,
+          isVerified: isVerfied,
         },
       },
     }
@@ -325,17 +335,51 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   return updateUser;
 };
 
+export const joinCommunityFromUniversity = async (universityId: string, userId: string, isVerfied: boolean = false) => {
+  const fetchUniversity = await universityService.getUniversityByRealId(universityId);
+  if (!fetchUniversity) {
+    throw new Error('University not found');
+  }
+  try {
+    let community = await communityModel.findOne({ university_id: universityId });
+    if (!community) {
+      const { _id: communityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
+      community = await communityModel.create({
+        name: name,
+        communityLogoUrl: { imageUrl: logo },
+        communityCoverUrl: { imageUrl: campus },
+        total_students: total_students,
+        university_id: communityId,
+        created_by: userId,
+        about: short_overview,
+      });
+    }
+    await communityService.joinCommunity(new mongoose.Types.ObjectId(userId), (community?._id).toString(), isVerfied);
+
+    return { message: 'Joined Successfully', data: { communityId: community?._id } };
+
+    //res.status(httpStatus.OK).json({ message: 'Joined Successfully', data: { communityId: community?._id } });
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
 export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
   try {
     const user = await getUserById(userId);
-    if (!user) {
+    const userProfile = await userProfileService.getUserProfileById(String(userId));
+    if (!user || !userProfile) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
 
     const community = await getCommunity(communityId);
     if (!community) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
     }
+
+    const communityIndex = userProfile.communities.findIndex((id) => id.toString() === communityId.toString());
+    userProfile.communities.splice(communityIndex, 1);
+    await userProfile.save();
 
     // Check if the user is a member of the communityGroup
     const userIndex = community.users.findIndex((user) => user.id.toString() === userId.toString());
