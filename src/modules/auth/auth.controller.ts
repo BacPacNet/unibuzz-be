@@ -67,7 +67,6 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   } = req.body;
 
   // const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
-  console.log('isJoinUniversity', isJoinUniversity);
 
   const user = await userService.registerUser(body);
   await userProfileService.createUserProfile(
