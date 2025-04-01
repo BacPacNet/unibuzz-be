@@ -62,6 +62,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     occupation,
     department,
     userType,
+    isJoinUniversity,
     ...body
   } = req.body;
 
@@ -83,7 +84,9 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     universityId,
     String(userType).toLowerCase()
   );
-  await userService.joinCommunityAfterEmailVerification(user._id, universityName);
+  if (isJoinUniversity == true) {
+    await userService.joinCommunityAfterEmailVerification(user._id, universityName);
+  }
 
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
 });
