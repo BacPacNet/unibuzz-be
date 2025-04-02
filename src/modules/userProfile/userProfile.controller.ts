@@ -24,7 +24,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
       return res.status(200).json({ updatedUserProfile });
     }
   } catch (error: any) {
-    console.error('err', error.message);
+    console.log('err', error.message);
     return res.status(error.statusCode).json({ message: error.message });
   }
 };
@@ -91,7 +91,7 @@ export const getAllUserFollowersAndFollowing = async (req: userIdExtend, res: Re
       return res.status(200).json(user);
     }
   } catch (error: any) {
-    console.error(error);
+    console.log(error);
 
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
@@ -152,8 +152,7 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
       communityId.toString(),
       community.communityLogoUrl.imageUrl
     );
-
-    await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString());
+    await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
 
     return res.status(200).json({ userProfile });
   } catch (error: any) {

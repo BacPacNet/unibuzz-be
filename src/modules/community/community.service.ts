@@ -302,37 +302,35 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     await userProfile.save();
   }
 
-  //  const communityIds = userProfile?.email.map((emailItem) => emailItem.communityId);
+  const userResult = await communityModel.findOne({
+    _id: communityId,
+    users: { $elemMatch: { id: userId } },
+  });
 
-  //  const userSet = new Set(communityIds);
-
-  //  if (!userSet.has(communityId)) {
-  //    throw new ApiError(httpStatus.FORBIDDEN, 'User is not verified to join this community');
-  //  }
-
-  const updateUser = await communityModel.updateOne(
-    { _id: communityId },
-    {
-      $push: {
-        users: {
-          id: userId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          profileImageUrl: userProfile.profile_dp?.imageUrl || null,
-          universityName: userProfile.university_name,
-          year: userProfile.study_year,
-          degree: userProfile.degree,
-          major: userProfile.major,
-          occupation: userProfile.occupation,
-          affiliation: userProfile.affiliation,
-          role: userProfile.role,
-          isVerified: isVerfied,
+  if (!userResult) {
+    const updateUser = await communityModel.updateOne(
+      { _id: communityId },
+      {
+        $push: {
+          users: {
+            id: userId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: userProfile.profile_dp?.imageUrl || null,
+            universityName: userProfile.university_name,
+            year: userProfile.study_year,
+            degree: userProfile.degree,
+            major: userProfile.major,
+            occupation: userProfile.occupation,
+            affiliation: userProfile.affiliation,
+            role: userProfile.role,
+            isVerified: isVerfied,
+          },
         },
-      },
-    }
-  );
-
-  return updateUser;
+      }
+    );
+    return updateUser;
+  }
 };
 
 export const joinCommunityFromUniversity = async (universityId: string, userId: string, isVerfied: boolean = false) => {
@@ -356,7 +354,7 @@ export const joinCommunityFromUniversity = async (universityId: string, userId: 
     }
     await communityService.joinCommunity(new mongoose.Types.ObjectId(userId), (community?._id).toString(), isVerfied);
 
-    return { message: 'Joined Successfully', data: { communityId: community?._id } };
+    return { message: 'Joined Successfully', data: { community: community } };
 
     //res.status(httpStatus.OK).json({ message: 'Joined Successfully', data: { communityId: community?._id } });
   } catch (error: any) {
