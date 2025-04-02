@@ -49,7 +49,17 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   );
 
   if (isUniversityVerified || isJoinUniversity) {
-    await communityService.joinCommunityFromUniversity(userId, universityId, isUniversityVerified);
+    const community = await communityService.joinCommunityFromUniversity(userId, universityId, isUniversityVerified);
+    if (isUniversityVerified) {
+      const { data } = community;
+      await userProfileService.addUniversityEmail(
+        userId,
+        universityEmail,
+        universityName,
+        data.community._id.toString(),
+        data.community.communityLogoUrl.imageUrl.toString()
+      );
+    }
   }
 
   res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });

@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as universityService from './university.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
+import { userIdExtend } from 'src/config/userIDType';
 
 // create university
 export const createUniversity = async (req: Request, res: Response) => {
@@ -89,6 +90,17 @@ export const getUniversityById = async (req: Request, res: Response, next: NextF
 // search by name or country
 export const searchUniversityByQuery = async (req: Request, res: Response, next: NextFunction) => {
   const { searchTerm, page, limit } = req.query;
+
+  try {
+    const result = await universityService.searchUniversityByQuery(String(searchTerm), Number(page), Number(limit));
+    res.status(200).json({ result });
+  } catch (error) {
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'No university Found!'));
+  }
+};
+
+export const verifyUniversityEmail = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { searchTerm, page, limit } = req.body;
 
   try {
     const result = await universityService.searchUniversityByQuery(String(searchTerm), Number(page), Number(limit));
