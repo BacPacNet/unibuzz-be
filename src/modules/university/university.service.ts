@@ -12,7 +12,7 @@ export const getUniversityById = async (university_name: string) => {
 };
 
 export const getUniversityByRealId = async (id: string) => {
-  return await universityModal.findById(id);
+  return await universityModal.findById(new mongoose.Types.ObjectId(id));
 };
 
 export const updateUniversity = async (id: mongoose.Types.ObjectId, university: any) => {

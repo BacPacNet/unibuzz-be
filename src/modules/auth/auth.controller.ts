@@ -11,58 +11,60 @@ import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 import { communityService } from '../community';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
-  const {
-    birthDate,
-    country,
-    universityEmail,
-    universityName,
-    universityId,
-    year,
-    degree,
-    major,
-    occupation,
-    department,
-    userType,
-    isJoinUniversity,
-    isUniversityVerified,
-    ...body
-  } = req.body;
+  try {
+    const {
+      birthDate,
+      country,
+      universityEmail,
+      universityName,
+      universityId,
+      year,
+      degree,
+      major,
+      occupation,
+      department,
+      userType,
+      isJoinUniversity,
+      isUniversityVerified,
+      universityLogo,
+      ...body
+    } = req.body;
 
-  // const dob = parse(birthDate, 'dd/MM/yyyy', new Date());
+    // Register user
+    const user = await userService.registerUser(body);
+    const { _id: userId } = user;
 
-  const user = await userService.registerUser(body);
-  const { _id: userId } = user;
-  await userProfileService.createUserProfile(
-    userId,
-    birthDate,
-    country,
-    '',
-    universityEmail,
-    universityName,
-    year,
-    degree,
-    major,
-    occupation,
-    department,
-    universityId,
-    String(userType).toLowerCase()
-  );
+    console.log(userId, 'userIduserIduserIduserId');
 
-  if (isUniversityVerified || isJoinUniversity) {
-    const community = await communityService.joinCommunityFromUniversity(userId, universityId, isUniversityVerified);
-    if (isUniversityVerified) {
-      const { data } = community;
-      await userProfileService.addUniversityEmail(
-        userId,
-        universityEmail,
-        universityName,
-        data.community._id.toString(),
-        data.community.communityLogoUrl.imageUrl.toString()
+    // Create user profile
+    await userProfileService.createUserProfile(userId.toString(), req.body);
+
+    // Handle university-related actions
+    if (isUniversityVerified || isJoinUniversity) {
+      const community = await communityService.joinCommunityFromUniversity(
+        userId.toString(),
+        universityId,
+        isUniversityVerified
       );
+      if (isUniversityVerified) {
+        const { data } = community;
+        await userProfileService.addUniversityEmail(
+          userId.toString(),
+          universityEmail,
+          universityName,
+          data.community._id.toString(),
+          data.community.communityLogoUrl.imageUrl.toString()
+        );
+      }
     }
-  }
 
-  res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
+    res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
+  } catch (error: any) {
+    console.error('Registration failed:', error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).send({ message: 'Registration failed', error: error.message });
+  } finally {
+    // Always end the session to free up resources
+  }
 });
 
 export const login = catchAsync(async (req: Request, res: Response) => {

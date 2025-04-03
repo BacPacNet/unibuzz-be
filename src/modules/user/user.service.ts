@@ -29,7 +29,9 @@ export const registerUser = async (userBody: NewRegisteredUser): Promise<IUserDo
   if (await User.isEmailTaken(userBody.email)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Email already taken');
   }
-  return User.create(userBody);
+  const user = new User(userBody);
+  const result = await user.save();
+  return result;
 };
 
 /**
