@@ -6,8 +6,7 @@ import { userProfileService } from '../userProfile';
 import mongoose, { PipelineStage } from 'mongoose';
 import { getUserById } from '../user/user.service';
 import { communityService } from '.';
-import { IUniversity } from '../university/university.model';
-import { universityService } from '../university';
+import UniversityModel, { IUniversity } from '../university/university.model';
 
 export const createCommunity = async (
   name: string,
@@ -333,8 +332,8 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   }
 };
 
-export const joinCommunityFromUniversity = async (universityId: string, userId: string, isVerfied: boolean = false) => {
-  const fetchUniversity = await universityService.getUniversityByRealId(universityId);
+export const joinCommunityFromUniversity = async (userId: string, universityId: string, isVerfied: boolean = false) => {
+  const fetchUniversity = await UniversityModel.findById(universityId);
   if (!fetchUniversity) {
     throw new Error('University not found');
   }

@@ -30,6 +30,7 @@ interface UserProfileDocument {
   country?: string;
   city?: string;
   university_name?: string;
+  universityLogo: string;
   university_id: Schema.Types.ObjectId;
   study_year?: string;
   degree?: string;

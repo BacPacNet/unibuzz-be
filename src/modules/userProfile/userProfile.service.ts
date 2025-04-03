@@ -9,36 +9,36 @@ import { io } from '../../index';
 import { communityModel } from '../community';
 import { userFollowService } from '../userFollow';
 import User from '../user/user.model';
+import { parse } from 'date-fns';
 
-export const createUserProfile = async (
-  user: any,
-  dob: string,
-  country: string,
-  city: string = '',
-  universityEmail: string = '',
-  universityName: string = '',
-  year: string,
-  degree: string,
-  major: string,
-  occupation: string,
-  department: string,
-  universityId: string | null,
-  role: string,
-  universityLogo: string = ''
-) => {
+export const createUserProfile = async (userId: string, body: any) => {
+  const {
+    birthDate,
+    country,
+    city,
+    universityEmail,
+    universityName,
+    year,
+    degree,
+    major,
+    occupation,
+    department,
+    universityId,
+    userType,
+    universityLogo,
+  } = body;
+
   const emailField =
     universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
-  if (universityId == '' || universityId == null) {
-    universityId = null;
-  }
+
   const userProfileData = {
-    users_id: user,
-    dob,
+    users_id: userId,
+    dob: parse(birthDate, 'dd/MM/yyyy', new Date()),
     country,
     city,
     degree,
     major,
-    role,
+    role: String(userType).toLowerCase(),
     occupation,
     affiliation: department,
     university_id: universityId,
@@ -48,7 +48,7 @@ export const createUserProfile = async (
     ...(emailField && { email: [emailField] }),
   };
 
-  return await UserProfile.create(userProfileData);
+  await UserProfile.create(userProfileData);
 };
 
 const buildEmailField = async (universityEmail: string, universityName: string, universityId: string | null) => {
