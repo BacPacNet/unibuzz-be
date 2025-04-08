@@ -75,6 +75,13 @@ export const allowedSubcategories: Record<string, string[]> = {
   Others: [],
 };
 
+export enum status {
+  pending = 'pending',
+  rejected = 'rejected',
+  accepted = 'accepted',
+  default = 'default',
+}
+
 interface users {
   userId: mongoose.Types.ObjectId;
   isRequestAccepted: boolean;
@@ -100,6 +107,7 @@ interface communityGroupInterface {
   communityGroupAccess: communityGroupAccess;
   communityGroupCategory: Map<string, string[]>;
   users: users[];
+  status: status;
 }
 
 export { communityGroupInterface };

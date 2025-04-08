@@ -29,10 +29,11 @@ export const createUserProfile = async (userId: string, body: any) => {
   } = body;
 
   const emailField =
-    universityEmail.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
+    universityEmail?.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
 
   const userProfileData = {
     users_id: userId,
+
     dob: parse(birthDate, 'dd/MM/yyyy', new Date()),
     country,
     city,
@@ -41,7 +42,7 @@ export const createUserProfile = async (userId: string, body: any) => {
     role: String(userType).toLowerCase(),
     occupation,
     affiliation: department,
-    university_id: universityId,
+    university_id: universityId?.length ? universityId : null,
     university_name: universityName,
     study_year: year,
     universityLogo,
