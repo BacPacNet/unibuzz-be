@@ -115,10 +115,18 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
 };
 
 export const getCommunityGroupById = async (groupId: string) => {
-  const communityGroup = await communityGroupModel.findById(groupId);
+  const communityGroup = await communityGroupModel
+    .findById(groupId)
+    .populate({
+      path: 'communityId', // Assuming this is the reference to communityModel
+      select: 'communityLogoUrl', // Selecting only the communityLogo field
+    })
+    .lean();
+
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
   }
+
   return communityGroup;
 };
 
