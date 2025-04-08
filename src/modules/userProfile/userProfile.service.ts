@@ -9,7 +9,7 @@ import { io } from '../../index';
 import { communityModel } from '../community';
 import { userFollowService } from '../userFollow';
 import User from '../user/user.model';
-import { parse } from 'date-fns';
+// import { parse } from 'date-fns';
 
 export const createUserProfile = async (userId: string, body: any) => {
   const {
@@ -33,7 +33,8 @@ export const createUserProfile = async (userId: string, body: any) => {
 
   const userProfileData = {
     users_id: userId,
-    dob: parse(birthDate, 'dd/MM/yyyy', new Date()),
+    // dob: parse(birthDate, 'dd/MM/yyyy', new Date()),
+    dob: birthDate,
     country,
     city,
     degree,
@@ -41,7 +42,7 @@ export const createUserProfile = async (userId: string, body: any) => {
     role: String(userType).toLowerCase(),
     occupation,
     affiliation: department,
-    university_id: universityId,
+    university_id: universityId?.length ? universityId : null,
     university_name: universityName,
     study_year: year,
     universityLogo,
