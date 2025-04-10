@@ -182,6 +182,16 @@ export const joinCommunityGroup = async (userID: string, groupId: string) => {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
 
+    //check if community is private and user is verified
+    const isCommunityPrivate = communityGroup?.communityGroupAccess === communityGroupAccess.Private;
+    const isUserVerified = userProfile?.email.some(
+      (community) => community.communityId.toString() === communityGroup.communityId._id.toString()
+    );
+
+    if (!isUserVerified && isCommunityPrivate) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are not verified to join this community');
+    }
+
     const community = await communityService.getCommunity(String(communityGroup.communityId));
     const communityUsersID = community?.users.map((item) => item.id.toString());
 
@@ -189,10 +199,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string) => {
 
     if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, 'User not found in Community  ');
 
-    const isUserVerifiedToJoin = userProfile.email.some((community) => {
-      if (!community.communityId) return;
-      return community.communityId.toString() === communityGroup.communityId.toString();
-    });
+    const isUserVerifiedToJoin = userProfile.communities.includes(communityGroup.communityId.toString());
 
     if (!isUserVerifiedToJoin) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
