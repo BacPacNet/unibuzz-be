@@ -34,8 +34,6 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     const user = await userService.registerUser(body);
     const { _id: userId } = user;
 
-    console.log(userId, 'userIduserIduserIduserId');
-
     // Create user profile
     await userProfileService.createUserProfile(userId.toString(), req.body);
 

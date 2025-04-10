@@ -112,7 +112,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
     if (!checkIfUserJoinedCommunity) {
       return res.status(httpStatus.FORBIDDEN).json({
         sucess: false,
-        message: 'You are not a verified member of this community',
+        message: 'You are not a member of this community',
       });
     }
 
