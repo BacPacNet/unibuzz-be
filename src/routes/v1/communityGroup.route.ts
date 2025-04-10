@@ -14,6 +14,8 @@ router
   .put(communityGroupController.updateCommunityGroup)
   .delete(communityGroupController.deleteCommunityGroup);
 
+router.route('/status/:groupId').put(communityGroupController.changeCommunityGroupStatus);
+
 router.route('/:groupId/join').put(userIdAuth, communityGroupController.joinCommunityGroup);
 router.route('/:groupId/leave').delete(userIdAuth, communityGroupController.leaveCommunityGroup);
 

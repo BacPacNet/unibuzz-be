@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { allowedCategories, allowedSubcategories, communityGroupInterface, status } from './communityGroup.interface';
-import { communityGroupAccess, communityGroupType } from '../../config/community.type';
+import { communityGroupAccess, CommunityGroupType } from '../../config/community.type';
 
 const communityGroupSchema = new Schema<communityGroupInterface>(
   {
@@ -34,8 +34,8 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
     },
     communityGroupType: {
       type: String,
-      enum: ['Casual', 'Official'],
-      default: communityGroupType.CASUAL,
+      enum: ['casual', 'official'],
+      default: CommunityGroupType.CASUAL,
     },
     status: {
       type: String,

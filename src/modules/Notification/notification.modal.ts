@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { notificationInterface, notificationRole } from './notification.interface';
+import { notificationInterface, notificationRole, notificationStatus } from './notification.interface';
 
 const notificationSchema = new Schema<notificationInterface>(
   {
@@ -30,6 +30,11 @@ const notificationSchema = new Schema<notificationInterface>(
     isRead: {
       type: Boolean,
       default: false,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'rejected', 'accepted', 'default'],
+      default: notificationStatus.default,
     },
   },
   { timestamps: true }

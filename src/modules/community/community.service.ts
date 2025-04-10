@@ -333,7 +333,8 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 };
 
 export const joinCommunityFromUniversity = async (userId: string, universityId: string, isVerfied: boolean = false) => {
-  const fetchUniversity = await UniversityModel.findById(universityId);
+  const fetchUniversity = await UniversityModel.findById(new mongoose.Types.ObjectId(universityId));
+
   if (!fetchUniversity) {
     throw new Error('University not found');
   }

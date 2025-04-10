@@ -4,8 +4,8 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfiles } from '../userProfile/userProfile.service';
-import { communityGroupAccess } from '../../config/community.type';
-import { communityGroupInterface } from './communityGroup.interface';
+import { communityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { communityGroupInterface, status } from './communityGroup.interface';
 import { userProfileService } from '../userProfile';
 import { communityGroupService } from '.';
 import { notificationService } from '../Notification';
@@ -27,6 +27,35 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
   if (selectedGroupCategory && groupSubCategory) {
     communityGroupToUpdate.communityGroupCategory = new Map([[selectedGroupCategory, groupSubCategory]]);
   }
+
+  const updatedCommunityGroup = await communityGroupToUpdate.save();
+  return updatedCommunityGroup;
+};
+export const RejectCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
+  let communityGroupToUpdate;
+
+  communityGroupToUpdate = await communityGroupModel.findById(id);
+
+  if (!communityGroupToUpdate) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+  }
+
+  communityGroupToUpdate.status = status.rejected;
+
+  const updatedCommunityGroup = await communityGroupToUpdate.save();
+  return updatedCommunityGroup;
+};
+export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
+  let communityGroupToUpdate;
+
+  communityGroupToUpdate = await communityGroupModel.findById(id);
+
+  if (!communityGroupToUpdate) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+  }
+
+  communityGroupToUpdate.status = status.accepted;
+  communityGroupToUpdate.communityGroupType = CommunityGroupType.OFFICIAL;
 
   const updatedCommunityGroup = await communityGroupToUpdate.save();
   return updatedCommunityGroup;
@@ -82,7 +111,7 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
 };
 
 export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
-  const { communityGroupCategory, selectedUsers } = body;
+  const { communityGroupCategory, selectedUsers, communityGroupType } = body;
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -93,8 +122,12 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
   if (!isUserAllowtoCreateGroup) {
     throw new ApiError(httpStatus.FORBIDDEN, 'User is not allowed to create group');
   }
+
+  const groupStatus = communityGroupType?.toLowerCase() === CommunityGroupType.OFFICIAL ? status.pending : status.default;
   const createdGroup = await communityGroupModel.create({
     ...body,
+    communityGroupType: CommunityGroupType.CASUAL,
+    status: groupStatus,
     communityId: communityId,
     adminUserId: userId,
     communityGroupCategory,
