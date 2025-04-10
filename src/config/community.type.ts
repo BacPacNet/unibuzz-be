@@ -2,9 +2,9 @@ export enum CommunityType {
   PUBLIC = 'PUBLIC',
   FOLLOWER_ONLY = 'FOLLOWER_ONLY',
 }
-export enum communityGroupType {
-  CASUAL = 'CASUAL',
-  OFFICIAL = 'OFFICIAL',
+export enum CommunityGroupType {
+  CASUAL = 'casual',
+  OFFICIAL = 'official',
 }
 export enum communityGroupAccess {
   Public = 'Public',

@@ -1,7 +1,9 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
 import { io } from '../../index';
-import { notificationRoleAccess } from './notification.interface';
+import { notificationRoleAccess, notificationStatus } from './notification.interface';
+import { ApiError } from '../errors';
+import httpStatus from 'http-status';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
@@ -315,6 +317,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         message: 1,
         userPostId: 1,
         communityPostId: 1,
+        status: 1,
         'sender_id._id': '$senderDetails._id',
         'sender_id.firstName': '$senderDetails.firstName',
         'sender_id.lastName': '$senderDetails.lastName',
@@ -375,4 +378,17 @@ export const updateUserNotification = async (id: string) => {
 
 export const CreateNotification = async (notification: any) => {
   return await notificationModel.create(notification);
+};
+
+export const changeNotificationStatus = async (status: notificationStatus, notificationId: string) => {
+  const notification = await notificationModel.findById(new mongoose.Types.ObjectId(notificationId));
+
+  if (!notification) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'notification not found!');
+  }
+
+  notification.status = status;
+  notification.isRead = true;
+
+  await notification.save();
 };

@@ -6,6 +6,9 @@ import { ApiError } from '../errors';
 import { User } from '../user';
 //import { communityGroupRoleAccess } from '../user/user.interfaces';
 import { communityGroupAccess } from '../../config/community.type';
+import { status } from './communityGroup.interface';
+import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
+import { notificationService } from '../Notification';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -25,6 +28,19 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group already exists' });
     }
     const createCommunityGroup = await communityGroupService.createCommunityGroup(body, communityId, userId);
+
+    if (body.communityGroupType === 'Official') {
+      const notifications = {
+        sender_id: userId,
+        receiverId: body?.universityAdminId,
+        communityGroupId: createCommunityGroup._id,
+        type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
+        message: 'User has request for an official group status',
+      };
+
+      await notificationService.CreateNotification(notifications);
+      // io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+    }
 
     return res.status(200).json({
       success: true,
@@ -46,6 +62,28 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       }
       await communityGroupService.updateCommunityGroup(new mongoose.Types.ObjectId(groupId), req.body);
       return res.status(200).json({ message: 'Updated Successfully' });
+    }
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+export const changeCommunityGroupStatus = async (req: Request, res: Response, next: NextFunction) => {
+  const { groupId } = req.params;
+
+  try {
+    if (typeof groupId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
+      }
+      if (req.body.status == status.rejected) {
+        await communityGroupService.RejectCommunityGroupApproval(new mongoose.Types.ObjectId(groupId));
+        await notificationService.changeNotificationStatus(notificationStatus.rejected, req.body.notificationId);
+      }
+      if (req.body.status == status.accepted) {
+        await communityGroupService.AcceptCommunityGroupApproval(new mongoose.Types.ObjectId(groupId));
+        await notificationService.changeNotificationStatus(notificationStatus.accepted, req.body.notificationId);
+      }
+      return res.status(200).json({ message: 'Status Updated Successfully' });
     }
   } catch (error: any) {
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
