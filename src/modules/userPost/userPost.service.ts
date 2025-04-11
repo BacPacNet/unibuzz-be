@@ -150,7 +150,7 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
 };
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
   const userProfile = await userProfileService.getUserProfileById(String(id));
-  return userProfile?.communities;
+  return userProfile?.communities.map((community) => community.communityId);
 };
 
 export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {

@@ -116,7 +116,6 @@ export const joinCommunity = async (req: userIdExtend, res: Response) => {
 
   try {
     const user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-
     return res.status(httpStatus.OK).json({ message: 'Joined Successfully', user });
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });

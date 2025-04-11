@@ -16,7 +16,10 @@ router
 
 router.route('/status/:groupId').put(communityGroupController.changeCommunityGroupStatus);
 
+router.route('/join-request/:groupId').put(communityGroupController.updateCommunityGroupJoinRequest);
+
 router.route('/:groupId/join').put(userIdAuth, communityGroupController.joinCommunityGroup);
+
 router.route('/:groupId/leave').delete(userIdAuth, communityGroupController.leaveCommunityGroup);
 
 export default router;
