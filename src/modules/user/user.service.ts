@@ -241,7 +241,7 @@ export const joinCommunityAfterEmailVerification = async (
   let community: any = await communityModel.findOne({ name: communityName });
   const userProfile = await userProfileService.getUserProfileById(String(userId));
 
-  const userSet = new Set(userProfile?.communities);
+  const userSet = new Set(userProfile?.communities.map((community) => community.communityId));
 
   let status = { isUniversityCommunity: false, isAlreadyJoined: false };
 

@@ -6,7 +6,7 @@ export enum CommunityGroupType {
   CASUAL = 'casual',
   OFFICIAL = 'official',
 }
-export enum communityGroupAccess {
+export enum CommunityGroupAccess {
   Public = 'Public',
   Private = 'Private',
 }

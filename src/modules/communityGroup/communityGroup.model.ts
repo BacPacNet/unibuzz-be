@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { allowedCategories, allowedSubcategories, communityGroupInterface, status } from './communityGroup.interface';
-import { communityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
 
 const communityGroupSchema = new Schema<communityGroupInterface>(
   {
@@ -30,7 +30,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
     communityGroupAccess: {
       type: String,
       enum: ['Private', 'Public'],
-      default: communityGroupAccess.Public,
+      default: CommunityGroupAccess.Public,
     },
     communityGroupType: {
       type: String,
@@ -100,6 +100,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },
         isRequestAccepted: { type: Boolean, default: false },
+        status: { type: String, enum: ['pending', 'rejected', 'accepted', 'default'], default: status.default },
         firstName: String,
         lastName: String,
         universityName: String,

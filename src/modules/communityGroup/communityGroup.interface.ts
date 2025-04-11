@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { communityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
 
 export const allowedCategories = new Set([
   'Academic Focus',
@@ -92,6 +92,7 @@ interface users {
   major: String;
   profileImageUrl: String | null;
   universityName: String;
+  status: status;
 }
 
 interface communityGroupInterface {
@@ -104,7 +105,7 @@ interface communityGroupInterface {
   description: string;
   memberCount: number;
   communityGroupType: CommunityGroupType;
-  communityGroupAccess: communityGroupAccess;
+  communityGroupAccess: CommunityGroupAccess;
   communityGroupCategory: Map<string, string[]>;
   users: users[];
   status: status;

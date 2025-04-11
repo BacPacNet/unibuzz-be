@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
 //import { communityGroupRoleAccess } from '../user/user.interfaces';
-import { communityGroupAccess } from '../../config/community.type';
+import { CommunityGroupAccess } from '../../config/community.type';
 import { status } from './communityGroup.interface';
 import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
@@ -67,6 +67,27 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const updateCommunityGroupJoinRequest = async (req: Request, res: Response) => {
+  const { groupId, userId } = req.params as any;
+  const { notificationId, status: reqStatus } = req.body;
+  try {
+    if (!groupId) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid group ID' });
+    }
+    if (reqStatus == status.rejected) {
+      await communityGroupService.rejectCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
+      await notificationService.changeNotificationStatus(notificationStatus.rejected, notificationId);
+    }
+    if (reqStatus == status.accepted) {
+      await communityGroupService.acceptCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
+      await notificationService.changeNotificationStatus(notificationStatus.accepted, notificationId);
+    }
+    return res.status(200).json({ message: 'Status Updated Successfully' });
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
 export const changeCommunityGroupStatus = async (req: Request, res: Response, next: NextFunction) => {
   const { groupId } = req.params;
 
@@ -119,7 +140,7 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
   const { communityId } = req.params;
   const { communityGroupId } = req.query;
   let groups;
-  let access = communityGroupAccess.Public;
+  let access = CommunityGroupAccess.Public;
   try {
     if (communityId) {
       const user = await User.findById(req.userId);
@@ -135,10 +156,10 @@ export const getAllCommunityGroup = async (req: extendedRequest, res: Response, 
       }
 
       if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
-        access = communityGroupAccess.Public;
+        access = CommunityGroupAccess.Public;
       }
       if (userVerifiedCommunityIds.includes(String(communityId))) {
-        access = communityGroupAccess.Private;
+        access = CommunityGroupAccess.Private;
       }
       groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
 
@@ -162,12 +183,7 @@ export const joinCommunityGroup = async (req: extendedRequest, res: Response) =>
   const { groupId } = req.params;
   try {
     const updatedCommunity = await communityGroupService.joinCommunityGroup(userID, groupId as string);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Successfully joined the community group',
-      data: updatedCommunity,
-    });
+    return res.status(200).json(updatedCommunity);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

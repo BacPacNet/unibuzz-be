@@ -7,6 +7,7 @@ import mongoose, { PipelineStage } from 'mongoose';
 import { getUserById } from '../user/user.service';
 import { communityService } from '.';
 import UniversityModel, { IUniversity } from '../university/university.model';
+import { getUserProfileById } from '../userProfile/userProfile.service';
 
 export const createCommunity = async (
   name: string,
@@ -44,7 +45,7 @@ export const getUserCommunities = async (userID: string) => {
     const userProfile = await userProfileService.getUserProfileById(userID);
     if (!userProfile) throw new Error('User Profile not found');
 
-    const getAllUserCommunityIds = userProfile.communities;
+    const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
 
     const communities = await communityModel.aggregate([
       {
@@ -292,12 +293,14 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 
   const community = await communityModel.findOne({ _id: communityId, 'users.id': userId });
 
-  if (community) {
+  if (community && !isVerfied) {
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
   }
-
-  if (!userProfile.communities.includes(communityId)) {
-    userProfile.communities.push(communityId);
+  let isAlreadyJoined = userProfile.communities.some(
+    (community) => community.communityId.toString() === communityId.toString()
+  );
+  if (!isAlreadyJoined) {
+    userProfile.communities.push({ communityId, isVerified: isVerfied });
     await userProfile.save();
   }
 
@@ -307,7 +310,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   });
 
   if (!userResult) {
-    const updateUser = await communityModel.updateOne(
+    await communityModel.updateOne(
       { _id: communityId },
       {
         $push: {
@@ -328,8 +331,8 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
         },
       }
     );
-    return updateUser;
   }
+  return userProfile;
 };
 
 export const joinCommunityFromUniversity = async (userId: string, universityId: string, isVerfied: boolean = false) => {
@@ -339,6 +342,17 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
   }
   try {
     let community = await communityModel.findOne({ university_id: universityId });
+    let userProfile = await getUserProfileById(userId);
+    let numberOfUnverifiedJoinCommunity =
+      userProfile?.communities?.reduce((acc, community) => (community?.isVerified === false ? acc + 1 : acc), 0) || 0;
+    console.log(numberOfUnverifiedJoinCommunity);
+
+    let isCommunityVerified = userProfile?.email.some(
+      (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
+    );
+    if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
+      throw new Error('You can only join 1 community that is not verified');
+    }
     if (!community) {
       const { _id: communityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
       community = await communityModel.create({
@@ -374,7 +388,9 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
       throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
     }
 
-    const communityIndex = userProfile.communities.findIndex((id) => id.toString() === communityId.toString());
+    const communityIndex = userProfile.communities.findIndex(
+      (community) => community.communityId.toString() === communityId.toString()
+    );
     userProfile.communities.splice(communityIndex, 1);
     await userProfile.save();
 

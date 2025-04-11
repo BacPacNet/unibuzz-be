@@ -145,16 +145,16 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
 
     const { _id: communityId } = community;
 
-    let userProfile = await userProfileService.addUniversityEmail(
+    await userProfileService.addUniversityEmail(
       userID,
       universityEmail,
       universityName,
       communityId.toString(),
       community.communityLogoUrl.imageUrl
     );
-    await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
+    const result = await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
 
-    return res.status(200).json({ userProfile });
+    return res.status(200).json(result);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
