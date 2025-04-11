@@ -16,21 +16,42 @@ import { io } from '../../index';
 type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
-  const { selectedGroupCategory, groupSubCategory } = body;
-  let communityGroupToUpdate;
+  //   const { selectedGroupCategory, groupSubCategory } = body;
+  //   let communityGroupToUpdate;
 
-  communityGroupToUpdate = await communityGroupModel.findById(id);
+  //   communityGroupToUpdate = await communityGroupModel.findById(id);
+
+  //   if (!communityGroupToUpdate) {
+  //     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+  //   }
+  //   Object.assign(communityGroupToUpdate, body);
+  //   if (selectedGroupCategory && groupSubCategory) {
+  //     communityGroupToUpdate.communityGroupCategory = new Map([[selectedGroupCategory, groupSubCategory]]);
+  //   }
+
+  //   const updatedCommunityGroup = await communityGroupToUpdate.save();
+  //   return updatedCommunityGroup;
+  const { selectedUsers, communityGroupType, communityGroupCategory, ...restBody } = body;
+
+  let communityGroupToUpdate = await communityGroupModel.findById(id);
 
   if (!communityGroupToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
   }
-  Object.assign(communityGroupToUpdate, body);
-  if (selectedGroupCategory && groupSubCategory) {
-    communityGroupToUpdate.communityGroupCategory = new Map([[selectedGroupCategory, groupSubCategory]]);
+
+  communityGroupToUpdate.communityGroupType = communityGroupType;
+
+  Object.assign(communityGroupToUpdate, restBody);
+
+  if (communityGroupCategory && typeof communityGroupCategory === 'object') {
+    communityGroupToUpdate.communityGroupCategory = new Map(Object.entries(communityGroupCategory));
   }
 
-  const updatedCommunityGroup = await communityGroupToUpdate.save();
-  return updatedCommunityGroup;
+  if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    communityGroupToUpdate.users.push(...selectedUsers);
+  }
+
+  await communityGroupToUpdate.save();
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {

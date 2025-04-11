@@ -46,6 +46,7 @@ export const getUserCommunities = async (userID: string) => {
     if (!userProfile) throw new Error('User Profile not found');
 
     const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
+    console.log('getAllUserCommunityIds', getAllUserCommunityIds, 'userProfile', userProfile);
 
     const communities = await communityModel.aggregate([
       {

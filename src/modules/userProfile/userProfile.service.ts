@@ -71,6 +71,7 @@ export const getUserProfile = async (id: string) => {
 };
 export const getUserProfileById = async (id: string) => {
   const userProfile = await UserProfile.findOne({ users_id: id });
+
   return userProfile;
 };
 
