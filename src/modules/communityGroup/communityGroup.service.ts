@@ -16,21 +16,6 @@ import { io } from '../../index';
 type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
-  //   const { selectedGroupCategory, groupSubCategory } = body;
-  //   let communityGroupToUpdate;
-
-  //   communityGroupToUpdate = await communityGroupModel.findById(id);
-
-  //   if (!communityGroupToUpdate) {
-  //     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
-  //   }
-  //   Object.assign(communityGroupToUpdate, body);
-  //   if (selectedGroupCategory && groupSubCategory) {
-  //     communityGroupToUpdate.communityGroupCategory = new Map([[selectedGroupCategory, groupSubCategory]]);
-  //   }
-
-  //   const updatedCommunityGroup = await communityGroupToUpdate.save();
-  //   return updatedCommunityGroup;
   const { selectedUsers, communityGroupType, communityGroupCategory, ...restBody } = body;
 
   let communityGroupToUpdate = await communityGroupModel.findById(id);
