@@ -49,6 +49,18 @@ export const getCommunity = async (req: any, res: Response, next: NextFunction) 
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
   }
 };
+export const getCommunityFromUniversityID = async (req: any, res: Response, next: NextFunction) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.universityId)) {
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
+    }
+    const community = await communityService.getCommunityFromUniversityId(req.params.universityId);
+    return res.status(200).json(community);
+  } catch (error) {
+    console.error(error);
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
+  }
+};
 
 export const updateCommunity = async (req: any, res: Response, next: NextFunction) => {
   let community;

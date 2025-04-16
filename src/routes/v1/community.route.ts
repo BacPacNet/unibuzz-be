@@ -12,6 +12,8 @@ router
 router.route('/filtered/:communityId').post(userIdAuth, communityController.getFilteredUserCommunity);
 router.route('/:communityId').get(communityController.getCommunity).put(communityController.updateCommunity);
 
+router.route('/uni/:universityId').get(communityController.getCommunityFromUniversityID);
+
 router.route('/:communityId/join').put(userIdAuth, communityController.joinCommunity);
 router.route('/join').post(userIdAuth, communityController.joinCommunityFromUniversity);
 

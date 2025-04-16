@@ -36,6 +36,9 @@ export const createCommunity = async (
 export const getCommunity = async (communityId: string) => {
   return await communityModel.findById(communityId);
 };
+export const getCommunityFromUniversityId = async (universityId: string) => {
+  return await communityModel.findOne({ university_id: universityId });
+};
 
 export const getUserCommunities = async (userID: string) => {
   try {
