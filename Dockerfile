@@ -11,9 +11,9 @@ COPY ./src ./src
 
 RUN ls -a
 
-EXPOSE 8000
+EXPOSE  3000
 
-RUN yarn install --pure-lockfile && yarn compile
+RUN yarn install --frozen-lockfile && yarn compile
 
 # production stage
 

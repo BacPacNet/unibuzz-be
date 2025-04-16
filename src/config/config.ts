@@ -1,5 +1,6 @@
 import Joi from 'joi';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const envVarsSchema = Joi.object()
   .keys({
@@ -30,7 +31,7 @@ const { value: envVars, error } = envVarsSchema.prefs({ errors: { label: 'key' }
 if (error) {
   throw new Error(`Config validation error: ${error.message}`);
 }
-
+console.log(envVars.MONGODB_URL + (envVars.NODE_ENV === 'test' ? '-test' : ''));
 const config = {
   env: envVars.NODE_ENV,
   port: envVars.PORT,
