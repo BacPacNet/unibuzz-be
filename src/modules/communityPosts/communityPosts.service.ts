@@ -80,13 +80,13 @@ export const getAllCommunityPost = async (
         {
           communityId: new mongoose.Types.ObjectId(communityId),
           communityPostsType: CommunityType.PUBLIC,
-          communiyGroupId: { $exists: false },
+          communityGroupId: { $exists: false },
         },
         {
           communityId: new mongoose.Types.ObjectId(communityId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
           user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
-          communiyGroupId: { $exists: false },
+          communityGroupId: { $exists: false },
         }
       );
     } else {
@@ -94,12 +94,12 @@ export const getAllCommunityPost = async (
       matchConditions.push(
         {
           communityId: new mongoose.Types.ObjectId(communityId),
-          communiyGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
           communityPostsType: CommunityType.PUBLIC,
         },
         {
           communityId: new mongoose.Types.ObjectId(communityId),
-          communiyGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
           user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
         }
@@ -172,7 +172,7 @@ export const getAllCommunityPost = async (
             imageUrl: 1,
             likeCount: 1,
             commentCount: 1,
-            communiyGroupId: 1,
+            communityGroupId: 1,
             communityId: 1,
             communityPostsType: 1,
             user: {
@@ -220,9 +220,9 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
     if (!post) throw new Error('Post not found');
 
     let isCommunityGroupMember = false;
-    if (post.communiyGroupId) {
+    if (post.communityGroupId) {
       const communityGroup = await communityGroupModel.findOne({
-        _id: post.communiyGroupId,
+        _id: post.communityGroupId,
         'users.userId': myUserId,
       });
       isCommunityGroupMember = !!communityGroup;
