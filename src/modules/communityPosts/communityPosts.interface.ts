@@ -17,6 +17,7 @@ interface communityPostsInterface {
   imageUrl?: image[];
   likeCount: Like[];
   communityPostsType: CommunityType;
+  isPostVerified: boolean;
 }
 
 export { communityPostsInterface };

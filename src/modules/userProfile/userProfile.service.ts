@@ -16,7 +16,7 @@ export const createUserProfile = async (userId: string, body: any) => {
     birthDate,
     country,
     city,
-    universityEmail,
+    //universityEmail,
     universityName,
     year,
     degree,
@@ -28,8 +28,8 @@ export const createUserProfile = async (userId: string, body: any) => {
     universityLogo,
   } = body;
 
-  const emailField =
-    universityEmail?.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
+  //  const emailField =
+  //    universityEmail?.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
 
   const userProfileData = {
     users_id: userId,
@@ -46,13 +46,13 @@ export const createUserProfile = async (userId: string, body: any) => {
     university_name: universityName,
     study_year: year,
     universityLogo,
-    ...(emailField && { email: [emailField] }),
+    //...(emailField && { email: [emailField] }),
   };
 
   await UserProfile.create(userProfileData);
 };
 
-const buildEmailField = async (universityEmail: string, universityName: string, universityId: string | null) => {
+export const buildEmailField = async (universityEmail: string, universityName: string, universityId: string | null) => {
   const community = await communityModel.findOne({ university_id: universityId });
   return {
     UniversityName: universityName,
