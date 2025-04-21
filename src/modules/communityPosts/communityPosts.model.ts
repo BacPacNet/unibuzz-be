@@ -15,6 +15,7 @@ const communityPostSchema = new Schema<communityPostsInterface>(
     imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
     communityPostsType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC'], default: CommunityType.PUBLIC },
+    isPostVerified: { type: Boolean },
   },
   { timestamps: true }
 );

@@ -13,7 +13,7 @@ import { io } from '../../index';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
   const postData = { ...post, user_id: userId };
-
+  console.log(postData, 'dsdsdsds');
   return await CommunityPostModel.create(postData);
 };
 
@@ -131,6 +131,17 @@ export const getAllCommunityPost = async (
         },
         {
           $lookup: {
+            from: 'communityGroup',
+            localField: 'communityGroupId',
+            foreignField: '_id',
+            as: 'communityGroup',
+          },
+        },
+        {
+          $unwind: { path: '$communityGroup', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
             from: 'users',
             localField: 'user_id',
             foreignField: '_id',
@@ -175,6 +186,7 @@ export const getAllCommunityPost = async (
             communityGroupId: 1,
             communityId: 1,
             communityPostsType: 1,
+            isPostVerified: 1,
             user: {
               _id: 1,
               firstName: 1,

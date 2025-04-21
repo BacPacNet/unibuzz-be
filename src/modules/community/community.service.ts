@@ -348,7 +348,6 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
     let userProfile = await getUserProfileById(userId);
     let numberOfUnverifiedJoinCommunity =
       userProfile?.communities?.reduce((acc, community) => (community?.isVerified === false ? acc + 1 : acc), 0) || 0;
-    console.log(numberOfUnverifiedJoinCommunity);
 
     let isCommunityVerified = userProfile?.email.some(
       (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
