@@ -6,6 +6,7 @@ const router: Router = Router();
 
 router.route('/').post(userIdAuth, chatController.Create_Get_Chat).get(userIdAuth, chatController.getUserChats);
 router.route('/notification').get(userIdAuth, chatController.getUserMessageNotification);
+router.route('/notification-count').get(userIdAuth, chatController.getUserMessageNotificationTotalCount);
 
 router.route('/group').post(userIdAuth, chatController.CreateGroupChat);
 router.route('/acceptRequest').put(userIdAuth, chatController.acceptSingleRequest);

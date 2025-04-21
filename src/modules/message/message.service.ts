@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { chatModel } from '../chat';
 import messageModel from './message.model';
 
@@ -78,4 +79,79 @@ export const reactToMessage = async (id: any, userId: string, emoji: string) => 
   }
 
   return messageModel.findById(id).populate([{ path: 'chat', select: ' users' }]);
+};
+
+// export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
+//   const userObjectId = new mongoose.Types.ObjectId(userId);
+
+//   const unreadMessages = await messageModel.find({
+//     chat: { $in: chatsID },
+//     readByUsers: { $ne: userObjectId }, // or $nin: [userObjectId] if preferred
+//   });
+
+//   console.log('mess', unreadMessages);
+
+//   console.log('Unread messages:', unreadMessages.length);
+//   return unreadMessages.length;
+// };
+
+// export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
+//   const userObjectId = new mongoose.Types.ObjectId(userId);
+
+//   const latestMessages = await messageModel.aggregate([
+//     {
+//       $match: {
+//         chat: { $in: chatsID },
+//       },
+//     },
+//     {
+//       $sort: { createdAt: -1 },
+//     },
+//     {
+//       $group: {
+//         _id: '$chat',
+//         latestMessage: { $first: '$$ROOT' },
+//       },
+//     },
+//   ]);
+
+//   const unreadChats = latestMessages.filter(
+//     (chat) => !chat.latestMessage.readByUsers.some((readerId: any) => readerId.equals(userObjectId))
+//   );
+
+//   console.log('Unread chats (based on latest message):', unreadChats.length);
+//   return unreadChats.length;
+// };
+
+export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+
+  const messages = await messageModel
+    .find({
+      chat: { $in: chatsID },
+    })
+    .sort({ createdAt: -1 });
+
+  const messagesByChat = new Map<string, any[]>();
+  for (const msg of messages) {
+    const chatId = msg.chat.toString();
+    if (!messagesByChat.has(chatId)) {
+      messagesByChat.set(chatId, []);
+    }
+    messagesByChat.get(chatId)!.push(msg);
+  }
+
+  let totalUnread = 0;
+
+  for (const [_, msgs] of messagesByChat.entries()) {
+    for (const msg of msgs) {
+      const isRead = msg.readByUsers.some((reader: any) => reader.equals(userObjectId));
+      if (isRead) break;
+
+      totalUnread++;
+    }
+  }
+
+  console.log('Total unread messages after last read per chat:', totalUnread);
+  return totalUnread;
 };

@@ -55,6 +55,17 @@ export const getUserMessageNotification = async (req: userIdExtend, res: Respons
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+export const getUserMessageNotificationTotalCount = async (req: userIdExtend, res: Response) => {
+  const UserID = req.userId;
+
+  try {
+    if (!UserID) throw new Error('Invalid user id');
+    const messageTotalCount = await chatService.messageNotificationTotalCount(UserID);
+    return res.status(200).json({ messageTotalCount });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
 
 export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
   const { users, groupName, groupDescription, groupLogo } = req.body;

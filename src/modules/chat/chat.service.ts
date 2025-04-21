@@ -4,7 +4,7 @@ import { chatInterface } from './chat.interface';
 import chatModel from './chat.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { messageModel } from '../message';
+import { messageModel, messageService } from '../message';
 
 export const getChat = async (yourId: string, userId: string) => {
   const isChat: chatInterface[] = await chatModel
@@ -91,6 +91,10 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
           universityName: userProfile?.university_name ?? null,
           studyYear: userProfile?.study_year ?? null,
           degree: userProfile?.degree ?? null,
+          major: userProfile?.major ?? null,
+          role: userProfile?.role ?? null,
+          affiliation: userProfile?.affiliation ?? null,
+          occupation: userProfile?.occupation ?? null,
         },
       };
     }),
@@ -112,6 +116,11 @@ export const getUserChats = async (userId: string) => {
     .lean();
 
   const filteredChats = chats.filter((chat) => {
+    if (chat.isGroupChat) {
+      chat.users = chat.users.filter((user) => user.userId !== null);
+      return chat;
+    }
+
     const isValidChat = chat.users.every((user) => {
       if (!user?.userId) {
         return false;
@@ -124,6 +133,26 @@ export const getUserChats = async (userId: string) => {
 
     return isValidChat;
   });
+
+  //   const filteredChats = chats.filter((chat) => {
+  //     // if (chat.isGroupChat) {
+  //     //   return true; // Always include group chats
+  //     // }
+
+  //     return chat.users.every((user) => {
+  //       const userId = user?.userId;
+
+  //       if (userId === null || userId === undefined) {
+  //         return false;
+  //       }
+
+  //       return (
+  //         typeof userId === 'string' ||
+  //         typeof userId === 'number' ||
+  //         (typeof userId === 'object' && typeof userId._id === 'string')
+  //       );
+  //     });
+  //   });
 
   const userIds = filteredChats
     .flatMap((chat) =>
@@ -145,7 +174,7 @@ export const getUserChats = async (userId: string) => {
   const uniqueUserIds = [...new Set(userIds)];
 
   const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
-    .select('profile_dp users_id university_name study_year degree')
+    .select('profile_dp users_id university_name study_year  major affiliation occupation role')
     .lean();
 
   const messages = await messageModel
@@ -199,6 +228,10 @@ export const getUserChats = async (userId: string) => {
               universityName: userProfile?.university_name ?? null,
               studyYear: userProfile?.study_year ?? null,
               degree: userProfile?.degree ?? null,
+              major: userProfile?.major ?? null,
+              role: userProfile?.role ?? null,
+              affiliation: userProfile?.affiliation ?? null,
+              occupation: userProfile?.occupation ?? null,
             },
           };
         }
@@ -510,4 +543,18 @@ export const messageNotification = async (userId: string = '', page: number = 1,
   });
 
   return allChats;
+};
+
+export const messageNotificationTotalCount = async (userId: string) => {
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const chats = await chatModel.find({
+    users: { $elemMatch: { userId: userObjectId } },
+    latestMessage: { $exists: true, $ne: null },
+  });
+
+  const chatsId = chats.map((item) => item?._id);
+
+  const unreadMessagesTotalCount = await messageService.unreadMessagesCount(chatsId, userId);
+
+  return unreadMessagesTotalCount;
 };
