@@ -13,7 +13,6 @@ import { io } from '../../index';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
   const postData = { ...post, user_id: userId };
-  console.log(postData, 'dsdsdsds');
   return await CommunityPostModel.create(postData);
 };
 
