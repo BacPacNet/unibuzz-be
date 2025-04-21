@@ -217,7 +217,7 @@ const countCommunityPostsForUserIds = async (communityIds: string[] = []) => {
       {
         communityId: { $in: communityIds.map((id) => new mongoose.Types.ObjectId(id)) },
         communityPostsType: CommunityType.PUBLIC,
-        communiyGroupId: { $exists: false },
+        communityGroupId: { $exists: false },
       },
     ];
 
@@ -379,12 +379,12 @@ export const getCommunityPostsForUser = async (
     const matchConditions: any = [
       {
         communityId: { $in: communityIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        communiyGroupId: { $exists: false },
+        communityGroupId: { $exists: false },
         communityPostsType: CommunityType.PUBLIC,
       },
       {
         communityId: { $in: communityIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        communiyGroupId: { $exists: false },
+        communityGroupId: { $exists: false },
         communityPostsType: CommunityType.FOLLOWER_ONLY,
         user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
       },
@@ -439,7 +439,7 @@ export const getCommunityPostsForUser = async (
             imageUrl: 1,
             likeCount: 1,
             commentCount: 1,
-            communiyGroupId: 1,
+            communityGroupId: 1,
             communityId: 1,
             communityPostsType: 1,
             user: {

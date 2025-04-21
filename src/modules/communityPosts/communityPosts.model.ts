@@ -5,7 +5,7 @@ import { CommunityType } from '../../config/community.type';
 const communityPostSchema = new Schema<communityPostsInterface>(
   {
     communityId: { type: Schema.Types.ObjectId, ref: 'community', required: true },
-    communiyGroupId: { type: Schema.Types.ObjectId, ref: 'communityGroup', required: false },
+    communityGroupId: { type: Schema.Types.ObjectId, ref: 'communityGroup', required: false },
     user_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -15,6 +15,7 @@ const communityPostSchema = new Schema<communityPostsInterface>(
     imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
     communityPostsType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC'], default: CommunityType.PUBLIC },
+    isPostVerified: { type: Boolean },
   },
   { timestamps: true }
 );

@@ -16,10 +16,10 @@ interface extendedRequest extends Request {
 // create community post
 export const createCommunityPost = async (req: extendedRequest, res: Response) => {
   const userId = req.userId as string;
-  const { communityId, communiyGroupId } = req.body;
+  const { communityId, communityGroupId } = req.body;
   req.body.content = he.decode(req.body.content);
   try {
-    if (communityId && !communiyGroupId) {
+    if (communityId && !communityGroupId) {
       const community = await communityService.getCommunity(req.body.communityId);
       if (!community) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
@@ -30,8 +30,8 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       }
     }
 
-    if (communityId && communiyGroupId) {
-      const communityGroup = await communityGroupService.getCommunityGroupById(communiyGroupId);
+    if (communityId && communityGroupId) {
+      const communityGroup = await communityGroupService.getCommunityGroupById(communityGroupId);
       if (!communityGroup) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
       }
