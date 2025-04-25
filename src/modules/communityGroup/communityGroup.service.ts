@@ -161,12 +161,9 @@ export const getCommunityGroupByCommunity = async (communityId: string) => {
 };
 
 export const getCommunityGroup = async (groupId: string): Promise<CommunityGroupDocument | null> => {
-  // Validate the ObjectId
   if (!Types.ObjectId.isValid(groupId)) {
-    return null;
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community group ID');
   }
-
-  // Find the community group and return it
   return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
@@ -275,8 +272,6 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a member of this community');
     }
 
-    const isGroupPrivate = communityGroup.communityGroupAccess === CommunityGroupAccess.Private;
-
     communityGroup.users.push({
       userId: new mongoose.Types.ObjectId(userID),
       firstName: user.firstName,
@@ -286,8 +281,8 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       year: userProfile.study_year as string,
       degree: userProfile.degree as string,
       major: userProfile.major as string,
-      isRequestAccepted: isAdmin ? true : isGroupPrivate ? false : true,
-      status: isAdmin ? status.accepted : isGroupPrivate ? status.pending : status.accepted,
+      isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
+      status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
     });
     await communityGroup.save();
 
@@ -339,5 +334,31 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
   } catch (error: any) {
     console.error(error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+  }
+};
+
+export const acceptPrivateCommunityGroupRequest = async (userId: string, communityGroupId: string) => {
+  try {
+    if (!communityGroupId || !userId) {
+      throw new Error('Invalid communityGroupId or userId');
+    }
+    const updatedGroup = await communityGroupModel.findOneAndUpdate(
+      { _id: communityGroupId, 'users.userId': userId },
+      {
+        $set: {
+          'users.$.isRequestAccepted': true,
+          'users.$.status': status.accepted,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedGroup) {
+      throw new Error('Community group or user not found');
+    }
+
+    return updatedGroup;
+  } catch (error: any) {
+    throw new Error(error.message);
   }
 };

@@ -56,8 +56,6 @@ export const getAllUniversity = async (req: Request, res: Response, next: NextFu
 
   const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
 
-  console.log(searchParams.region, 'searchParams.region,');
-
   try {
     let allUniversity = await universityService.getAllUniversity(
       Number(page),
