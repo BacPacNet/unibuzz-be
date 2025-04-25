@@ -93,20 +93,6 @@ export const reactToMessage = async (id: any, userId: string, emoji: string) => 
   return messageModel.findById(id).populate([{ path: 'chat', select: ' users' }]);
 };
 
-// export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
-//   const userObjectId = new mongoose.Types.ObjectId(userId);
-
-//   const unreadMessages = await messageModel.find({
-//     chat: { $in: chatsID },
-//     readByUsers: { $ne: userObjectId }, // or $nin: [userObjectId] if preferred
-//   });
-
-//   console.log('mess', unreadMessages);
-
-//   console.log('Unread messages:', unreadMessages.length);
-//   return unreadMessages.length;
-// };
-
 export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
   const userObjectId = new mongoose.Types.ObjectId(userId);
 

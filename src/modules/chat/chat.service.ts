@@ -134,26 +134,6 @@ export const getUserChats = async (userId: string) => {
     return isValidChat;
   });
 
-  //   const filteredChats = chats.filter((chat) => {
-  //     // if (chat.isGroupChat) {
-  //     //   return true; // Always include group chats
-  //     // }
-
-  //     return chat.users.every((user) => {
-  //       const userId = user?.userId;
-
-  //       if (userId === null || userId === undefined) {
-  //         return false;
-  //       }
-
-  //       return (
-  //         typeof userId === 'string' ||
-  //         typeof userId === 'number' ||
-  //         (typeof userId === 'object' && typeof userId._id === 'string')
-  //       );
-  //     });
-  //   });
-
   const userIds = filteredChats
     .flatMap((chat) =>
       chat.users.map((user) => {
@@ -294,15 +274,6 @@ export const createGroupChat = async (
   const newGroup = await chatModel.create(NewGroupData);
   return newGroup;
 };
-
-// type Group = {
-//   _id: string;
-//   chatName: string;
-//   users: { userId: string }[];
-//   groupLogo: { imageUrl: string; publicId: string };
-//   isGroupChat: boolean;
-//   groupAdmin: string;
-// };
 
 type UsersToAdd = {
   user: {
