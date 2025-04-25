@@ -68,12 +68,13 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
   }
 };
 
-export const updateCommunityGroupJoinRequest = async (req: Request, res: Response) => {
-  const { groupId, userId } = req.params as any;
-  const { notificationId, status: reqStatus } = req.body;
+export const updateCommunityGroupJoinRequest = async (req: extendedRequest, res: Response) => {
+  const { groupId } = req.params as any;
+  const { notificationId, status: reqStatus, userId } = req.body;
+
   try {
-    if (!groupId) {
-      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid group ID' });
+    if (!groupId || !userId) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid group ID or user ID' });
     }
     if (reqStatus == status.rejected) {
       await communityGroupService.rejectCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
@@ -186,6 +187,27 @@ export const joinCommunityGroup = async (req: extendedRequest, res: Response) =>
     return res.status(200).json(updatedCommunity);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const acceptPrivateCommunityGroupRequest = async (req: extendedRequest, res: Response) => {
+  const { groupId, userId } = req.params as any;
+  const { notificationId, status: reqStatus } = req.body;
+  try {
+    if (!groupId) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid group ID' });
+    }
+    if (reqStatus == status.rejected) {
+      await communityGroupService.rejectCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
+      await notificationService.changeNotificationStatus(notificationStatus.rejected, notificationId);
+    }
+    if (reqStatus == status.accepted) {
+      await communityGroupService.acceptCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
+      await notificationService.changeNotificationStatus(notificationStatus.accepted, notificationId);
+    }
+    return res.status(200).json({ message: 'Status Updated Successfully' });
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 

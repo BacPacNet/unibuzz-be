@@ -95,7 +95,6 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
   const { page, limit } = req.query;
   const { communityId, communityGroupId } = req.params as any;
   const userId = req.userId as string;
-
   // let access = CommunityType.PUBLIC;
   const userIdObject = new mongoose.Types.ObjectId(userId);
   try {
@@ -117,7 +116,19 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
     }
 
     if (communityGroupId) {
-      const communityGroup = await communityGroupModel.findOne({ _id: communityGroupId, 'users.userId': req.userId });
+      const communityGroup = await communityGroupModel.findOne({
+        _id: communityGroupId,
+        $or: [
+          {
+            'users.userId': req.userId,
+            status: 'accepted',
+          },
+          {
+            adminUserId: req.userId,
+          },
+        ],
+      });
+
       if (!communityGroup) {
         return res.status(httpStatus.NOT_FOUND).json({ message: 'Not a member' });
       }

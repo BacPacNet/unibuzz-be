@@ -61,10 +61,13 @@ export const getAllUniversity = async (
     searchConditions.push({ type: { $regex: type, $options: 'i' } });
   }
 
-  const searchQuery: any = searchConditions.length > 0 ? { $and: searchConditions } : {};
+  const matchStage = searchConditions.length > 0 ? { $match: { $and: searchConditions } } : { $match: {} };
 
-  const Universities = await universityModal.find(searchQuery).sort({ total_students: -1 }).skip(startIndex).limit(limit);
-  const totalUniversities = await universityModal.countDocuments(searchQuery);
+  const aggregation: any = [matchStage, { $skip: startIndex }, { $limit: limit }];
+
+  const Universities = await universityModal.aggregate(aggregation).option({ allowDiskUse: true });
+
+  const totalUniversities = await universityModal.countDocuments(matchStage.$match);
   const totalPages = Math.ceil(totalUniversities / limit);
 
   return {
