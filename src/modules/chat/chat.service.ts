@@ -4,7 +4,7 @@ import { chatInterface } from './chat.interface';
 import chatModel from './chat.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { messageModel } from '../message';
+import { messageModel, messageService } from '../message';
 
 export const getChat = async (yourId: string, userId: string) => {
   const isChat: chatInterface[] = await chatModel
@@ -91,6 +91,10 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
           universityName: userProfile?.university_name ?? null,
           studyYear: userProfile?.study_year ?? null,
           degree: userProfile?.degree ?? null,
+          major: userProfile?.major ?? null,
+          role: userProfile?.role ?? null,
+          affiliation: userProfile?.affiliation ?? null,
+          occupation: userProfile?.occupation ?? null,
         },
       };
     }),
@@ -112,6 +116,11 @@ export const getUserChats = async (userId: string) => {
     .lean();
 
   const filteredChats = chats.filter((chat) => {
+    if (chat.isGroupChat) {
+      chat.users = chat.users.filter((user) => user.userId !== null);
+      return chat;
+    }
+
     const isValidChat = chat.users.every((user) => {
       if (!user?.userId) {
         return false;
@@ -145,13 +154,13 @@ export const getUserChats = async (userId: string) => {
   const uniqueUserIds = [...new Set(userIds)];
 
   const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
-    .select('profile_dp users_id university_name study_year degree')
+    .select('profile_dp users_id university_name study_year  major affiliation occupation role')
     .lean();
 
   const messages = await messageModel
     .find({ chat: { $in: chatIds } })
     .sort({ createdAt: -1 })
-    .limit(10)
+    .limit(50)
     .lean();
 
   const messagesByChat = messages.reduce((acc: any, message) => {
@@ -199,6 +208,10 @@ export const getUserChats = async (userId: string) => {
               universityName: userProfile?.university_name ?? null,
               studyYear: userProfile?.study_year ?? null,
               degree: userProfile?.degree ?? null,
+              major: userProfile?.major ?? null,
+              role: userProfile?.role ?? null,
+              affiliation: userProfile?.affiliation ?? null,
+              occupation: userProfile?.occupation ?? null,
             },
           };
         }
@@ -215,6 +228,10 @@ export const getUserChats = async (userId: string) => {
             universityName: userProfile?.university_name ?? null,
             studyYear: userProfile?.study_year ?? null,
             degree: userProfile?.degree ?? null,
+            major: userProfile?.major ?? null,
+            role: userProfile?.role ?? null,
+            affiliation: userProfile?.affiliation ?? null,
+            occupation: userProfile?.occupation ?? null,
           },
         };
       }) as any;
@@ -258,6 +275,59 @@ export const createGroupChat = async (
   return newGroup;
 };
 
+type UsersToAdd = {
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    profile: any;
+  };
+  acceptRequest: boolean;
+};
+
+export const editGroupChat = async (
+  groupId: string,
+  usersToAdd: UsersToAdd[],
+  groupName: string,
+  groupLogo: { imageUrl: string; publicId: string }
+) => {
+  const currentGroup: any = await getChatById(groupId);
+
+  if (usersToAdd.length) {
+    const existingUserIds = new Set(currentGroup.users.map((u: any) => u.userId.toString()));
+
+    const normalizedUsers = usersToAdd.map((user) => ({
+      userId: user.user.id.toString(),
+      isRequestAccepted: user.acceptRequest,
+    }));
+
+    const newUsers = normalizedUsers.filter((user) => !existingUserIds.has(user.userId));
+
+    if (newUsers.length > 0) {
+      const cleanedCurrentUsers = currentGroup.users.map((u: any) => ({
+        userId: u.userId.toString(),
+        isRequestAccepted: u.isRequestAccepted,
+      }));
+
+      currentGroup.users = [...cleanedCurrentUsers, ...newUsers];
+    }
+  }
+
+  if (groupName && groupName !== currentGroup.chatName) {
+    currentGroup.chatName = groupName;
+  }
+
+  if (
+    groupLogo &&
+    (groupLogo.imageUrl !== currentGroup.groupLogo?.imageUrl || groupLogo.publicId !== currentGroup.groupLogo?.publicId)
+  ) {
+    currentGroup.groupLogo = groupLogo;
+  }
+
+  const updatedGroup = await currentGroup.save();
+  return updatedGroup;
+};
+
 export const toggleAddToGroup = async (userID: string, userToToggleId: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);
   let updated = false;
@@ -292,10 +362,14 @@ export const leaveGroupByUserId = async (userID: string, chatId: string) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'not group chat');
   }
 
-  const doesUserExist = chat.users.some((user) => user.toString() == userID.toString());
+  const doesUserExist = chat.users.find((user) => user.userId.toString() == userID.toString());
 
+  if (doesUserExist && doesUserExist.userId.toString() == chat.groupAdmin.toString()) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'you are  admin of group');
+  }
   if (doesUserExist) {
-    chat.users = chat.users.filter((item) => item.toString() !== userID.toString());
+    chat.users = chat.users.filter((item) => item.userId.toString() !== userID.toString());
+
     updated = true;
   } else {
     throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of group');
@@ -510,4 +584,18 @@ export const messageNotification = async (userId: string = '', page: number = 1,
   });
 
   return allChats;
+};
+
+export const messageNotificationTotalCount = async (userId: string) => {
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const chats = await chatModel.find({
+    users: { $elemMatch: { userId: userObjectId } },
+    latestMessage: { $exists: true, $ne: null },
+  });
+
+  const chatsId = chats.map((item) => item?._id);
+
+  const unreadMessagesTotalCount = await messageService.unreadMessagesCount(chatsId, userId);
+
+  return unreadMessagesTotalCount;
 };

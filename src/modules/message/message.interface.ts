@@ -17,6 +17,8 @@ interface messageInterface {
   readByUsers: mongoose.Types.ObjectId[];
   media?: media[];
   reactions: reaction[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export { messageInterface };
