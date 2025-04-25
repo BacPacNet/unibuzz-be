@@ -94,15 +94,47 @@ export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+export const EditGroupChat = async (req: userIdExtend, res: Response) => {
+  const { users, groupName, groupLogo } = req.body;
+  const userID = req.userId;
+  const { chatId } = req.params;
+  try {
+    if (userID && chatId) {
+      const userProfile = await userProfileService.getUserProfile(userID);
+      const followingIds = userProfile?.following.map((id: any) => id.userId._id.toString());
+      const followersIds = userProfile?.followers.map((id: any) => id.userId._id.toString());
+
+      const usersToAdd =
+        users
+          ?.filter((user: any) => user != null)
+          ?.map((user: any) => {
+            const acceptRequest = followersIds?.includes(user) && followingIds?.includes(user);
+            return {
+              user,
+              acceptRequest,
+            };
+          }) || [];
+
+      const updatedGroup = await chatService.editGroupChat(chatId, usersToAdd, groupName, groupLogo);
+
+      return res.status(201).json(updatedGroup);
+    }
+  } catch (error: any) {
+    console.log(error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
 
 export const ToggleAddToGroup = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { userToToggleId } = req.body;
   const { chatId } = req.params;
+
   try {
     if (userID && chatId) {
-      const newGroup = await chatService.toggleAddToGroup(userID, userToToggleId, chatId);
-      return res.status(201).json(newGroup);
+      await chatService.toggleAddToGroup(userID, userToToggleId, chatId);
+
+      return res.status(201).json({ id: userToToggleId });
     }
   } catch (error: any) {
     console.log(error);

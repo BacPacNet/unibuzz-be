@@ -14,6 +14,8 @@ router.route('/acceptGroupRequest').put(userIdAuth, chatController.acceptGroupRe
 router.route('/starred').put(userIdAuth, chatController.toggleStarred);
 
 router.route('/group/:chatId').put(userIdAuth, chatController.ToggleAddToGroup);
+router.route('/edit-group/:chatId').put(userIdAuth, chatController.EditGroupChat);
+router.route('/leave-group/:chatId').put(userIdAuth, chatController.leaveGroup);
 router.route('/block/:userIdToBlock').put(userIdAuth, chatController.toggleBlock);
 
 export default router;
