@@ -10,10 +10,19 @@ import { communityGroupModel } from '../communityGroup';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
+import communityModel from '../community/community.model';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
+  const { communityId, communityGroupId } = post;
+
+  const community = await communityModel.findOne({ _id: communityId }, 'name');
+  const communityName = community?.name;
+  let communityGroup;
+  if (communityId) {
+    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, 'title');
+  }
   const postData = { ...post, user_id: userId };
-  return await CommunityPostModel.create(postData);
+  return await CommunityPostModel.create({ ...postData, communityName, communityGroupName: communityGroup?.title });
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
@@ -128,14 +137,7 @@ export const getAllCommunityPost = async (
         {
           $limit: limit,
         },
-        {
-          $lookup: {
-            from: 'communityGroup',
-            localField: 'communityGroupId',
-            foreignField: '_id',
-            as: 'communityGroup',
-          },
-        },
+
         {
           $unwind: { path: '$communityGroup', preserveNullAndEmptyArrays: true },
         },
@@ -186,6 +188,8 @@ export const getAllCommunityPost = async (
             communityId: 1,
             communityPostsType: 1,
             isPostVerified: 1,
+            communityName: 1,
+            communityGroupName: 1,
             user: {
               _id: 1,
               firstName: 1,

@@ -283,6 +283,9 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       major: userProfile.major as string,
       isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
       status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+      occupation: userProfile.occupation as string,
+      affiliation: userProfile.affiliation as string,
+      role: userProfile.role,
     });
     await communityGroup.save();
 
