@@ -93,6 +93,9 @@ interface users {
   profileImageUrl: String | null;
   universityName: String;
   status: status;
+  occupation: string;
+  affiliation: string;
+  role: 'student' | 'faculty' | 'applicant';
 }
 
 interface communityGroupInterface {

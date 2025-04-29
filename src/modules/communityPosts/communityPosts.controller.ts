@@ -121,7 +121,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
         $or: [
           {
             'users.userId': req.userId,
-            status: 'accepted',
+            'users.status': 'accepted',
           },
           {
             adminUserId: req.userId,
