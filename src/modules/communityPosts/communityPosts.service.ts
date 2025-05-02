@@ -8,8 +8,8 @@ import { CommunityType } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 import { communityGroupModel } from '../communityGroup';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationService } from '../Notification';
-import { io } from '../../index';
+import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import communityModel from '../community/community.model';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
@@ -37,8 +37,7 @@ export const likeUnlike = async (id: string, userId: string) => {
       message: 'Reacted to your Community Post.',
     };
     if (userId !== String(post?.user_id)) {
-      await notificationService.CreateNotification(notifications);
-      io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST });
+      await notificationQueue.add(NotificationIdentifier.community_post_like_notification, notifications);
     }
 
     await post?.updateOne({ $push: { likeCount: { userId } } });

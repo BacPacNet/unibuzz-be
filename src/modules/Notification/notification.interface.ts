@@ -8,7 +8,11 @@ export const notificationRoleAccess = {
   REACTED_TO_POST: 'REACTED_TO_POST',
   REACTED_TO_COMMUNITY_POST: 'REACTED_TO_COMMUNITY_POST',
   OFFICIAL_GROUP_REQUEST: 'OFFICIAL_GROUP_REQUEST',
+  REJECTED_OFFICIAL_GROUP_REQUEST: 'REJECTED_OFFICIAL_GROUP_REQUEST',
+  ACCEPTED_OFFICIAL_GROUP_REQUEST: 'ACCEPTED_OFFICIAL_GROUP_REQUEST',
   PRIVATE_GROUP_REQUEST: 'PRIVATE_GROUP_REQUEST',
+  ACCEPTED_PRIVATE_GROUP_REQUEST: 'ACCEPTED_PRIVATE_GROUP_REQUEST',
+  REJECTED_PRIVATE_GROUP_REQUEST: 'REJECTED_PRIVATE_GROUP_REQUEST',
 };
 
 export enum notificationStatus {
@@ -20,6 +24,11 @@ export enum notificationStatus {
 
 export const notificationRole = Object.keys(notificationRoleAccess);
 
+interface likedBy {
+  totalCount: number;
+  newFiveUsers: mongoose.Types.ObjectId[];
+}
+
 interface notificationInterface {
   sender_id: mongoose.Types.ObjectId;
   receiverId: mongoose.Types.ObjectId;
@@ -30,6 +39,8 @@ interface notificationInterface {
   type: string;
   isRead: boolean;
   status: notificationStatus;
+  likedBy: likedBy;
+  commentedBy: likedBy;
 }
 
 export { notificationInterface };

@@ -5,11 +5,10 @@ import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
-
 import { CommunityType, userPostType } from '../../config/community.type';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationService } from '../Notification';
-import { io } from '../../index';
+import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 
 export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
@@ -117,12 +116,22 @@ export const likeUnlike = async (id: string, userId: string) => {
     };
 
     if (userId !== String(post?.user_id)) {
-      await notificationService.CreateNotification(notifications);
-      io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_POST });
+      await notificationQueue.add(NotificationIdentifier.like_notification, notifications);
     }
 
     await post?.updateOne({ $push: { likeCount: { userId } } });
   } else {
+    const notifications = {
+      sender_id: userId,
+      receiverId: post?.user_id,
+      userPostId: post?._id,
+      type: notificationRoleAccess.REACTED_TO_POST,
+      message: 'Reacted to your Post.',
+    };
+
+    if (userId !== String(post?.user_id)) {
+      await notificationQueue.add(NotificationIdentifier.like_notification, notifications);
+    }
     await post.updateOne({ $pull: { likeCount: { userId } } });
   }
 

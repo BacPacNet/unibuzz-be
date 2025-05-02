@@ -4,9 +4,10 @@ import { userPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationService } from '../Notification';
-import { io } from '../../index';
+
 import he from 'he';
+import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -32,8 +33,7 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
         message: 'Commented at your Post.',
       };
       if (userID !== comment.userPostId.user_id) {
-        await notificationService.CreateNotification(notifications);
-        io.emit(`notification_${comment.userPostId.user_id}`, { type: notificationRoleAccess.COMMENT });
+        await notificationQueue.add(NotificationIdentifier.comment_notification, notifications);
       }
 
       return res.status(httpStatus.CREATED).json({ comment });

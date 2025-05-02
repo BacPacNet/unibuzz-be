@@ -10,6 +10,7 @@ router
   .put(userIdAuth, notificationController.updateGroupNotification);
 
 router.route('/user').get(userIdAuth, notificationController.getUserNotification);
+router.route('/user/total-count').get(userIdAuth, notificationController.getUserNotificationTotalCount);
 
 router.route('/join').put(userIdAuth, notificationController.JoinGroup);
 
