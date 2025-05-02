@@ -13,6 +13,7 @@ import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
 import OpenAI from 'openai';
+import { bullBoardRouter } from './bullmq/bullBoard';
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
 
@@ -58,6 +59,7 @@ if (config.env === 'production') {
   app.use('/v1/auth', authLimiter);
 }
 
+app.use('/admin/queues', bullBoardRouter);
 // v1 api routes
 app.use('/v1', routes);
 

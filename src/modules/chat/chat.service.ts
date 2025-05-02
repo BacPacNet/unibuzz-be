@@ -197,8 +197,8 @@ export const getUserChats = async (userId: string) => {
 
     if (!chat.isGroupChat) {
       chat.users = chat.users.map((user) => {
-        if (user.userId._id.toString() !== userId.toString()) {
-          const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId._id.toString());
+        if (user?.userId?._id?.toString() !== userId.toString()) {
+          const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user?.userId?._id?.toString());
           profileDp = userProfile?.profile_dp?.imageUrl ?? null;
           return {
             ...user,
@@ -245,13 +245,15 @@ export const getUserChats = async (userId: string) => {
       latestMessageTime,
     };
   });
+
   allChats.sort((a, b) => b.latestMessageTime - a.latestMessageTime);
   return allChats;
 };
 
 interface usersToAdd {
-  user: string;
+  user: any;
   acceptRequest: boolean;
+  id: string;
 }
 export const createGroupChat = async (
   userID: string,
@@ -263,7 +265,7 @@ export const createGroupChat = async (
   const NewGroupData = {
     chatName: groupName,
     users: usersToAdd
-      .map((user) => ({ userId: user.user, isRequestAccepted: user.acceptRequest }))
+      .map((user) => ({ userId: user?.user?.id, isRequestAccepted: user.acceptRequest }))
       .concat({ userId: userID, isRequestAccepted: true }),
     isGroupChat: true,
     groupAdmin: userID,

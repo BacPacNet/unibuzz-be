@@ -4,11 +4,13 @@ import { communityGroupModel, communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { User } from '../user';
-//import { communityGroupRoleAccess } from '../user/user.interfaces';
+
 import { CommunityGroupAccess } from '../../config/community.type';
 import { status } from './communityGroup.interface';
 import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
+import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -38,8 +40,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
         message: 'User has request for an official group status',
       };
 
-      await notificationService.CreateNotification(notifications);
-      // io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+      await notificationQueue.add(NotificationIdentifier.official_group_request, notifications);
     }
 
     return res.status(200).json({
@@ -70,7 +71,7 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
 
 export const updateCommunityGroupJoinRequest = async (req: extendedRequest, res: Response) => {
   const { groupId } = req.params as any;
-  const { notificationId, status: reqStatus, userId } = req.body;
+  const { notificationId, status: reqStatus, userId, adminId, communityGroupId } = req.body;
 
   try {
     if (!groupId || !userId) {
@@ -79,18 +80,37 @@ export const updateCommunityGroupJoinRequest = async (req: extendedRequest, res:
     if (reqStatus == status.rejected) {
       await communityGroupService.rejectCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
       await notificationService.changeNotificationStatus(notificationStatus.rejected, notificationId);
+      const notifications = {
+        sender_id: adminId,
+        receiverId: userId,
+        communityGroupId: communityGroupId,
+        type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
+        message: 'Your Request has been Rejected',
+      };
+
+      await notificationQueue.add(NotificationIdentifier.reject_private_join_group_request, notifications);
     }
     if (reqStatus == status.accepted) {
       await communityGroupService.acceptCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
       await notificationService.changeNotificationStatus(notificationStatus.accepted, notificationId);
+      const notifications = {
+        sender_id: adminId,
+        receiverId: userId,
+        communityGroupId: communityGroupId,
+        type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
+        message: 'Your Request has been Accepted',
+      };
+
+      await notificationQueue.add(NotificationIdentifier.accept_private_join_group_request, notifications);
     }
     return res.status(200).json({ message: 'Status Updated Successfully' });
   } catch (error: any) {
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
-export const changeCommunityGroupStatus = async (req: Request, res: Response, next: NextFunction) => {
+export const changeCommunityGroupStatus = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const { groupId } = req.params;
+  const { communityGroupId, adminId, userId } = req.body;
 
   try {
     if (typeof groupId == 'string') {
@@ -100,10 +120,28 @@ export const changeCommunityGroupStatus = async (req: Request, res: Response, ne
       if (req.body.status == status.rejected) {
         await communityGroupService.RejectCommunityGroupApproval(new mongoose.Types.ObjectId(groupId));
         await notificationService.changeNotificationStatus(notificationStatus.rejected, req.body.notificationId);
+        const notifications = {
+          sender_id: adminId,
+          receiverId: userId,
+          communityGroupId: communityGroupId,
+          type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
+          message: 'Your Request has been Rejected',
+        };
+
+        await notificationQueue.add(NotificationIdentifier.reject_official_group_request, notifications);
       }
       if (req.body.status == status.accepted) {
         await communityGroupService.AcceptCommunityGroupApproval(new mongoose.Types.ObjectId(groupId));
         await notificationService.changeNotificationStatus(notificationStatus.accepted, req.body.notificationId);
+        const notifications = {
+          sender_id: adminId,
+          receiverId: userId,
+          communityGroupId: communityGroupId,
+          type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
+          message: 'Your Request has been Accepted',
+        };
+
+        await notificationQueue.add(NotificationIdentifier.accept_official_group_request, notifications);
       }
       return res.status(200).json({ message: 'Status Updated Successfully' });
     }
@@ -123,7 +161,6 @@ export const deleteCommunityGroup = async (req: Request, res: Response) => {
 };
 
 export const getCommunityGroupById = async (req: extendedRequest, res: Response) => {
-  //  const { communityId } = req.params;
   const { communityGroupId } = req.query;
 
   try {

@@ -32,6 +32,18 @@ export const getUserNotification = async (req: extendedRequest, res: Response) =
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+export const getUserNotificationTotalCount = async (req: extendedRequest, res: Response) => {
+  const userID = req.userId;
+
+  try {
+    if (userID) {
+      const notification = await notificationService.getUserNotificationCount(userID);
+      return res.status(200).json(notification);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
 
 export const updateGroupNotification = async (req: extendedRequest, res: Response) => {
   const { id } = req.body;

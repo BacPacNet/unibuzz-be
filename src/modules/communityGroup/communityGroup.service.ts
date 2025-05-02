@@ -242,7 +242,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     //check if community is private and user is verified
     const isCommunityPrivate = communityGroup?.communityGroupAccess === CommunityGroupAccess.Private;
     const isUserVerified = userProfile?.email.some(
-      (community) => community.communityId.toString() === communityGroup.communityId._id.toString()
+      (community) => community.communityId.toString() === communityGroup.communityId?.toString()
     );
 
     if (!isUserVerified && isCommunityPrivate) {
@@ -255,12 +255,14 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     const userIDSet = new Set(communityUsersID);
 
     if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, 'User not found in Community  ');
+    // console.log('userProfile.communities', userProfile.communities, 'ccc', communityGroup.communityId);
+    // const isUserVerifiedToJoin = userProfile.communities.some(
+    //   (community) => community.communityId.toString() === communityGroup.communityId.toString()
+    // );
 
-    const isUserVerifiedToJoin = userProfile.communities.some(
-      (community) => community.communityId.toString() === communityGroup.communityId.toString()
-    );
+    // console.log('isUserVerifiedToJoin', isUserVerifiedToJoin);
 
-    if (!isUserVerifiedToJoin) {
+    if (!isUserVerified) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
     }
 

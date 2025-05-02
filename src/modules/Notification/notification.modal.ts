@@ -6,7 +6,7 @@ const notificationSchema = new Schema<notificationInterface>(
     sender_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      //   required: true,
     },
     receiverId: {
       type: Schema.Types.ObjectId,
@@ -26,10 +26,29 @@ const notificationSchema = new Schema<notificationInterface>(
       ref: 'userPost',
     },
     type: { type: String, enum: notificationRole, required: true },
+
     message: { type: String, required: true },
     isRead: {
       type: Boolean,
       default: false,
+    },
+    likedBy: {
+      totalCount: { type: Number },
+      newFiveUsers: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+    },
+    commentedBy: {
+      totalCount: { type: Number },
+      newFiveUsers: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
     },
     status: {
       type: String,

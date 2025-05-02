@@ -1,0 +1,15 @@
+export enum NotificationIdentifier {
+  group_invite_notifications = 'group-invite-notifications',
+  send_notification = 'send-notification',
+  like_notification = 'like-notification',
+  community_post_like_notification = 'community-post-like-notification',
+  comment_notification = 'comment-notification',
+  community_post_comment_notification = 'community-post-comment-notification',
+  follow_user = 'follow-user',
+  un_follow_user = 'un-follow-user',
+  official_group_request = 'official-group-request',
+  reject_official_group_request = 'reject-official-group-request',
+  accept_official_group_request = 'accept-official-group-request',
+  reject_private_join_group_request = 'reject-private-join-group-request-group-request',
+  accept_private_join_group_request = 'accept-private-join-group-request-group-request',
+}

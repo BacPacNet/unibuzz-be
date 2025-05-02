@@ -67,6 +67,10 @@ const config = {
   },
   clientUrl: envVars.CLIENT_URL,
   OPENAI_API_KEY: envVars.OPENAI_API_KEY,
+  bull_mq_queue: {
+    REDIS_HOST: envVars.REDIS_HOST,
+    REDIS_PORT: envVars.REDIS_PORT,
+  },
 };
 
 export default config;

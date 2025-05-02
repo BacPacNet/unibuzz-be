@@ -6,6 +6,7 @@ import { Server as SocketIoServer, Socket } from 'socket.io';
 import { handleNewMessage } from './sockets/messageHandlers';
 import { OnlineUsers } from './sockets/onlineUsers';
 import { handleConnection } from './sockets/connectionHandler3';
+import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
 
 let server: any;
 let io: any;
@@ -28,12 +29,18 @@ mongoose.connect(config.mongoose.url).then(() => {
   });
 });
 
-const exitHandler = () => {
+const exitHandler = async () => {
   if (server) {
     server.close(() => {
       logger.info('Server closed');
-      process.exit(1);
+      //   process.exit(1);
     });
+
+    if (notificationWorker) {
+      await notificationWorker.close();
+      logger.info('Notification Worker closed');
+    }
+    process.exit(1);
   } else {
     process.exit(1);
   }
