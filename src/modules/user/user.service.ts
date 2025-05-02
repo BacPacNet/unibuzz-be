@@ -129,6 +129,11 @@ export const getAllUser = async (name: string = '', page: number, limit: number,
         isFollowing: { $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))] }, // Check if user is in following list
       },
     },
+    {
+      $project: {
+        password: 0, // Exclude the password field
+      },
+    },
   ])
     .skip(startIndex)
     .limit(limitpage);

@@ -277,7 +277,7 @@ export const createGroupChat = async (
 
 type UsersToAdd = {
   user: {
-    id: string;
+    _id: string;
     firstName: string;
     lastName: string;
     profile: any;
@@ -291,20 +291,23 @@ export const editGroupChat = async (
   groupName: string,
   groupLogo: { imageUrl: string; publicId: string }
 ) => {
-  const currentGroup: any = await getChatById(groupId);
+  const currentGroup = await getChatById(groupId);
+  if (!currentGroup) {
+    throw new Error('Chat Id not found');
+  }
 
   if (usersToAdd.length) {
     const existingUserIds = new Set(currentGroup.users.map((u: any) => u.userId.toString()));
 
     const normalizedUsers = usersToAdd.map((user) => ({
-      userId: user.user.id.toString(),
+      userId: user.user._id.toString(),
       isRequestAccepted: user.acceptRequest,
     }));
 
     const newUsers = normalizedUsers.filter((user) => !existingUserIds.has(user.userId));
 
     if (newUsers.length > 0) {
-      const cleanedCurrentUsers = currentGroup.users.map((u: any) => ({
+      const cleanedCurrentUsers: any = currentGroup.users.map((u) => ({
         userId: u.userId.toString(),
         isRequestAccepted: u.isRequestAccepted,
       }));
@@ -378,6 +381,24 @@ export const leaveGroupByUserId = async (userID: string, chatId: string) => {
     throw new ApiError(httpStatus.NOT_FOUND, ' group not found');
   }
   return await chat.save();
+};
+
+export const deleteChatGroupByAdmin = async (userID: string, chatId: string) => {
+  const chat = await chatModel.findById(chatId);
+
+  if (!chat || !chat.isGroupChat) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
+  }
+
+  const isAdmin = chat.groupAdmin.toString() === userID;
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'User is not an admin');
+  }
+
+  await chatModel.findByIdAndDelete(chatId);
+
+  return { message: 'Group deleted successfully' };
 };
 
 export const toggleBlock = async (userId: string, userToBlockId: string, chatId: string) => {
