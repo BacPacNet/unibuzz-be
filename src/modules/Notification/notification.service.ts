@@ -1,37 +1,10 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
-// import { io } from '../../index';
 import { notificationRoleAccess, notificationStatus } from './notification.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
-
-// export const createManyNotification = async (
-//   adminId: mongoose.Types.ObjectId,
-//   communityGroupId: mongoose.Types.ObjectId,
-//   receiverArr: Array<any>,
-//   type: String,
-//   message: string
-// ) => {
-//   const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?.id));
-//   const notifications = receiverIds.map((receiverId) => ({
-//     sender_id: adminId,
-//     receiverId: receiverId,
-//     communityGroupId: communityGroupId,
-//     type,
-//     message,
-//   }));
-
-//   try {
-//     await notificationModel.create(notifications);
-//     receiverIds.forEach((userId) => {
-//       io.emit(`notification_${userId}`, { type: type });
-//     });
-//   } catch (error) {
-//     throw error;
-//   }
-// };
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,

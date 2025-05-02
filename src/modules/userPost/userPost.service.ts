@@ -5,11 +5,8 @@ import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
-
 import { CommunityType, userPostType } from '../../config/community.type';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-// import { notificationService } from '../Notification';
-// import { io } from '../../index';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 

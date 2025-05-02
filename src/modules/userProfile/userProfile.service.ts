@@ -4,8 +4,6 @@ import { UserProfileDocument } from './userProfile.interface';
 import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-// import { notificationService } from '../Notification';
-// import { io } from '../../index';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { communityModel } from '../community';
@@ -117,8 +115,6 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
 
   if (!userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString())) {
     await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
-    // await notificationService.CreateNotification(notifications);
-    // io.emit(`notification_${userToFollow}`, { type: notificationRoleAccess.FOLLOW });
     await notificationQueue.add(NotificationIdentifier.follow_user, notifications);
     updatedUseProfile = await UserProfile.findOneAndUpdate(
       { users_id: userId },

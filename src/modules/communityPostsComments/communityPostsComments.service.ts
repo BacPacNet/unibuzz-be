@@ -2,8 +2,6 @@ import mongoose from 'mongoose';
 import communityPostCommentModel from './communityPostsComments.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-// import { io } from '../../index';
-// import { notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
@@ -20,8 +18,6 @@ export const createCommunityComment = async (userID: string, communityPostId: st
   const comment = await communityPostCommentModel.create(newComment);
 
   if (userID !== body.adminId) {
-    // await notificationService.CreateNotification(notifications);
-    // io.emit(`notification_${body.adminId}`, { type: notificationRoleAccess.COMMUNITY_COMMENT });
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
   }
 
