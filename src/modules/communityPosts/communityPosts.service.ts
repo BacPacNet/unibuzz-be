@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { communityPostsInterface } from './communityPosts.interface';
 import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
@@ -68,6 +68,109 @@ export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community
 
 export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   return await communityPostsModel.findByIdAndDelete(id);
+};
+
+export const getCommunityPostsByCommunityId = async (communityId: string, page: number = 1, limit: number = 10) => {
+  try {
+    const communityObjectId = new Types.ObjectId(communityId);
+
+    const finalPost = await CommunityPostModel.aggregate([
+      {
+        $match: {
+          communityId: communityObjectId,
+          communityGroupId: null,
+        },
+      },
+      {
+        $sort: {
+          createdAt: -1, // latest first
+        },
+      },
+      {
+        $skip: (page - 1) * limit,
+      },
+      {
+        $limit: limit,
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      {
+        $unwind: '$user',
+      },
+      {
+        $lookup: {
+          from: 'userprofiles',
+          localField: 'user._id',
+          foreignField: 'users_id',
+          as: 'userProfile',
+        },
+      },
+      {
+        $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'communitypostcomments',
+          localField: '_id',
+          foreignField: 'communityId',
+          as: 'comments',
+        },
+      },
+      {
+        $addFields: {
+          commentCount: { $size: '$comments' },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          content: 1,
+          createdAt: 1,
+          imageUrl: 1,
+          likeCount: 1,
+          commentCount: 1,
+          communityGroupId: 1,
+          communityId: 1,
+          communityPostsType: 1,
+          isPostVerified: 1,
+          communityName: 1,
+          communityGroupName: 1,
+          user: {
+            _id: 1,
+            firstName: 1,
+            lastName: 1,
+          },
+          userProfile: {
+            profile_dp: 1,
+            university_name: 1,
+            study_year: 1,
+            degree: 1,
+            major: 1,
+            affiliation: 1,
+            occupation: 1,
+            role: 1,
+          },
+        },
+      },
+    ]);
+
+    const total = await CommunityPostModel.countDocuments({ communityId: communityObjectId });
+
+    return {
+      finalPost,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to get community posts: ${error.message}`);
+  }
 };
 
 export const getAllCommunityPost = async (

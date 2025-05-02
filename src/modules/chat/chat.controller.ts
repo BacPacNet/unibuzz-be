@@ -120,7 +120,7 @@ export const EditGroupChat = async (req: userIdExtend, res: Response) => {
       return res.status(201).json(updatedGroup);
     }
   } catch (error: any) {
-    console.log(error);
+    console.error(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -156,6 +156,19 @@ export const leaveGroup = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const deleteChatGroup = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+  const { chatId } = req.params;
+  try {
+    if (userID && chatId) {
+      const newGroup = await chatService.deleteChatGroupByAdmin(userID, chatId);
+      return res.status(201).json(newGroup);
+    }
+  } catch (error: any) {
+    console.log(error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
 export const toggleBlock = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { userIdToBlock } = req.params;

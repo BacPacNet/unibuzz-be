@@ -90,6 +90,40 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
   }
 };
 
+export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) => {
+  const { page, limit } = req.query;
+
+  const { communityId } = req.query as any;
+  const userId = req.userId as string;
+
+  try {
+    const community = await communityService.getCommunity(communityId);
+
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'CCCCommunity not found' });
+    }
+
+    console.log(community);
+
+    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
+
+    if (!checkIfUserJoinedCommunity) {
+      throw new Error('You are not a member of this community');
+    }
+
+    const communityPosts = await communityPostsService.getCommunityPostsByCommunityId(
+      communityId,
+      Number(page),
+      Number(limit)
+    );
+
+    return res.status(200).json(communityPosts);
+  } catch (error: any) {
+    console.error(error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 //get all community post
 export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
   const { page, limit } = req.query;
@@ -101,7 +135,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
     const community = await communityService.getCommunity(communityId);
 
     if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not foundddd' });
     }
 
     const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
