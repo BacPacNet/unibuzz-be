@@ -22,6 +22,8 @@ router.route('/:groupId/join').put(userIdAuth, communityGroupController.joinComm
 
 router.route('/:groupId/leave').delete(userIdAuth, communityGroupController.leaveCommunityGroup);
 
+router.route('/:groupId/user/:userId').delete(userIdAuth, communityGroupController.removeUserFromCommunityGroup);
+
 export default router;
 
 /**

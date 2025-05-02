@@ -18,6 +18,8 @@ interface communityPostsInterface {
   likeCount: Like[];
   communityPostsType: CommunityType;
   isPostVerified: boolean;
+  communityName: string;
+  communityGroupName: string;
 }
 
 export { communityPostsInterface };

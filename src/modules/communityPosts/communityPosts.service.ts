@@ -8,13 +8,21 @@ import { CommunityType } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 import { communityGroupModel } from '../communityGroup';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import communityModel from '../community/community.model';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
+  const { communityId, communityGroupId } = post;
+
+  const community = await communityModel.findOne({ _id: communityId }, 'name');
+  const communityName = community?.name;
+  let communityGroup;
+  if (communityId) {
+    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, 'title');
+  }
   const postData = { ...post, user_id: userId };
-  return await CommunityPostModel.create(postData);
+  return await CommunityPostModel.create({ ...postData, communityName, communityGroupName: communityGroup?.title });
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
@@ -29,8 +37,6 @@ export const likeUnlike = async (id: string, userId: string) => {
       message: 'Reacted to your Community Post.',
     };
     if (userId !== String(post?.user_id)) {
-      //   await notificationService.CreateNotification(notifications);
-      //   io.emit(`notification_${post?.user_id}`, { type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST });
       await notificationQueue.add(NotificationIdentifier.community_post_like_notification, notifications);
     }
 
@@ -130,14 +136,7 @@ export const getAllCommunityPost = async (
         {
           $limit: limit,
         },
-        {
-          $lookup: {
-            from: 'communityGroup',
-            localField: 'communityGroupId',
-            foreignField: '_id',
-            as: 'communityGroup',
-          },
-        },
+
         {
           $unwind: { path: '$communityGroup', preserveNullAndEmptyArrays: true },
         },
@@ -188,6 +187,8 @@ export const getAllCommunityPost = async (
             communityId: 1,
             communityPostsType: 1,
             isPostVerified: 1,
+            communityName: 1,
+            communityGroupName: 1,
             user: {
               _id: 1,
               firstName: 1,

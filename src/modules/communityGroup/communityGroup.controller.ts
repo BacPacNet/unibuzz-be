@@ -263,3 +263,25 @@ export const leaveCommunityGroup = async (req: extendedRequest, res: Response) =
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Response) => {
+  const adminId = req.userId as string;
+  const { groupId, userId } = req.params;
+  try {
+    const communityGroupAdmin = await communityGroupModel.find({ adminUserId: adminId });
+
+    if (!communityGroupAdmin) {
+      throw new Error('You are not admin');
+    }
+
+    const updatedCommunity = await communityGroupService.leaveCommunityGroup(userId as string, groupId as string);
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully left the community group',
+      data: updatedCommunity,
+    });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
