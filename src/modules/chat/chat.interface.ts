@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-interface media {
+export interface media {
   imageUrl: String;
   publicId: String;
 }
@@ -8,7 +8,7 @@ interface media {
 interface users {
   userId: mongoose.Types.ObjectId;
   isRequestAccepted: boolean;
-  isStarred: boolean;
+  isStarred?: boolean;
 }
 interface Message {
   _id: string;

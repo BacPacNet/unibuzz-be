@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { UserProfile, userProfileService } from '../userProfile';
-import { chatInterface } from './chat.interface';
+import { chatInterface, media } from './chat.interface';
 import chatModel from './chat.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
@@ -60,7 +60,6 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
     groupAdmin: yourId,
     isRequestAccepted: isRequestAcceptedBoolean,
   };
-  console.log('iscrte');
 
   const chat = await chatModel.create(chatToCreate);
 
@@ -116,18 +115,24 @@ export const getUserChats = async (userId: string) => {
     .lean();
 
   const filteredChats = chats.filter((chat) => {
+    if (!chat?.users) return false; // Ensure chat.users exists
+
     if (chat.isGroupChat) {
-      chat.users = chat.users.filter((user) => user.userId !== null);
-      return chat;
+      chat.users = chat.users.filter((user) => user?.userId !== null && user?.userId !== undefined);
+      return chat.users.length > 0; // Only keep group chats with valid users
     }
 
+    // For non-group chats
     const isValidChat = chat.users.every((user) => {
-      if (!user?.userId) {
-        return false;
+      // Check if user exists and has userId
+      if (!user?.userId) return false;
+
+      // Handle different userId formats
+      if (typeof user.userId === 'object') {
+        return user.userId?._id !== undefined; // Safe check for _id
       }
-      if (typeof user.userId === 'object' && user.userId._id) {
-        return true;
-      }
+
+      // Check for string or number userId
       return typeof user.userId === 'string' || typeof user.userId === 'number';
     });
 
@@ -250,31 +255,55 @@ export const getUserChats = async (userId: string) => {
   return allChats;
 };
 
-interface usersToAdd {
-  user: any;
-  acceptRequest: boolean;
-  id: string;
-}
 export const createGroupChat = async (
-  userID: string,
-  usersToAdd: usersToAdd[],
+  adminId: string,
+  usersToAdd: { userId: string; acceptRequest: boolean }[],
   groupName: string,
   groupDescription: string,
-  groupLogo: { imageUrl: string; publicId: string }
+  groupLogo: media | null = null
 ) => {
-  const NewGroupData = {
-    chatName: groupName,
-    users: usersToAdd
-      .map((user) => ({ userId: user?.user?.id, isRequestAccepted: user.acceptRequest }))
-      .concat({ userId: userID, isRequestAccepted: true }),
+  // Validate required fields
+  if (!adminId || !groupName) {
+    throw new Error('Admin ID and group name are required');
+  }
+
+  // Normalize and validate users to add
+  const normalizedUsers =
+    usersToAdd
+      ?.filter((user) => user.userId && user.userId !== adminId) // Remove invalid IDs and prevent adding admin again
+      .map((user) => ({
+        userId: new mongoose.Types.ObjectId(user.userId),
+        isRequestAccepted: false,
+        isStarred: false,
+      })) || [];
+
+  // Create group data with proper ObjectId types
+  const groupData = {
+    chatName: groupName.trim(),
+    users: [
+      ...normalizedUsers,
+      {
+        userId: new mongoose.Types.ObjectId(adminId),
+        isRequestAccepted: true,
+        isStarred: false,
+      },
+    ],
     isGroupChat: true,
-    groupAdmin: userID,
-    groupDescription,
-    groupLogo,
+    groupAdmin: adminId,
+    groupDescription: groupDescription?.trim() || '',
+    groupLogo: groupLogo || undefined,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
-  const newGroup = await chatModel.create(NewGroupData);
-  return newGroup;
+  // Create and return the new group
+  try {
+    const newGroup = await chatModel.create(groupData);
+    return newGroup;
+  } catch (error) {
+    console.error('Failed to create group chat:', error);
+    throw new Error('Failed to create group chat');
+  }
 };
 
 type UsersToAdd = {
@@ -287,6 +316,58 @@ type UsersToAdd = {
   acceptRequest: boolean;
 };
 
+export const editGroupChatV2 = async (
+  groupId: string,
+  usersToAdd: { userId: string; acceptRequest: boolean }[], // Now accepts array of strings (user IDs)
+  groupName: string,
+  groupLogo: { imageUrl: string; publicId: string } | null
+) => {
+  const currentGroup = await getChatById(groupId);
+  if (!currentGroup) {
+    throw new Error('Chat not found');
+  }
+
+  // Normalize existing users first for consistent comparison
+  const existingUsers = currentGroup.users.map((user) => ({
+    userId: new mongoose.Types.ObjectId(user.userId),
+    isRequestAccepted: user.isRequestAccepted,
+  }));
+  const existingUserIds = new Set(existingUsers.map((u) => u.userId.toString()));
+
+  // Process new users - only add those not already in group
+  if (usersToAdd?.length) {
+    const newUsers = usersToAdd
+      .filter((user) => {
+        const userIdStr = user.userId?.toString();
+        return userIdStr && !existingUserIds.has(userIdStr);
+      })
+      .map((user) => ({
+        userId: new mongoose.Types.ObjectId(user.userId),
+        isRequestAccepted: false, // Default to false since we're just adding IDs
+      }));
+
+    if (newUsers.length) {
+      currentGroup.users = [...existingUsers, ...newUsers];
+    }
+  }
+
+  // Update group name if changed
+  if (groupName && groupName !== currentGroup.chatName) {
+    currentGroup.chatName = groupName;
+  }
+
+  // Update group logo if changed
+  if (
+    groupLogo &&
+    (groupLogo.imageUrl !== currentGroup.groupLogo?.imageUrl || groupLogo.publicId !== currentGroup.groupLogo?.publicId)
+  ) {
+    currentGroup.groupLogo = groupLogo;
+  }
+
+  const updatedGroup = await currentGroup.save();
+  return updatedGroup;
+};
+
 export const editGroupChat = async (
   groupId: string,
   usersToAdd: UsersToAdd[],
@@ -294,6 +375,7 @@ export const editGroupChat = async (
   groupLogo: { imageUrl: string; publicId: string }
 ) => {
   const currentGroup = await getChatById(groupId);
+
   if (!currentGroup) {
     throw new Error('Chat Id not found');
   }

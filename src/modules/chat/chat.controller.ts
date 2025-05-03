@@ -81,7 +81,7 @@ export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
         const acceptRequest = followersIds?.includes(user) && followingIds?.includes(user);
 
         return {
-          user,
+          userId: user,
           acceptRequest,
         };
       });
@@ -95,33 +95,46 @@ export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
   }
 };
 export const EditGroupChat = async (req: userIdExtend, res: Response) => {
-  const { users, groupName, groupLogo } = req.body;
+  const { users = [], groupName, groupLogo } = req.body;
   const userID = req.userId;
   const { chatId } = req.params;
+
+  if (!userID || !chatId) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Missing required parameters' });
+  }
+
   try {
-    if (userID && chatId) {
-      const userProfile = await userProfileService.getUserProfile(userID);
-      const followingIds = userProfile?.following.map((id: any) => id.userId._id.toString());
-      const followersIds = userProfile?.followers.map((id: any) => id.userId._id.toString());
+    const userProfile = await userProfileService.getUserProfile(userID);
 
-      const usersToAdd =
-        users
-          ?.filter((user: any) => user != null)
-          ?.map((user: any) => {
-            const acceptRequest = followersIds?.includes(user) && followingIds?.includes(user);
-            return {
-              user,
-              acceptRequest,
-            };
-          }) || [];
-
-      const updatedGroup = await chatService.editGroupChat(chatId, usersToAdd, groupName, groupLogo);
-
-      return res.status(201).json(updatedGroup);
+    if (!userProfile) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'User profile not found' });
     }
+
+    // Convert to string sets for faster lookup
+    const followingIds = new Set(userProfile.following?.map((f: any) => f.userId?.toString()).filter(Boolean) || []);
+    const followersIds = new Set(userProfile.followers?.map((f: any) => f.userId?.toString()).filter(Boolean) || []);
+
+    // Process all users (keep even non-mutual ones but with acceptRequest: false)
+    const usersToAdd = users
+      .filter((userId: string) => userId !== null && userId !== undefined)
+      .map((userId: string) => {
+        const userIdStr = userId.toString();
+        const isMutualFollow = followingIds.has(userIdStr) && followersIds.has(userIdStr);
+        return {
+          userId: userIdStr,
+          acceptRequest: isMutualFollow,
+        };
+      });
+
+    const updatedGroup = await chatService.editGroupChatV2(chatId, usersToAdd, groupName, groupLogo);
+
+    return res.status(httpStatus.OK).json(updatedGroup);
   } catch (error: any) {
-    console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    console.error('Error in EditGroupChat:', error);
+    const status = error.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
+    res.status(status).json({
+      message: error.message || 'Failed to edit group chat',
+    });
   }
 };
 
