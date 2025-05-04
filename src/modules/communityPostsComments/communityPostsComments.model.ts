@@ -3,9 +3,9 @@ import { communityPostCommentsInterface } from './communityPostsComments.interfa
 
 const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
   {
-    communityId: {
+    postId: {
       type: Schema.Types.ObjectId,
-      ref: 'community',
+      ref: 'CommunityPost',
     },
     commenterId: {
       type: Schema.Types.ObjectId,

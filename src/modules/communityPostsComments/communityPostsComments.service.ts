@@ -5,9 +5,11 @@ import httpStatus from 'http-status';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { convertToObjectId } from '../../utils/common';
 
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
-  const newComment = { ...body, communityId: communityPostId, commenterId: userID, level: 0 };
+  const { content, commenterProfileId } = body;
+
   const notifications = {
     sender_id: userID,
     receiverId: body.adminId,
@@ -15,7 +17,16 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     type: notificationRoleAccess.COMMUNITY_COMMENT,
     message: 'commented on your community post',
   };
-  const comment = await communityPostCommentModel.create(newComment);
+
+  const payload = {
+    content,
+    postId: convertToObjectId(communityPostId),
+    commenterId: convertToObjectId(userID),
+    commenterProfileId: convertToObjectId(commenterProfileId),
+    level: 0,
+  };
+
+  const comment = await communityPostCommentModel.create(payload);
 
   if (userID !== body.adminId) {
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
@@ -63,7 +74,7 @@ export const getCommunityPostComments = async (postId: string, page: number = 1,
   // Fetch the main comments on the post
   const comments =
     (await communityPostCommentModel
-      .find({ communityId: postId })
+      .find({ postId: postId })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
         { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree major affiliation occupation' },

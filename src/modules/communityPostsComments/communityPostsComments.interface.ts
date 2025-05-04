@@ -4,7 +4,7 @@ interface Like {
   userId: string;
 }
 interface communityPostCommentsInterface {
-  communityId: Schema.Types.ObjectId;
+  postId: Schema.Types.ObjectId;
   commenterId: Schema.Types.ObjectId;
   commenterProfileId: Schema.Types.ObjectId;
   content: string;

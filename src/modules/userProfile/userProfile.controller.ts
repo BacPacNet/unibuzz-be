@@ -33,6 +33,10 @@ export const toggleFollow = async (req: userIdExtend, res: Response) => {
   const { userToFollow } = req.query as { userToFollow?: string };
   const userId = req.userId;
   try {
+    if (userToFollow === userId) {
+      return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: 'You cannot follow to yorself' });
+    }
+
     if (userId && userToFollow) {
       let followed = await userProfileService.toggleFollow(
         new mongoose.Types.ObjectId(userId),

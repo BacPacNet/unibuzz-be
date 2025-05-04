@@ -105,38 +105,40 @@ export const createUserPost = async (post: userPostInterface) => {
 
 export const likeUnlike = async (id: string, userId: string) => {
   const post = await UserPostModel.findById(id);
-
-  if (!post?.likeCount.some((x) => x.userId === userId)) {
-    const notifications = {
-      sender_id: userId,
-      receiverId: post?.user_id,
-      userPostId: post?._id,
-      type: notificationRoleAccess.REACTED_TO_POST,
-      message: 'Reacted to your Post.',
-    };
-
-    if (userId !== String(post?.user_id)) {
-      await notificationQueue.add(NotificationIdentifier.like_notification, notifications);
-    }
-
-    await post?.updateOne({ $push: { likeCount: { userId } } });
-  } else {
-    const notifications = {
-      sender_id: userId,
-      receiverId: post?.user_id,
-      userPostId: post?._id,
-      type: notificationRoleAccess.REACTED_TO_POST,
-      message: 'Reacted to your Post.',
-    };
-
-    if (userId !== String(post?.user_id)) {
-      await notificationQueue.add(NotificationIdentifier.like_notification, notifications);
-    }
-    await post.updateOne({ $pull: { likeCount: { userId } } });
+  if (!post) {
+    throw new Error('Post not found');
   }
 
-  const updatedPost = await UserPostModel.findById(id).select('likeCount');
-  return { likeCount: updatedPost?.likeCount };
+  // Determine if user already liked the post
+  const hasLiked = post.likeCount.some((like) => like.userId.toString() === userId);
+  const isOwnPost = userId === post.user_id.toString();
+
+  // Prepare notification if needed
+  if (!isOwnPost) {
+    const notification = {
+      sender_id: userId,
+      receiverId: post.user_id,
+      userPostId: post._id,
+      type: notificationRoleAccess.REACTED_TO_POST,
+      message: 'Reacted to your Post.',
+    };
+    await notificationQueue.add(NotificationIdentifier.like_notification, notification);
+  }
+
+  const updatedPost = await UserPostModel.findOneAndUpdate(
+    { _id: id },
+    hasLiked ? { $pull: { likeCount: { userId } } } : { $push: { likeCount: { userId } } },
+    { new: true, select: 'likeCount' }
+  );
+
+  if (!updatedPost) {
+    throw new Error('Failed to update post');
+  }
+
+  return {
+    likeCount: updatedPost.likeCount,
+    totalCount: updatedPost.likeCount.length,
+  };
 };
 
 export const updateUserPost = async (id: mongoose.Types.ObjectId, post: userPostInterface) => {

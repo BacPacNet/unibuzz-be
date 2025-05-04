@@ -87,17 +87,25 @@ export const getAllTimelinePosts = async (req: any, res: Response, next: NextFun
 };
 
 //like and unlike
-export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
+export const updateLikeStatus = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
+  const userId = req.userId;
+
+  if (!postId || !userId) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      message: 'Post ID and user ID are required',
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(postId)) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      message: 'Invalid post ID format',
+    });
+  }
 
   try {
-    if (postId && req.userId) {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid post ID type' });
-      }
-      let likeCount = await userPostService.likeUnlike(postId, req.userId);
-      return res.status(201).json(likeCount);
-    }
+    let likeCount = await userPostService.likeUnlike(postId, userId);
+    return res.status(201).json(likeCount);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

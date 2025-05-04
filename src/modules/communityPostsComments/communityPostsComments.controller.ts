@@ -42,7 +42,7 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteCommunityPost = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteCommunityPostComment = async (req: Request, res: Response, next: NextFunction) => {
   const { commentId } = req.params;
   try {
     if (typeof commentId == 'string') {

@@ -13,7 +13,7 @@ router.route('/comment/:commentId').get(userIdAuth, communityPostCommentsControl
 router
   .route('/:commentId')
   .put(communityPostCommentsController.updateComment)
-  .delete(communityPostCommentsController.deleteCommunityPost);
+  .delete(communityPostCommentsController.deleteCommunityPostComment);
 
 router.route('/:commentId/replies').post(userIdAuth, communityPostCommentsController.CommunityPostCommentReply);
 router.put('/likeUnlike/:communityPostCommentId', userIdAuth, communityPostCommentsController.LikeCommunityPostComments);

@@ -12,7 +12,7 @@ router.route('/timeline').get(userIdAuth, userPostController.getAllTimelinePosts
 
 router.route('/:postId').put(userPostController.updateUserPost).delete(userPostController.deleteUserPost);
 
-router.put('/likeunlike/:postId', userIdAuth, userPostController.likeUnlikePost);
+router.put('/likes/:postId', userIdAuth, userPostController.updateLikeStatus);
 
 export default router;
 
