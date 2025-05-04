@@ -8,6 +8,8 @@ import { communityGroupModel, communityGroupService } from '../communityGroup';
 import he from 'he';
 import { userIdExtend } from 'src/config/userIDType';
 import mongoose from 'mongoose';
+import { convertToObjectId } from '../../utils/common';
+import { status } from '../communityGroup/communityGroup.interface';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -103,8 +105,6 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
       return res.status(httpStatus.NOT_FOUND).json({ message: 'CCCCommunity not found' });
     }
 
-    console.log(community);
-
     const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
 
     if (!checkIfUserJoinedCommunity) {
@@ -113,6 +113,47 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
 
     const communityPosts = await communityPostsService.getCommunityPostsByCommunityId(
       communityId,
+      Number(page),
+      Number(limit)
+    );
+
+    return res.status(200).json(communityPosts);
+  } catch (error: any) {
+    console.error(error);
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Response) => {
+  const { page, limit } = req.query;
+
+  const { communityId, communityGroupId } = req.query as any;
+  const userId = req.userId as string;
+
+  try {
+    const community = await communityService.getCommunity(communityId);
+
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+    }
+
+    const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId));
+
+    if (!communityGroup) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community Group not found' });
+    }
+
+    const checkIfUserJoinedCommunity = communityGroup.users.some(
+      (user) => user.userId.toString() === userId.toString() && user.status === status.accepted
+    );
+
+    if (!checkIfUserJoinedCommunity) {
+      return res.status(httpStatus.UNAUTHORIZED).json({ message: 'You are not a member of this community' });
+    }
+
+    const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
+      communityId,
+      communityGroupId,
       Number(page),
       Number(limit)
     );

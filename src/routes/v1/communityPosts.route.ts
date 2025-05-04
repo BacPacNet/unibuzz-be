@@ -6,6 +6,8 @@ import { noErrorUserIdAuth } from '../../modules/user/user.middleware';
 const router: Router = express.Router();
 router.route('/timelinePost').get(userIdAuth, communityPostsController.getAllCommunityPostV2);
 
+router.route('/group').get(userIdAuth, communityPostsController.getAllCommunityGroupPostV2);
+
 router.route('/post/:postId').get(noErrorUserIdAuth, communityPostsController.getPostById);
 router.route('/:communityId/:communityGroupId?').get(userIdAuth, communityPostsController.getAllCommunityPost);
 
