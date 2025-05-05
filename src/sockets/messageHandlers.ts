@@ -1,26 +1,39 @@
 import { Server, Socket } from 'socket.io';
 import { Message, ReactedMessage } from './messageTypes';
 import { SocketMessageEnums } from './socketEnum';
+// import { messageQueue } from 'src/bullmq/Messages/messageQueue';
+import { messageQueue } from '../bullmq/Messages/messageQueue';
+import { MessageIdentifier } from '../bullmq/Messages/messageEnums';
 
 export const handleNewMessage = (socket: Socket, io: Server) => {
-  socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
-    const chat = newMessageReceived.chat;
-    if (!chat.users) return console.log('chat.users not defined');
+  //   socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
+  //     const chat = newMessageReceived.chat;
+  //     if (!chat.users) return console.log('chat.users not defined');
 
-    chat.users.forEach((user) => {
-      if (user.userId.toString() === newMessageReceived.sender.id) {
-        return;
-      }
+  //     chat.users.forEach((user) => {
+  //       if (user.userId.toString() === newMessageReceived.sender.id) {
+  //         return;
+  //       }
 
-      const room = io.sockets.adapter.rooms.get(user.userId.toString());
+  //       const room = io.sockets.adapter.rooms.get(user.userId.toString());
 
-      if (room) {
-        socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
-        io.emit(`message_notification_${user.userId}`);
-      } else {
-        console.log(`User ${user} is not in the room, cannot send message`);
-      }
-    });
+  //       if (room) {
+  //         socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
+  //         io.emit(`message_notification_${user.userId}`);
+  //       } else {
+  //         console.log(`User ${user} is not in the room, cannot send message`);
+  //       }
+  //     });
+  //   });
+
+  socket.on(SocketMessageEnums.RECEIVED_MESSAGE, async (newMessageReceived: Message) => {
+    try {
+      await messageQueue.add(MessageIdentifier.process_new_message, {
+        newMessageReceived,
+      });
+    } catch (error) {
+      console.error('Failed to add message to queue', error);
+    }
   });
 
   socket.on(SocketMessageEnums.REACTED_MESSAGE, (reactedToMessageReceived: ReactedMessage) => {

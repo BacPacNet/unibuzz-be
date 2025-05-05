@@ -7,6 +7,7 @@ import { handleNewMessage } from './sockets/messageHandlers';
 import { OnlineUsers } from './sockets/onlineUsers';
 import { handleConnection } from './sockets/connectionHandler3';
 import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
+import { createMessageWorker } from './bullmq/Messages/workers/messageWorker';
 
 let server: any;
 let io: any;
@@ -25,6 +26,7 @@ mongoose.connect(config.mongoose.url).then(() => {
     io.on('connection', (socket: Socket) => {
       handleConnection(socket, io, onlineUsers);
       handleNewMessage(socket, io);
+      createMessageWorker(io);
     });
   });
 });
