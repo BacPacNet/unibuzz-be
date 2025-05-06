@@ -1,4 +1,5 @@
 import { Schema } from 'mongoose';
+import { status } from '../communityGroup/communityGroup.interface';
 
 export enum UserRole {
   STUDENT = 'student',
@@ -18,10 +19,21 @@ interface following {
   isBlock: boolean;
 }
 
+export interface UserCommunityGroup {
+  id: string;
+  status: status;
+}
+
+export interface UserCommunities {
+  communityId: string;
+  isVerified: boolean;
+  communityGroups: UserCommunityGroup[];
+}
+
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
-  communities: [{ communityId: string; isVerified: boolean }]; // community id
+  communities: UserCommunities[];
   profile_dp?: { imageUrl: string; publicId: string };
   cover_dp?: { imageUrl: string; publicId: string };
   bio?: string;

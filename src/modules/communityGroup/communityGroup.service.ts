@@ -3,15 +3,16 @@ import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
-import { getUserProfiles } from '../userProfile/userProfile.service';
+import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
 import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
 import { communityGroupInterface, status } from './communityGroup.interface';
-import { userProfileService } from '../userProfile';
+import { UserProfile, userProfileService } from '../userProfile';
 import { communityGroupService } from '.';
 import { notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { communityService } from '../community';
 import { io } from '../../index';
+//import { UserCommunities, UserCommunityGroup } from '../userProfile/userProfile.interface';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -59,6 +60,26 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
       throw new Error('Community group or user not found');
     }
 
+    const communityId = updatedGroup.communityId;
+
+    const userProfile = await getUserProfileById(userId);
+
+    await UserProfile.updateOne(
+      {
+        _id: userProfile?._id,
+        'communities.communityId': communityId,
+        'communities.communityGroups.id': communityGroupId,
+      },
+      {
+        $set: {
+          'communities.$[community].communityGroups.$[group].status': status.accepted,
+        },
+      },
+      {
+        arrayFilters: [{ 'community.communityId': communityId }, { 'group.id': communityGroupId }],
+      }
+    );
+
     return updatedGroup;
   } catch (error: any) {
     throw new Error(error.message);
@@ -84,6 +105,25 @@ export const rejectCommunityGroupJoinApproval = async (communityGroupId: mongoos
     if (!updatedGroup) {
       throw new Error('Community group or user not found');
     }
+    const communityId = updatedGroup.communityId;
+
+    const userProfile = await getUserProfileById(userId);
+
+    await UserProfile.updateOne(
+      {
+        _id: userProfile?._id,
+        'communities.communityId': communityId,
+        'communities.communityGroups.id': communityGroupId,
+      },
+      {
+        $set: {
+          'communities.$[community].communityGroups.$[group].status': status.rejected,
+        },
+      },
+      {
+        arrayFilters: [{ 'community.communityId': communityId }, { 'group.id': communityGroupId }],
+      }
+    );
 
     return updatedGroup;
   } catch (error: any) {
@@ -291,6 +331,46 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     });
     await communityGroup.save();
 
+    await UserProfile.updateOne(
+      {
+        _id: userProfile._id,
+        'communities.communityId': communityGroup.communityId,
+      },
+      {
+        $push: {
+          'communities.$.communityGroups': {
+            id: groupId,
+            status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+          },
+        },
+      }
+    );
+
+    //const joinCommunity = userProfile.communities.find(
+    //  (c) => c.communityId.toString() === communityGroup.communityId.toString()
+    //) as UserCommunities;
+    //console.log(joinCommunity, 'joinCommunity');
+
+    //if (joinCommunity) {
+    //  const newGroupMember: UserCommunityGroup = {
+    //    id: groupId,
+    //    status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+    //  };
+
+    //  // Initialize array if it doesn't exist
+    //  if (!joinCommunity.communityGroup) {
+    //    joinCommunity.communityGroup = [];
+    //  }
+
+    //  joinCommunity.communityGroup.push(newGroupMember);
+
+    //  // Explicitly mark the modified path
+    //  userProfile.markModified('communities');
+
+    //  console.log(userProfile.communities, 'userProfile');
+    //  await userProfile.save();
+    //}
+
     if (isCommunityPrivate && !isAdmin) {
       const notificationPayload = {
         sender_id: userID,
@@ -313,15 +393,21 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
 
 export const leaveCommunityGroup = async (userID: string, groupId: string) => {
   try {
-    const user = await getUserById(new mongoose.Types.ObjectId(userID));
+    // Fetch required data in parallel
+    const [user, communityGroup, userProfile] = await Promise.all([
+      getUserById(new mongoose.Types.ObjectId(userID)),
+      getCommunityGroup(groupId),
+      userProfileService.getUserProfileById(userID),
+    ]);
+
     if (!user) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
 
-    const communityGroup = await getCommunityGroup(groupId);
     if (!communityGroup) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
+    if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
     // Check if the user is a member of the communityGroup
     const userIndex = communityGroup.users.findIndex((groupUser) => groupUser.userId.toString() === userID);
@@ -335,6 +421,26 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
 
     // Save the updated communityGroup
     await communityGroup.save();
+
+    // Find the community that contains this group
+    const communityIndex = userProfile.communities.findIndex((community) =>
+      community.communityGroups.some((group) => group.id.toString() === groupId)
+    );
+
+    if (communityIndex !== -1) {
+      // Filter out the group from the communityGroup array
+      userProfile.communities[communityIndex]!.communityGroups = userProfile.communities[
+        communityIndex
+      ]!.communityGroups.filter((group) => group.id.toString() !== groupId);
+
+      // If no groups left in this community, consider removing the whole community entry
+      if (userProfile.communities[communityIndex]!.communityGroups.length === 0) {
+        userProfile.communities.splice(communityIndex, 1);
+      }
+    }
+
+    await userProfile.save();
+
     return communityGroup;
   } catch (error: any) {
     console.error(error);

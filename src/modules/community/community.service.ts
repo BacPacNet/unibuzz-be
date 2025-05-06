@@ -50,6 +50,7 @@ export const getUserCommunities = async (userID: string) => {
 
     const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
 
+    // First get all communities with their groups
     const communities = await communityModel.aggregate([
       {
         $match: { _id: { $in: getAllUserCommunityIds } },
@@ -77,7 +78,17 @@ export const getUserCommunities = async (userID: string) => {
       },
     ]);
 
-    return communities;
+    // Now enrich with verification status in JavaScript
+    const communitiesWithVerification = communities.map((community) => {
+      const communityInProfile = userProfile.communities.find((c) => c.communityId.toString() === community._id.toString());
+
+      return {
+        ...community,
+        isVerified: communityInProfile ? communityInProfile.isVerified : false,
+      };
+    });
+
+    return communitiesWithVerification;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
@@ -299,11 +310,17 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   if (community && !isVerfied) {
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
   }
+
+  const communityToJoin = await communityModel.findById(communityId);
+  let isCommunityVerified = userProfile?.email.some(
+    (userCommunity) => userCommunity.communityId.toString() === communityToJoin?._id.toString()
+  );
+
   let isAlreadyJoined = userProfile.communities.some(
     (community) => community.communityId.toString() === communityId.toString()
   );
   if (!isAlreadyJoined) {
-    userProfile.communities.push({ communityId, isVerified: isVerfied });
+    userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerfied, communityGroups: [] });
     await userProfile.save();
   }
 
@@ -356,22 +373,25 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
       throw new Error('You can only join 1 community that is not verified');
     }
     if (!community) {
-      const { _id: communityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
+      const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
       community = await communityModel.create({
         name: name,
         communityLogoUrl: { imageUrl: logo },
         communityCoverUrl: { imageUrl: campus },
         total_students: total_students,
-        university_id: communityId,
+        university_id: universityId,
         created_by: userId,
         about: short_overview,
       });
+      await UniversityModel.updateOne({ _id: universityId }, { $set: { communityId: community._id } });
     }
-    await communityService.joinCommunity(new mongoose.Types.ObjectId(userId), (community?._id).toString(), isVerfied);
+    const updatedUserProfile = await communityService.joinCommunity(
+      new mongoose.Types.ObjectId(userId),
+      (community?._id).toString(),
+      isCommunityVerified || isVerfied
+    );
 
-    return { message: 'Joined Successfully', data: { community: community } };
-
-    //res.status(httpStatus.OK).json({ message: 'Joined Successfully', data: { communityId: community?._id } });
+    return { message: 'Joined successfully', data: { profile: updatedUserProfile, community: community } };
   } catch (error: any) {
     throw new Error(error.message);
   }
@@ -394,7 +414,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
       (community) => community.communityId.toString() === communityId.toString()
     );
     userProfile.communities.splice(communityIndex, 1);
-    await userProfile.save();
+    const updatedUserProfile = await userProfile.save();
 
     // Check if the user is a member of the communityGroup
     const userIndex = community.users.findIndex((user) => user.id.toString() === userId.toString());
@@ -407,7 +427,8 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     community.users.splice(userIndex, 1);
 
     // Save the updated communityGroup
-    return await community.save();
+    await community.save();
+    return { message: 'You have left the community', data: { community: updatedUserProfile.communities } };
   } catch (error: any) {
     console.error(error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
