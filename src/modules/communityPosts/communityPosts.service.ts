@@ -126,11 +126,12 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
       {
         $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
       },
+
       {
         $lookup: {
           from: 'communitypostcomments',
           localField: '_id',
-          foreignField: 'communityId',
+          foreignField: 'postId',
           as: 'comments',
         },
       },
@@ -239,10 +240,18 @@ export const getCommunityGroupPostsByCommunityId = async (
         $lookup: {
           from: 'communitypostcomments',
           localField: '_id',
-          foreignField: 'communityId',
+          foreignField: 'postId',
           as: 'comments',
         },
       },
+      //   {
+      //     $lookup: {
+      //       from: 'communitypostcomments',
+      //       localField: '_id',
+      //       foreignField: 'communityId',
+      //       as: 'comments',
+      //     },
+      //   },
       {
         $addFields: {
           commentCount: { $size: '$comments' },
@@ -496,7 +505,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
         $lookup: {
           from: 'communitypostcomments',
           localField: '_id',
-          foreignField: 'communityId',
+          foreignField: 'postId',
           as: 'comments',
         },
       },

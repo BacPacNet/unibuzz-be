@@ -303,6 +303,24 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       },
     },
     {
+      $match: {
+        $expr: {
+          $not: {
+            $and: [
+              { $eq: ['$type', 'REACTED_TO_POST'] },
+              { $eq: ['$likedBy.totalCount', 0] },
+              {
+                $or: [
+                  { $eq: [{ $size: { $ifNull: ['$likedBy.newFiveUsers', []] } }, 0] },
+                  { $not: ['$likedBy.newFiveUsers'] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
       $project: {
         _id: 1,
         createdAt: 1,
