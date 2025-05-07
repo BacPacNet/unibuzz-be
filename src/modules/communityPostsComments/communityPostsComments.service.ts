@@ -32,6 +32,26 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
   }
 
+  await comment.populate([
+    { path: 'commenterId', select: 'firstName lastName _id' },
+    {
+      path: 'commenterProfileId',
+      select: 'profile_dp university_name study_year degree major affiliation occupation role',
+    },
+    {
+      path: 'replies',
+      options: { sort: { createdAt: -1 } },
+      populate: [
+        { path: 'commenterId', select: 'firstName lastName _id' },
+        {
+          path: 'commenterProfileId',
+          select: 'profile_dp university_name study_year degree major affiliation occupation role',
+        },
+      ],
+    },
+    { path: 'postId', select: 'user_id' },
+  ]);
+
   return comment;
 };
 
@@ -80,6 +100,7 @@ export const getCommunityPostComments = async (postId: string, page: number = 1,
         { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree major affiliation occupation' },
         {
           path: 'replies',
+          options: { sort: { createdAt: -1 } },
           populate: [
             { path: 'commenterId', select: 'firstName lastName _id' },
             {
@@ -240,7 +261,25 @@ export const commentReply = async (commentId: string, userID: string, body: any,
 
   const parentComment = await communityPostCommentModel
     .findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true })
-    .populate('replies');
+    .populate([
+      { path: 'commenterId', select: 'firstName lastName _id' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year degree major affiliation occupation role',
+      },
+      {
+        path: 'replies',
+        options: { sort: { createdAt: -1 } },
+        populate: [
+          { path: 'commenterId', select: 'firstName lastName _id' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year degree major affiliation occupation role',
+          },
+        ],
+      },
+    ])
+    .lean();
 
   return parentComment;
 };

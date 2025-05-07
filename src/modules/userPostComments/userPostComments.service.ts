@@ -6,9 +6,27 @@ import httpStatus from 'http-status';
 export const createUserPostComment = async (userId: string, userPostId: string, body: any) => {
   const newComment = { ...body, userPostId, commenterId: userId, level: 0 };
 
-  const createdComment = await userPostCommentsModel
-    .create(newComment)
-    .then((comment) => comment.populate('userPostId', 'user_id'));
+  const createdComment = await userPostCommentsModel.create(newComment);
+
+  await createdComment.populate([
+    { path: 'commenterId', select: 'firstName lastName _id' },
+    {
+      path: 'commenterProfileId',
+      select: 'profile_dp university_name study_year degree major affiliation occupation role',
+    },
+    {
+      path: 'replies',
+      options: { sort: { createdAt: -1 } },
+      populate: [
+        { path: 'commenterId', select: 'firstName lastName _id' },
+        {
+          path: 'commenterProfileId',
+          select: 'profile_dp university_name study_year degree major affiliation occupation role',
+        },
+      ],
+    },
+    { path: 'userPostId', select: 'user_id' },
+  ]);
 
   return createdComment;
 };
@@ -59,7 +77,25 @@ export const commentReply = async (commentId: string, userID: string, body: any,
 
   const parentComment = await userPostCommentsModel
     .findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true })
-    .populate('replies');
+    .populate([
+      { path: 'commenterId', select: 'firstName lastName _id' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year degree major affiliation occupation role',
+      },
+      {
+        path: 'replies',
+        options: { sort: { createdAt: -1 } },
+        populate: [
+          { path: 'commenterId', select: 'firstName lastName _id' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year degree major affiliation occupation role',
+          },
+        ],
+      },
+    ])
+    .lean();
 
   return parentComment;
 };
@@ -78,6 +114,7 @@ export const getUserPostComments = async (postId: string, page: number = 1, limi
         },
         {
           path: 'replies',
+          options: { sort: { createdAt: -1 } },
           populate: [
             { path: 'commenterId', select: 'firstName lastName _id' },
             {

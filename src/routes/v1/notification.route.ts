@@ -11,6 +11,7 @@ router
 
 router.route('/user').get(userIdAuth, notificationController.getUserNotification);
 router.route('/user/total-count').get(userIdAuth, notificationController.getUserNotificationTotalCount);
+router.route('/user/read-all').put(userIdAuth, notificationController.markUserNotificationsAsRead);
 
 router.route('/join').put(userIdAuth, notificationController.JoinGroup);
 
