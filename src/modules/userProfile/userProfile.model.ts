@@ -24,7 +24,16 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   affiliation: String,
   occupation: String,
   communities: [
-    { communityId: { type: Schema.Types.ObjectId, ref: 'community' }, isVerified: { type: Boolean, default: false } },
+    {
+      communityId: { type: Schema.Types.ObjectId, ref: 'community' },
+      isVerified: { type: Boolean, default: false },
+      communityGroups: [
+        {
+          id: { type: Schema.Types.ObjectId, ref: 'communityGroup' },
+          status: { type: String, enum: ['pending', 'rejected', 'accepted', 'default'], default: 'default' },
+        },
+      ],
+    },
   ],
   role: {
     type: String,

@@ -36,6 +36,7 @@ export interface IUniversity extends Document {
   tuition_fee: string;
   type: string;
   web_pages: string[];
+  communityId?: string;
 }
 
 const UniversitySchema = new Schema(
@@ -58,6 +59,7 @@ const UniversitySchema = new Schema(
     logo: { type: String, required: true },
     state_province: { type: String, default: null },
     web_pages: { type: [String], required: true },
+    communityId: { type: String, required: false },
   },
   { timestamps: true }
 );

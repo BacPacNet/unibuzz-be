@@ -77,7 +77,7 @@ export const getAllTimelinePosts = async (req: any, res: Response, next: NextFun
   const { page, limit } = req.query;
 
   try {
-    timelinePosts = await userPostService.getAllTimelinePosts(req.userId, Number(page), Number(limit));
+    timelinePosts = await userPostService.getRecentTimelinePosts(req.userId, Number(page), Number(limit));
 
     return res.status(200).json(timelinePosts);
   } catch (error) {

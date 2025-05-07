@@ -7,6 +7,7 @@ import { userIdExtend } from 'src/config/userIDType';
 import { communityModel, communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
 import universityModel, { IUniversity } from '../university/university.model';
+import UniversityModel from '../university/university.model';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -135,16 +136,18 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     let community: any = await communityModel.findOne({ name: universityName });
     if (!community) {
       const fetchUniversity = await universityModel.findOne({ name: universityName });
-      const { _id: communityId, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
+      const { _id: university_id, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
       community = await communityModel.create({
         name: universityName,
         communityLogoUrl: { imageUrl: logo },
         communityCoverUrl: { imageUrl: campus },
         total_students: total_students,
-        university_id: communityId,
+        university_id: university_id,
         created_by: userID,
         about: short_overview,
       });
+
+      await UniversityModel.updateOne({ _id: university_id }, { $set: { communityId: community._id } });
     }
 
     const { _id: communityId } = community;

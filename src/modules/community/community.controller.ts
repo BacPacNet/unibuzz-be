@@ -141,7 +141,7 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
       return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
     }
     let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-    return res.status(200).json({ message: 'Left the community', user });
+    return res.status(200).json(user);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }

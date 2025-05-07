@@ -164,6 +164,242 @@ export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.Object
   return userProfile?.communities.map((community) => community.communityId);
 };
 
+//interface PaginatedPosts {
+//  posts: any[];
+//  pagination: {
+//    currentPage: number;
+//    totalPages: number;
+//    totalPosts: number;
+//    hasNextPage: boolean;
+//    hasPreviousPage: boolean;
+//  };
+//}
+
+export const getRecentTimelinePosts = async (
+  userId: mongoose.Types.ObjectId,
+  page: number = 1,
+  limit: number = 10
+): Promise<any> => {
+  try {
+    // 1. Get user's profile with following and communities
+    const userProfile = await UserProfile.findOne({ users_id: userId }).select('following communities').lean();
+
+    if (!userProfile) {
+      throw new Error('User profile not found');
+    }
+
+    // 2. Extract IDs for queries
+    const followingUserIds = userProfile.following.filter((follow) => !follow.isBlock).map((follow) => follow.userId);
+
+    const communityIds = userProfile.communities.map((community) => community.communityId);
+
+    // Include self in the user posts
+    //const allUserIds = [...followingUserIds, userId];
+
+    // 3. Create match stages for both post types
+    const userPostMatchStage = {
+      $or: [
+        { user_id: { $in: followingUserIds }, PostType: 'PUBLIC' },
+        { user_id: { $in: followingUserIds }, PostType: 'FOLLOWER_ONLY' },
+        { user_id: userId }, // User can always see their own posts
+      ],
+    };
+
+    const communityPostMatchStage = {
+      communityId: { $in: communityIds },
+      communityPostsType: 'PUBLIC',
+    };
+
+    // 4. Fetch posts using aggregation with full population
+    const [userPosts, communityPosts, totalUserPosts, totalCommunityPosts] = await Promise.all([
+      // User posts aggregation
+      UserPostModel.aggregate([
+        { $match: userPostMatchStage },
+        { $sort: { createdAt: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        {
+          $lookup: {
+            from: 'userprofiles',
+            localField: 'user._id',
+            foreignField: 'users_id',
+            as: 'userProfile',
+          },
+        },
+        {
+          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: 'userpostcomments',
+            localField: '_id',
+            foreignField: 'userPostId',
+            as: 'comments',
+          },
+        },
+        {
+          $addFields: {
+            commentCount: { $size: '$comments' },
+            postType: 'user', // Add post type identifier
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            imageUrl: 1,
+            likeCount: 1,
+            commentCount: 1,
+            PostType: 1,
+            postType: 1,
+            user: {
+              _id: 1,
+              firstName: 1,
+              lastName: 1,
+              email: 1,
+            },
+            userProfile: {
+              profile_dp: 1,
+              university_name: 1,
+              study_year: 1,
+              degree: 1,
+              major: 1,
+              affiliation: 1,
+              occupation: 1,
+              role: 1,
+            },
+          },
+        },
+      ]),
+
+      // Community posts aggregation
+      CommunityPostModel.aggregate([
+        { $match: communityPostMatchStage },
+        { $sort: { createdAt: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        {
+          $lookup: {
+            from: 'userprofiles',
+            localField: 'user._id',
+            foreignField: 'users_id',
+            as: 'userProfile',
+          },
+        },
+        {
+          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+        },
+        {
+          $lookup: {
+            from: 'communities',
+            localField: 'communityId',
+            foreignField: '_id',
+            as: 'community',
+          },
+        },
+        { $unwind: '$community' },
+        {
+          $lookup: {
+            from: 'communitypostcomments',
+            localField: '_id',
+            foreignField: 'communityPostId',
+            as: 'comments',
+          },
+        },
+        {
+          $addFields: {
+            commentCount: { $size: '$comments' },
+            postType: 'community', // Add post type identifier
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            imageUrl: 1,
+            likeCount: 1,
+            commentCount: 1,
+            communityPostsType: 1,
+            isPostVerified: 1,
+            postType: 1,
+            communityName: 1,
+            communityGroupName: 1,
+            communityGroupId: 1,
+            user: {
+              _id: 1,
+              firstName: 1,
+              lastName: 1,
+              email: 1,
+            },
+            userProfile: {
+              profile_dp: 1,
+              university_name: 1,
+              study_year: 1,
+              degree: 1,
+              major: 1,
+              affiliation: 1,
+              occupation: 1,
+              role: 1,
+            },
+            community: {
+              _id: 1,
+              name: 1,
+              logo: 1,
+              description: 1,
+            },
+          },
+        },
+      ]),
+
+      // Count queries remain the same
+      UserPostModel.countDocuments(userPostMatchStage),
+      CommunityPostModel.countDocuments(communityPostMatchStage),
+    ]);
+
+    // 5. Combine and sort posts by date
+    const allPosts = [...userPosts, ...communityPosts]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+
+    // 6. Calculate pagination details
+    const totalPosts = totalUserPosts + totalCommunityPosts;
+    const totalPages = Math.ceil(totalPosts / limit);
+
+    return {
+      allPosts,
+      currentPage: page,
+      totalPages,
+      totalPosts,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
+  } catch (error) {
+    console.error('Error in getRecentTimelinePosts:', error);
+    throw new Error('Failed to fetch timeline posts');
+  }
+};
 export const getAllTimelinePosts = async (userId: mongoose.Schema.Types.ObjectId, page: number = 1, limit: number = 5) => {
   // Get user IDs of the user and their followers
   const [followingAndSelfUserIds = [], followersAndSelfUserIds = []] = await getFollowingAndSelfUserIds(userId);
