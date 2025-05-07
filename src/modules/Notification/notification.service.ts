@@ -148,58 +148,6 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
   };
 };
 
-//export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
-//  const skip = (page - 1) * limit;
-
-//  const userNotification = await notificationModel
-//    .find({ receiverId: new mongoose.Types.ObjectId(userID), isRead: false })
-//    .populate([
-//      { path: 'sender_id', select: 'firstName lastName _id' },
-//      { path: 'communityGroupId', select: 'title _id' },
-//      { path: 'communityPostId', select: '_id' },
-//    ])
-//    .sort({ createdAt: -1 })
-//    .skip(skip)
-//    .limit(limit)
-//    .lean();
-
-//    console.log('userNotification', userNotification)
-
-//  const userIDs = userNotification.map((item) => item.sender_id._id.toString());
-//  const uniqueUserIDs = [...new Set(userIDs)];
-//  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIDs } })
-//    .select('profile_dp users_id')
-//    .lean();
-
-//  const userNotificationWithDp = userNotification.map((item) => {
-//    const userProfile = userProfiles.find((profile) => profile.users_id.toString() === item.sender_id._id.toString());
-
-//    const profileDp = userProfile?.profile_dp?.imageUrl ?? '';
-
-//    return {
-//      ...item,
-//      sender_id: {
-//        ...item.sender_id,
-//        profileDp,
-//      },
-//    };
-//  });
-
-//  const totalNotifications = await notificationModel.countDocuments({
-//    receiverId: new mongoose.Types.ObjectId(userID),
-//    isRead: false,
-//  });
-
-//  const totalPages = Math.ceil(totalNotifications / limit);
-
-//  return {
-//    notifications: userNotificationWithDp,
-//    currentPage: page,
-//    totalPages,
-//    totalNotifications,
-//  };
-//};
-
 export const getUserNotificationCount = async (userID: string) => {
   const pipeline: PipelineStage[] = [
     {
@@ -352,6 +300,24 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       $unwind: {
         path: '$communityDetails',
         preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $match: {
+        $expr: {
+          $not: {
+            $and: [
+              { $eq: ['$type', 'REACTED_TO_POST'] },
+              { $eq: ['$likedBy.totalCount', 0] },
+              {
+                $or: [
+                  { $eq: [{ $size: { $ifNull: ['$likedBy.newFiveUsers', []] } }, 0] },
+                  { $not: ['$likedBy.newFiveUsers'] },
+                ],
+              },
+            ],
+          },
+        },
       },
     },
     {
@@ -516,12 +482,8 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
   };
 };
 
-export const updateUserNotification = async (id: string) => {
-  const userNotification = await notificationModel.findByIdAndUpdate(
-    id,
-    { isRead: true, status: notificationStatus.accepted },
-    { new: true }
-  );
+export const updateUserNotification = async (id: string, status: string = 'default') => {
+  const userNotification = await notificationModel.findByIdAndUpdate(id, { isRead: true, status: status }, { new: true });
 
   return userNotification;
 };
@@ -545,4 +507,16 @@ export const changeNotificationStatus = async (status: notificationStatus, notif
 
 export const DeleteNotification = async (filter: any) => {
   await notificationModel.findOneAndDelete(filter);
+};
+
+export const markNotificationsAsRead = async (userID: string) => {
+  try {
+    const result = await notificationModel.updateMany(
+      { receiverId: new mongoose.Types.ObjectId(userID), isRead: false },
+      { $set: { isRead: true } }
+    );
+    return result;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
 };

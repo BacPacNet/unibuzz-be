@@ -33,11 +33,17 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
     communityGroupToUpdate.communityGroupCategory = new Map(Object.entries(communityGroupCategory));
   }
 
-  if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
-    communityGroupToUpdate.users.push(...selectedUsers);
-  }
-
   await communityGroupToUpdate.save();
+
+  if (selectedUsers?.length >= 1 && communityGroupToUpdate?._id) {
+    await notificationService.createManyNotification(
+      communityGroupToUpdate.adminUserId,
+      communityGroupToUpdate._id,
+      selectedUsers,
+      notificationRoleAccess.GROUP_INVITE,
+      'received an invitation to join group'
+    );
+  }
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {

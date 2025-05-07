@@ -4,7 +4,6 @@ import { userPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-
 import he from 'he';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
@@ -133,6 +132,7 @@ export const UserPostCommentReply = async (req: extendedRequest, res: Response) 
   const { commentId } = req.params;
   const { level, ...body } = req.body;
   body.content = he.decode(body.content);
+
   try {
     if (commentId && req.userId) {
       let commentReply = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));

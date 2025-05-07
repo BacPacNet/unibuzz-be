@@ -178,7 +178,7 @@ const handleCommentNotification = async (job: any) => {
     const newNotification = {
       receiverId: receiverObjectId,
       userPostId: postObjectId,
-      type: notificationRoleAccess.COMMUNITY_COMMENT,
+      type: notificationRoleAccess.COMMENT,
       message: 'Commented on your post.',
       commentedBy: {
         totalCount: 1,
@@ -405,6 +405,9 @@ export const notificationWorker = new Worker(
         break;
       case NotificationIdentifier.accept_official_group_request:
         await CreateAcceptedOfficialGroupRequestNotification(job);
+        break;
+      case NotificationIdentifier.group_invite_notifications:
+        await handleSendNotification(job);
         break;
 
       default:

@@ -322,7 +322,7 @@ export const getRecentTimelinePosts = async (
           $lookup: {
             from: 'communitypostcomments',
             localField: '_id',
-            foreignField: 'communityPostId',
+            foreignField: 'postId',
             as: 'comments',
           },
         },

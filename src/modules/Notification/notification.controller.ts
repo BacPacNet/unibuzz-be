@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import { notificationService } from '.';
 import { communityGroupService } from '../communityGroup';
+import { notificationStatus } from './notification.interface';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -32,6 +33,19 @@ export const getUserNotification = async (req: extendedRequest, res: Response) =
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+export const markUserNotificationsAsRead = async (req: extendedRequest, res: Response) => {
+  const userID = req.userId;
+
+  try {
+    if (userID) {
+      const notification = await notificationService.markNotificationsAsRead(userID);
+      return res.status(200).json(notification);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getUserNotificationTotalCount = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
 
@@ -50,7 +64,7 @@ export const updateGroupNotification = async (req: extendedRequest, res: Respons
 
   try {
     if (id) {
-      const notification = await notificationService.updateUserNotification(id);
+      const notification = await notificationService.updateUserNotification(id, notificationStatus.default);
 
       return res.status(200).json({ notification });
     }
@@ -67,7 +81,7 @@ export const JoinGroup = async (req: extendedRequest, res: Response) => {
   try {
     if (userID && groupId) {
       status = await communityGroupService.joinCommunityGroup(userID, groupId);
-      await notificationService.updateUserNotification(id);
+      await notificationService.updateUserNotification(id, notificationStatus.accepted);
       return res.status(200).json(status);
     }
   } catch (error: any) {
