@@ -147,7 +147,7 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
         about: short_overview,
       });
 
-      await UniversityModel.updateOne({ _id: university_id }, { $set: { communityId: community._id } });
+      await UniversityModel.updateOne({ _id: university_id }, { $set: { communityId: community._id, isVerified: true } });
     }
 
     const { _id: communityId } = community;
