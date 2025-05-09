@@ -197,19 +197,20 @@ export const changeUserName = async (req: userIdExtend, res: Response) => {
     const user = await userService.changeUserName(userID, userName, newUserName, password);
     return res.status(httpStatus.OK).json(user);
   } catch (error: any) {
-    return res.status(error.statusCode).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
 export const changeUserPassword = async (req: userIdExtend, res: Response) => {
   const { currentPassword, newPassword } = req.body;
   const userID = req.userId;
+
   try {
     if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    const user = await userService.changeUserPassowrd(userID, currentPassword, newPassword);
+    const user = await userService.changeUserPassword(userID, currentPassword, newPassword);
     return res.status(httpStatus.OK).json(user);
   } catch (error: any) {
-    return res.status(error.statusCode).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 

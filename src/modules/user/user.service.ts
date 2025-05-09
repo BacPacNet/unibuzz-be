@@ -523,15 +523,15 @@ export const changeUserName = async (userID: string, userName: string, newUserNa
   await user.save();
   return user;
 };
-export const changeUserPassowrd = async (userID: string, password: string, newPassword: string) => {
+export const changeUserPassword = async (userID: string, password: string, newPassword: string) => {
   const user = await User.findById(userID);
 
   if (!user) {
-    throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'user does not exist');
   }
 
   if (!(await user.isPasswordMatch(password))) {
-    throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Password is incorrect!');
   }
 
   user.password = newPassword;

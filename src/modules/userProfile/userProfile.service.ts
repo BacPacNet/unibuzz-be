@@ -221,6 +221,7 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
   const followingIds = profile?.following.map((id) => id.userId.toString()) || [];
 
   const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean);
+
   if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
 
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
