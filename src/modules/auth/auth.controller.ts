@@ -45,7 +45,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
         isUniversityVerified
       );
       if (isUniversityVerified) {
-        const { data } = community;
+        const { data } = community as any;
         await userProfileService.addUniversityEmail(
           userId.toString(),
           universityEmail,

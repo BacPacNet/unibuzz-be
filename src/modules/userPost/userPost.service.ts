@@ -193,8 +193,9 @@ export const getRecentTimelinePosts = async (
 
     const communityIds = userProfile.communities.map((community) => community.communityId);
 
-    // Include self in the user posts
-    //const allUserIds = [...followingUserIds, userId];
+    const communityGroupIds: mongoose.Types.ObjectId[] = userProfile.communities.flatMap((community) =>
+      (community.communityGroups || []).map((group) => new mongoose.Types.ObjectId(group.id))
+    );
 
     // 3. Create match stages for both post types
     const userPostMatchStage = {
@@ -206,8 +207,16 @@ export const getRecentTimelinePosts = async (
     };
 
     const communityPostMatchStage = {
-      communityId: { $in: communityIds },
-      communityPostsType: 'PUBLIC',
+      $or: [
+        {
+          communityId: { $in: communityIds },
+          communityGroupId: null,
+          communityPostsType: 'PUBLIC',
+        },
+        {
+          communityGroupId: { $in: communityGroupIds },
+        },
+      ],
     };
 
     // 4. Fetch posts using aggregation with full population

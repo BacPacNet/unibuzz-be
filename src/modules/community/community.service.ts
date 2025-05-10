@@ -370,7 +370,7 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
       (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
     );
     if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
-      throw new Error('You can only join 1 community that is not verified');
+      return new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
     }
     if (!community) {
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
