@@ -331,7 +331,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     });
     await communityGroup.save();
 
-    await UserProfile.updateOne(
+    const updateUserProfile = await UserProfile.findOneAndUpdate(
       {
         _id: userProfile._id,
         'communities.communityId': communityGroup.communityId,
@@ -343,8 +343,14 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
             status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
           },
         },
+      },
+      {
+        new: true,
+        returnDocument: 'after',
       }
     );
+
+    console.log(updateUserProfile, 'updateUserProfile');
 
     //const joinCommunity = userProfile.communities.find(
     //  (c) => c.communityId.toString() === communityGroup.communityId.toString()
@@ -383,7 +389,11 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
       return { success: true, message: 'Request sent successfully' };
     } else {
-      return { success: true, message: 'Successfully joined the community group', data: communityGroup };
+      return {
+        success: true,
+        message: 'Successfully joined the community group',
+        data: { communityGroup, communities: updateUserProfile?.communities },
+      };
     }
   } catch (error: any) {
     console.error(error);
@@ -439,9 +449,11 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
       }
     }
 
-    await userProfile.save();
+    const updatedUserProfile = await userProfile.save();
 
-    return communityGroup;
+    console.log(updatedUserProfile.communities[0]?.communityGroups, 'updatedUserProfile');
+
+    return { communityGroup, communities: updatedUserProfile.communities };
   } catch (error: any) {
     console.error(error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
