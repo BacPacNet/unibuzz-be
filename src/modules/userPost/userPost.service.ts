@@ -9,6 +9,7 @@ import { CommunityType, userPostType } from '../../config/community.type';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { convertToObjectId } from '../../utils/common';
 
 export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
@@ -175,11 +176,7 @@ export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.Object
 //  };
 //}
 
-export const getRecentTimelinePosts = async (
-  userId: mongoose.Types.ObjectId,
-  page: number = 1,
-  limit: number = 10
-): Promise<any> => {
+export const getRecentTimelinePosts = async (userId: string, page: number = 1, limit: number = 10): Promise<any> => {
   try {
     // 1. Get user's profile with following and communities
     const userProfile = await UserProfile.findOne({ users_id: userId }).select('following communities').lean();
@@ -202,9 +199,11 @@ export const getRecentTimelinePosts = async (
       $or: [
         { user_id: { $in: followingUserIds }, PostType: 'PUBLIC' },
         { user_id: { $in: followingUserIds }, PostType: 'FOLLOWER_ONLY' },
-        { user_id: userId }, // User can always see their own posts
+        { user_id: convertToObjectId(userId) }, // User can always see their own posts
       ],
     };
+
+    console.log(userPostMatchStage, 'userPostMatchStage');
 
     const communityPostMatchStage = {
       $or: [
@@ -386,6 +385,8 @@ export const getRecentTimelinePosts = async (
       UserPostModel.countDocuments(userPostMatchStage),
       CommunityPostModel.countDocuments(communityPostMatchStage),
     ]);
+
+    console.log(userPosts, totalUserPosts);
 
     // 5. Combine and sort posts by date
     const allPosts = [...userPosts, ...communityPosts]

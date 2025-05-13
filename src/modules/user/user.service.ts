@@ -90,58 +90,119 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
   return userProfile[0];
 };
 
-export const getAllUser = async (name: string = '', page: number, limit: number, userId: string) => {
-  const Currpage = page ? page : 1;
-  const limitpage = limit ? limit : 10;
-  const startIndex = (Currpage - Number(1)) * Number(limitpage);
+export const getAllUser = async (
+  name: string = '',
+  page: number,
+  limit: number,
+  userId: string,
+  universityName: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[]
+) => {
+  const Currpage = page || 1;
+  const limitpage = limit || 10;
+  const startIndex = (Currpage - 1) * limitpage;
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
+  const university_name = decodeURI(universityName);
 
-  // Fetch the logged-in user's following list
   const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following');
   const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
+
+  const matchStage: any = {
+    _id: { $ne: new mongoose.Types.ObjectId(userId) },
+  };
+
+  if (firstNametoPush) {
+    matchStage.firstName = { $regex: new RegExp(firstNametoPush, 'i') };
+  }
+
+  if (lastNametopush) {
+    matchStage.lastName = { $regex: new RegExp(lastNametopush, 'i') };
+  }
+
+  if (university_name) {
+    matchStage['profile.university_name'] = { $regex: new RegExp(university_name, 'i') };
+  }
+
+  const orConditions: any[] = [];
+
+  if (studyYear.length && major.length) {
+    orConditions.push({
+      $and: [{ 'profile.study_year': { $in: studyYear } }, { 'profile.major': { $in: major } }],
+    });
+  } else if (studyYear.length) {
+    orConditions.push({ 'profile.study_year': { $in: studyYear } });
+  } else if (major.length) {
+    orConditions.push({ 'profile.major': { $in: major } });
+  }
+
+  if (occupation.length && affiliation.length) {
+    orConditions.push({
+      $and: [{ 'profile.occupation': { $in: occupation } }, { 'profile.affiliation': { $in: affiliation } }],
+    });
+  } else if (occupation.length) {
+    orConditions.push({ 'profile.occupation': { $in: occupation } });
+  } else if (affiliation.length) {
+    orConditions.push({ 'profile.affiliation': { $in: affiliation } });
+  }
+
+  if (orConditions.length) {
+    matchStage.$or = orConditions;
+  }
 
   const users = await User.aggregate([
     {
       $lookup: {
         from: 'userprofiles',
-        localField: '_id', // The field in the User schema to match
-        foreignField: 'users_id', // The field in the UserProfile schema to match
+        localField: '_id',
+        foreignField: 'users_id',
         as: 'profile',
       },
     },
-    {
-      $match: {
-        _id: { $ne: new mongoose.Types.ObjectId(userId) },
-        $or: [
-          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-        ],
-      },
-    },
-    {
-      $unwind: {
-        path: '$profile', // Unwind the profile array to get a single object
-        preserveNullAndEmptyArrays: true, // Include users without a matching profile
-      },
-    },
+    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    { $match: matchStage },
     {
       $addFields: {
-        isFollowing: { $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))] }, // Check if user is in following list
+        isFollowing: {
+          $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))],
+        },
       },
     },
     {
       $project: {
-        password: 0, // Exclude the password field
+        password: 0,
       },
     },
   ])
     .skip(startIndex)
     .limit(limitpage);
-  const totalUsers = await User.countDocuments();
-  const totalPages = Math.ceil(totalUsers / limit);
 
-  return { currentPage: page, totalPages: totalPages, users };
+  // Copy the same match stage logic used above
+  const totalUsersAggregate = await User.aggregate([
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
+    },
+    {
+      $match: matchStage, // <- same dynamic matchStage you already built
+    },
+    {
+      $count: 'total',
+    },
+  ]);
+
+  const totalUsers = totalUsersAggregate[0]?.total || 0;
+  const totalPages = Math.ceil(totalUsers / limitpage);
+
+  return { currentPage: Currpage, totalPages, users };
 };
+
 /**
  * Get user by email
  * @param {string} email

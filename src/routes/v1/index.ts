@@ -21,6 +21,7 @@ import eventRoute from './events.route';
 import endorseRoute from './endorsementAI.route';
 import chatbotRoute from './chatbot.route';
 import contactRoute from './contact.route';
+import uploadRoute from './upload.route';
 
 const router = express.Router();
 
@@ -109,6 +110,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/contact',
     route: contactRoute,
+  },
+  {
+    path: '/upload',
+    route: uploadRoute,
   },
 ];
 

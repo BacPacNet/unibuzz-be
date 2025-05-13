@@ -46,9 +46,19 @@ export const getUser = catchAsync(async (req: Request, res: Response, next: Next
 });
 
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { page, limit, name } = req.query as any;
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation } = req.query as any;
   try {
-    let allUsers = await userService.getAllUser(name, Number(page), Number(limit), req.userId as string);
+    let allUsers = await userService.getAllUser(
+      name,
+      Number(page),
+      Number(limit),
+      req.userId as string,
+      universityName,
+      studyYear ? studyYear.split(',') : [],
+      major ? major.split(',') : [],
+      occupation ? occupation.split(',') : [],
+      affiliation ? affiliation.split(',') : []
+    );
     return res.status(200).json(allUsers);
   } catch (error) {
     console.error(error);
