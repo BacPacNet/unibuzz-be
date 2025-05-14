@@ -44,13 +44,6 @@ const notificationSchema = new Schema<notificationInterface>(
     },
     commentedBy: {
       totalCount: { type: Number },
-      //   newFiveUsers: [
-      //     {
-      //       type: Schema.Types.ObjectId,
-      //       ref: 'User',
-
-      //     },
-      //   ],
       newFiveUsers: [
         {
           _id: { type: Schema.Types.ObjectId, ref: 'User' },

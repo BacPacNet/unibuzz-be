@@ -162,9 +162,6 @@ const handleCommentNotification = async (job: any) => {
   if (existingNotification) {
     let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
 
-    // const index = updatedUsers.findIndex(
-    //   (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
-    // );
     const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
 
     if (index !== -1) {
@@ -175,10 +172,6 @@ const handleCommentNotification = async (job: any) => {
       }
     }
     updatedUsers.unshift(newUserEntry);
-
-    // existingNotification.commentedBy.newFiveUsers = updatedUsers;
-
-    // existingNotification.commentedBy.totalCount += 1;
 
     if (existingNotification) {
       if (!existingNotification.commentedBy) {
@@ -207,58 +200,6 @@ const handleCommentNotification = async (job: any) => {
 
   io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
 };
-// const handleCommunityPostCommentNotification = async (job: any) => {
-//   const { sender_id, receiverId, communityPostId, communityPostCommentId } = job.data;
-
-//   const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-//   const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-//   const postObjectId = new mongoose.Types.ObjectId(communityPostId);
-
-//   let existingNotification = await notificationModel.findOne({
-//     receiverId: receiverObjectId,
-//     communityPostId: postObjectId,
-//     type: notificationRoleAccess.COMMENT,
-//   });
-
-//   if (existingNotification) {
-//     let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
-
-//     const index = updatedUsers.findIndex(
-//       (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
-//     );
-
-//     if (index !== -1) {
-//       updatedUsers.splice(index, 1);
-//     } else {
-//       if (updatedUsers.length >= 5) {
-//         updatedUsers.pop();
-//       }
-//     }
-//     updatedUsers.unshift(senderObjectId);
-
-//     existingNotification.commentedBy.newFiveUsers = updatedUsers;
-
-//     existingNotification.commentedBy.totalCount += 1;
-
-//     await existingNotification.save();
-//   } else {
-//     const newNotification = {
-//       receiverId: receiverObjectId,
-//       communityPostId: postObjectId,
-//       type: notificationRoleAccess.COMMUNITY_COMMENT,
-//       communityPostCommentId,
-//       message: 'commented on your community post',
-//       commentedBy: {
-//         totalCount: 1,
-//         newFiveUsers: [senderObjectId],
-//       },
-//     };
-
-//     await notificationService.CreateNotification(newNotification);
-//   }
-
-//   io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-// };
 
 const handleCommunityPostCommentNotification = async (job: any) => {
   const { sender_id, receiverId, communityPostId, communityPostCommentId } = job.data;
