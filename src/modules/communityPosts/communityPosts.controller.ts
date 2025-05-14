@@ -104,7 +104,7 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
     const community = await communityService.getCommunity(communityId);
 
     if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'CCCCommunity not found' });
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
 
     const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
