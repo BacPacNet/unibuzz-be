@@ -162,7 +162,7 @@ export const getCommunityPostComments = async (postId: string, page: number = 1,
     })
   );
 
-  const totalComments = await communityPostCommentModel.countDocuments({ communityId: postId });
+  const totalComments = await communityPostCommentModel.countDocuments({ postId: postId });
 
   const totalPages = Math.ceil(totalComments / limit);
 
