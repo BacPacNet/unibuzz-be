@@ -268,3 +268,22 @@ export const getPostCommentById = async (commentId: string) => {
     finalComments,
   };
 };
+
+export const getSingleCommentByCommentId = async (commentId: string) => {
+  const comment = await userPostCommentsModel
+    .findById(commentId)
+    .populate([
+      { path: 'commenterId', select: 'firstName lastName _id' },
+      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+      {
+        path: 'replies',
+        populate: [
+          { path: 'commenterId', select: 'firstName lastName _id' },
+          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+        ],
+      },
+    ])
+    .lean();
+
+  return comment;
+};

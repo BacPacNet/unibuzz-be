@@ -82,6 +82,7 @@ export const getCommunityPostComments = async (req: extendedRequest, res: Respon
         Number(page),
         Number(limit)
       );
+
       return res.status(200).json(comments);
     }
   } catch (error: any) {

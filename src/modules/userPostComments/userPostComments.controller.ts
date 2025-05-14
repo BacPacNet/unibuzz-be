@@ -28,10 +28,12 @@ export const CreateComment = async (req: extendedRequest, res: Response, next: N
         sender_id: userID,
         receiverId: comment.userPostId.user_id,
         userPostId: comment.userPostId._id,
+        postCommentId: comment._id,
         type: notificationRoleAccess.COMMENT,
         message: 'Commented at your Post.',
       };
-      if (userID !== comment.userPostId.user_id) {
+
+      if (userID.toString() !== comment.userPostId.user_id.toString()) {
         await notificationQueue.add(NotificationIdentifier.comment_notification, notifications);
       }
 

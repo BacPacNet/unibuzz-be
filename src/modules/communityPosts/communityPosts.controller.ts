@@ -10,6 +10,8 @@ import { userIdExtend } from 'src/config/userIDType';
 import mongoose from 'mongoose';
 import { convertToObjectId } from '../../utils/common';
 import { status } from '../communityGroup/communityGroup.interface';
+import { userPostCommentsService } from '../userPostComments';
+import { communityPostCommentsService } from '../communityPostsComments';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -240,9 +242,10 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
 
 export const getPostById = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
-  const { isType } = req.query;
-  let post: any;
+  const { isType, commentId } = req.query;
 
+  let post: any;
+  let comment: any;
   try {
     if (postId) {
       if (isType == 'Community') {
@@ -256,6 +259,10 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
         if (!postResult.length) {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
+
+        if (commentId?.toString().length) {
+          comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(commentId?.toString());
+        }
       } else if (isType == 'Timeline') {
         const postResult = await userPostService.getUserPost(postId, req.userId);
 
@@ -264,13 +271,19 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
         if (!postResult.length) {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
+
+        if (commentId?.toString().length) {
+          comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString());
+        }
       } else {
         throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');
       }
 
-      return res.status(200).json({ post });
+      return res.status(200).json({ post, comment });
     }
   } catch (error: any) {
+    console.log('Err', error);
+
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

@@ -115,6 +115,8 @@ export const joinCommunityFromUniversity = async (req: userIdExtend, res: Respon
     const community = await communityService.joinCommunityFromUniversity(userId, universityId);
     return res.status(httpStatus.OK).json(community);
   } catch (error: any) {
+    console.log('err', error);
+
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

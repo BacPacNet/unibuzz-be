@@ -25,6 +25,7 @@ const notificationSchema = new Schema<notificationInterface>(
       type: Schema.Types.ObjectId,
       ref: 'userPost',
     },
+
     type: { type: String, enum: notificationRole, required: true },
 
     message: { type: String, required: true },
@@ -45,8 +46,15 @@ const notificationSchema = new Schema<notificationInterface>(
       totalCount: { type: Number },
       newFiveUsers: [
         {
-          type: Schema.Types.ObjectId,
-          ref: 'User',
+          _id: { type: Schema.Types.ObjectId, ref: 'User' },
+          communityPostCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'communityPostComments',
+          },
+          postCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'userPostComments',
+          },
         },
       ],
     },

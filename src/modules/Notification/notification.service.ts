@@ -282,7 +282,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
     {
       $lookup: {
         from: 'users',
-        localField: 'commentedBy.newFiveUsers',
+        localField: 'commentedBy.newFiveUsers._id',
         foreignField: '_id',
         as: 'commentedUsersDetails',
       },
@@ -290,7 +290,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
     {
       $lookup: {
         from: 'userprofiles',
-        localField: 'commentedBy.newFiveUsers',
+        localField: 'commentedBy.newFiveUsers._id',
         foreignField: 'users_id',
         as: 'commentedUsersProfiles',
       },
@@ -330,6 +330,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         message: 1,
         userPostId: 1,
         communityPostId: 1,
+        communityPostCommentId: 1,
         status: 1,
         'sender_id._id': '$senderDetails._id',
         'sender_id.firstName': '$senderDetails.firstName',
@@ -392,12 +393,15 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
           },
         },
         'commentedBy.totalCount': 1,
+
         'commentedBy.newFiveUsers': {
           $map: {
             input: '$commentedBy.newFiveUsers',
-            as: 'userId',
+            as: 'userEntry',
             in: {
-              _id: '$$userId',
+              _id: '$$userEntry._id',
+              communityPostCommentId: '$$userEntry.communityPostCommentId',
+              postCommentId: '$$userEntry.postCommentId',
               name: {
                 $let: {
                   vars: {
@@ -407,7 +411,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
                           $filter: {
                             input: '$commentedUsersDetails',
                             as: 'u',
-                            cond: { $eq: ['$$u._id', '$$userId'] },
+                            cond: { $eq: ['$$u._id', '$$userEntry._id'] },
                           },
                         },
                         0,
@@ -426,7 +430,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
                           $filter: {
                             input: '$commentedUsersProfiles',
                             as: 'p',
-                            cond: { $eq: ['$$p.users_id', '$$userId'] },
+                            cond: { $eq: ['$$p.users_id', '$$userEntry._id'] },
                           },
                         },
                         0,
