@@ -234,6 +234,75 @@ export const getUserFilteredCommunities = async (
         });
         break;
 
+      case 'alphabetAsc':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { lowerTitle: 1 } },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.lowerTitle',
+        });
+        break;
+
+      case 'alphabetDesc':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: [
+                    '$$group',
+                    {
+                      lowerTitle: {
+                        $cond: {
+                          if: { $isArray: ['$$group.title'] },
+                          then: '',
+                          else: { $toLower: '$$group.title' },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: {
+                input: '$communityGroups',
+                sortBy: { lowerTitle: -1 },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.lowerTitle',
+        });
+        break;
       case 'users':
         pipeline.push({
           $addFields: {
@@ -243,6 +312,47 @@ export const getUserFilteredCommunities = async (
                 as: 'group',
                 in: {
                   $mergeObjects: ['$$group', { userCount: { $size: '$$group.users' } }],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { userCount: -1 } },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.userCount',
+        });
+        break;
+
+      case 'userCountDesc':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: [
+                    '$$group',
+                    {
+                      userCount: {
+                        $size: {
+                          $filter: {
+                            input: '$$group.users',
+                            as: 'user',
+                            cond: { $eq: ['$$user.status', 'accepted'] },
+                          },
+                        },
+                      },
+                    },
+                  ],
                 },
               },
             },
@@ -393,6 +503,8 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
 
     return { message: 'Joined successfully', data: { profile: updatedUserProfile, community: community } };
   } catch (error: any) {
+    console.log('errrr', error);
+
     throw new Error(error.message);
   }
 };

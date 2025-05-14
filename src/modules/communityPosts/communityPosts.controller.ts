@@ -243,7 +243,6 @@ export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
 export const getPostById = async (req: extendedRequest, res: Response) => {
   const { postId } = req.params;
   const { isType, commentId } = req.query;
-  console.log('qwe', req.query);
 
   let post: any;
   let comment: any;
@@ -261,7 +260,7 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
 
-        if (commentId?.toString().trim().length) {
+        if (commentId?.toString().length) {
           comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(commentId?.toString());
         }
       } else if (isType == 'Timeline') {
@@ -273,7 +272,7 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
           throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
         }
 
-        if (commentId?.toString().trim().length) {
+        if (commentId?.toString().length) {
           comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString());
         }
       } else {

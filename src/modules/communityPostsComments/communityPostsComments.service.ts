@@ -29,7 +29,7 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     message: 'commented on your community post',
   };
 
-  if (userID !== body.adminId) {
+  if (userID.toString() !== body.adminId.toString()) {
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
   }
 
@@ -286,17 +286,20 @@ export const commentReply = async (commentId: string, userID: string, body: any,
 };
 
 export const getSingleCommunityCommentByCommentId = async (commentId: string) => {
-  const comment = await communityPostCommentModel.findById(new mongoose.Types.ObjectId(commentId)).populate([
-    { path: 'commenterId', select: 'firstName lastName _id' },
-    { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
-    {
-      path: 'replies',
-      populate: [
-        { path: 'commenterId', select: 'firstName lastName _id' },
-        { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
-      ],
-    },
-  ]);
+  const comment = await communityPostCommentModel
+    .findById(new mongoose.Types.ObjectId(commentId))
+    .populate([
+      { path: 'commenterId', select: 'firstName lastName _id' },
+      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+      {
+        path: 'replies',
+        populate: [
+          { path: 'commenterId', select: 'firstName lastName _id' },
+          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+        ],
+      },
+    ])
+    .lean();
 
   return comment;
 };
