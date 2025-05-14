@@ -7,6 +7,7 @@ import { notificationModel, notificationService } from '../../../modules/Notific
 import { NotificationIdentifier } from '../NotificationEnums';
 import { notificationRoleAccess } from '../../../modules/Notification/notification.interface';
 import { QueuesEnum } from '../../queueEnums';
+import { logger } from '../../../modules/logger';
 const connection = {
   host: config.bull_mq_queue.REDIS_HOST || 'localhost',
   port: Number(config.bull_mq_queue.REDIS_PORT) || 6379,
@@ -439,7 +440,7 @@ export const notificationWorker = new Worker(
 );
 
 notificationWorker.on('ready', () => {
-  console.log('Notification Worker ready!');
+  logger.info('Notification Worker ready');
 });
 
 notificationWorker.on('failed', (_, err) => {
