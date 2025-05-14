@@ -10,14 +10,6 @@ import { convertToObjectId } from '../../utils/common';
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
   const { content, commenterProfileId } = body;
 
-  const notifications = {
-    sender_id: userID,
-    receiverId: body.adminId,
-    communityPostId: communityPostId,
-    type: notificationRoleAccess.COMMUNITY_COMMENT,
-    message: 'commented on your community post',
-  };
-
   const payload = {
     content,
     postId: convertToObjectId(communityPostId),
@@ -27,6 +19,15 @@ export const createCommunityComment = async (userID: string, communityPostId: st
   };
 
   const comment = await communityPostCommentModel.create(payload);
+
+  const notifications = {
+    sender_id: userID,
+    receiverId: body.adminId,
+    communityPostId: communityPostId,
+    communityPostCommentId: comment._id,
+    type: notificationRoleAccess.COMMUNITY_COMMENT,
+    message: 'commented on your community post',
+  };
 
   if (userID !== body.adminId) {
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
@@ -282,4 +283,20 @@ export const commentReply = async (commentId: string, userID: string, body: any,
     .lean();
 
   return parentComment;
+};
+
+export const getSingleCommunityCommentByCommentId = async (commentId: string) => {
+  const comment = await communityPostCommentModel.findById(new mongoose.Types.ObjectId(commentId)).populate([
+    { path: 'commenterId', select: 'firstName lastName _id' },
+    { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+    {
+      path: 'replies',
+      populate: [
+        { path: 'commenterId', select: 'firstName lastName _id' },
+        { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role' },
+      ],
+    },
+  ]);
+
+  return comment;
 };

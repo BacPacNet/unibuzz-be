@@ -29,18 +29,32 @@ interface likedBy {
   newFiveUsers: mongoose.Types.ObjectId[];
 }
 
+interface CommentedUser {
+  _id: mongoose.Types.ObjectId;
+  communityPostCommentId?: mongoose.Types.ObjectId;
+  postCommentId?: mongoose.Types.ObjectId;
+}
+
+interface CommentedBy {
+  totalCount: number;
+  newFiveUsers: CommentedUser[];
+}
+
 interface notificationInterface {
   sender_id: mongoose.Types.ObjectId;
   receiverId: mongoose.Types.ObjectId;
   communityGroupId: mongoose.Types.ObjectId;
   communityPostId: mongoose.Types.ObjectId;
   userPostId: mongoose.Types.ObjectId;
+  postCommentId: mongoose.Types.ObjectId;
+  communityPostCommentId: mongoose.Types.ObjectId;
   message: string;
   type: string;
   isRead: boolean;
   status: notificationStatus;
   likedBy: likedBy;
-  commentedBy: likedBy;
+  //   commentedBy: likedBy;
+  commentedBy?: CommentedBy;
 }
 
 export { notificationInterface };
