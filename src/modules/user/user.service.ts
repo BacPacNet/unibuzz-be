@@ -105,7 +105,7 @@ export const getAllUser = async (
   const limitpage = limit || 10;
   const startIndex = (Currpage - 1) * limitpage;
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
-  const university_name = decodeURI(universityName);
+  const university_name = decodeURI(universityName || '');
 
   const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following');
   const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
@@ -122,7 +122,8 @@ export const getAllUser = async (
     matchStage.lastName = { $regex: new RegExp(lastNametopush, 'i') };
   }
 
-  if (university_name) {
+  // Only apply university_name filter if provided
+  if (university_name.trim() !== '') {
     matchStage['profile.university_name'] = { $regex: new RegExp(university_name, 'i') };
   }
 
@@ -179,7 +180,6 @@ export const getAllUser = async (
     .skip(startIndex)
     .limit(limitpage);
 
-  // Copy the same match stage logic used above
   const totalUsersAggregate = await User.aggregate([
     {
       $lookup: {
@@ -189,9 +189,8 @@ export const getAllUser = async (
         as: 'profile',
       },
     },
-    {
-      $match: matchStage, // <- same dynamic matchStage you already built
-    },
+    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    { $match: matchStage },
     {
       $count: 'total',
     },

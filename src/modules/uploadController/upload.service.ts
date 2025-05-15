@@ -26,6 +26,5 @@ export async function uploadToS3(file: Express.Multer.File, existingKey?: string
   };
 
   const data = await s3.upload(params).promise();
-  console.log(data, 'data');
   return { imageUrl: data.Location, publicId: data.Key };
 }

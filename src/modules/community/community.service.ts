@@ -132,8 +132,8 @@ export const getUserFilteredCommunities = async (
         const typeConditions: any[] = [];
         if (selectedType.includes('Private')) typeConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
         if (selectedType.includes('Public')) typeConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
-        if (selectedType.includes('Official')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'Official'] });
-        if (selectedType.includes('Casual')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'Casual'] });
+        if (selectedType.includes('Official')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
+        if (selectedType.includes('Casual')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
 
         pipeline.push({
           $addFields: {

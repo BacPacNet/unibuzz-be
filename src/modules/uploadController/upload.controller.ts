@@ -3,7 +3,6 @@ import { Request, Response } from 'express';
 import { uploadToS3 } from './upload.service';
 
 export const uploadToS3Controller = async (req: Request, res: Response) => {
-  console.log(req.files);
   try {
     const files = (req.files || []) as any[];
     const existingKeys = req.body.existingKeys || [];

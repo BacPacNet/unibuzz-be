@@ -85,7 +85,6 @@ export const getAllUserPostComments = async (req: Request, res: Response, next: 
       return res.status(200).json({ allComments });
     }
   } catch (error) {
-    console.log(req);
     console.log(error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get post Comments'));
   }
