@@ -251,7 +251,14 @@ export const getUserChats = async (userId: string) => {
     };
   });
 
-  allChats.sort((a, b) => b.latestMessageTime - a.latestMessageTime);
+  //   allChats.sort((a, b) => b.latestMessageTime - a.latestMessageTime);
+  allChats.sort((a: any, b: any) => {
+    const aTime = a.latestMessageTime > 0 ? a.latestMessageTime : new Date(a.createdAt || 0).getTime();
+
+    const bTime = b.latestMessageTime > 0 ? b.latestMessageTime : new Date(b.createdAt || 0).getTime();
+
+    return bTime - aTime;
+  });
   return allChats;
 };
 
