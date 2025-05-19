@@ -301,12 +301,9 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     const userIDSet = new Set(communityUsersID);
 
     if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, 'User not found in Community  ');
-    // console.log('userProfile.communities', userProfile.communities, 'ccc', communityGroup.communityId);
     // const isUserVerifiedToJoin = userProfile.communities.some(
     //   (community) => community.communityId.toString() === communityGroup.communityId.toString()
     // );
-
-    // console.log('isUserVerifiedToJoin', isUserVerifiedToJoin);
 
     if (!isUserVerified) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
@@ -356,12 +353,9 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       }
     );
 
-    console.log(updateUserProfile, 'updateUserProfile');
-
     //const joinCommunity = userProfile.communities.find(
     //  (c) => c.communityId.toString() === communityGroup.communityId.toString()
     //) as UserCommunities;
-    //console.log(joinCommunity, 'joinCommunity');
 
     //if (joinCommunity) {
     //  const newGroupMember: UserCommunityGroup = {
@@ -379,7 +373,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     //  // Explicitly mark the modified path
     //  userProfile.markModified('communities');
 
-    //  console.log(userProfile.communities, 'userProfile');
+    //  userProfile.communities, 'userProfile');
     //  await userProfile.save();
     //}
 
@@ -456,8 +450,6 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
     }
 
     const updatedUserProfile = await userProfile.save();
-
-    console.log(updatedUserProfile.communities[0]?.communityGroups, 'updatedUserProfile');
 
     return { communityGroup, communities: updatedUserProfile.communities };
   } catch (error: any) {

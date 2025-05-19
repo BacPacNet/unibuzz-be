@@ -13,7 +13,7 @@ export const createManyNotification = async (
   type: string,
   message: string
 ) => {
-  const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?.id));
+  const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?._id));
   const jobData = {
     adminId: adminId.toString(),
     communityGroupId: communityGroupId.toString(),
