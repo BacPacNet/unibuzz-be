@@ -4,11 +4,16 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 
 export const createUserPostComment = async (userId: string, userPostId: string, body: any) => {
-  const newComment = { ...body, userPostId, commenterId: userId, level: 0 };
+  const payload = {
+    ...body,
+    userPostId,
+    commenterId: userId,
+    level: 0,
+  };
 
-  const createdComment = await userPostCommentsModel.create(newComment);
+  const comment = await userPostCommentsModel.create(payload);
 
-  await createdComment.populate([
+  await comment.populate([
     { path: 'commenterId', select: 'firstName lastName _id' },
     {
       path: 'commenterProfileId',
@@ -28,7 +33,9 @@ export const createUserPostComment = async (userId: string, userPostId: string, 
     { path: 'userPostId', select: 'user_id' },
   ]);
 
-  return createdComment;
+  return comment;
+
+  console.log(comment, 'comment');
 };
 
 export const updateUserPostComment = async (commentId: mongoose.Types.ObjectId, comment: any) => {

@@ -8,29 +8,25 @@ import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEn
 import { convertToObjectId } from '../../utils/common';
 
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
-  const { content, commenterProfileId } = body;
+  const { commenterProfileId, adminId } = body;
 
-  const payload = {
-    content,
+  const comment = await communityPostCommentModel.create({
+    ...body,
     postId: convertToObjectId(communityPostId),
     commenterId: convertToObjectId(userID),
     commenterProfileId: convertToObjectId(commenterProfileId),
     level: 0,
-  };
+  });
 
-  const comment = await communityPostCommentModel.create(payload);
-
-  const notifications = {
-    sender_id: userID,
-    receiverId: body.adminId,
-    communityPostId: communityPostId,
-    communityPostCommentId: comment._id,
-    type: notificationRoleAccess.COMMUNITY_COMMENT,
-    message: 'commented on your community post',
-  };
-
-  if (userID.toString() !== body.adminId.toString()) {
-    await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, notifications);
+  if (userID !== adminId) {
+    await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, {
+      sender_id: userID,
+      receiverId: adminId,
+      communityPostId,
+      communityPostCommentId: comment._id,
+      type: notificationRoleAccess.COMMUNITY_COMMENT,
+      message: 'commented on your community post',
+    });
   }
 
   await comment.populate([

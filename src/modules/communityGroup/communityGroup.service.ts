@@ -8,11 +8,14 @@ import { CommunityGroupAccess, CommunityGroupType } from '../../config/community
 import { communityGroupInterface, status } from './communityGroup.interface';
 import { UserProfile, userProfileService } from '../userProfile';
 import { communityGroupService } from '.';
-import { notificationService } from '../Notification';
+import { notificationModel, notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { communityService } from '../community';
 import { io } from '../../index';
-//import { UserCommunities, UserCommunityGroup } from '../userProfile/userProfile.interface';
+import CommunityPostModel from '../communityPosts/communityPosts.model';
+import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
+import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -168,7 +171,55 @@ export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId) 
 };
 
 export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
-  return await communityGroupModel.findByIdAndDelete(id);
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    // Get the group before deleting
+    const groupToDelete = await communityGroupModel.findById(id).session(session);
+    if (!groupToDelete) {
+      throw new Error('Community group not found');
+    }
+
+    const receiverIds = groupToDelete.users
+      .map((user) => user.userId)
+      .filter((id) => id, toString() !== groupToDelete.adminUserId.toString());
+
+    // Delete the community group
+    await communityGroupModel.findByIdAndDelete(id, { session });
+
+    // Delete notifications with that communityGroupId
+    await notificationModel.deleteMany({ communityGroupId: id }, { session });
+
+    // Get all posts under the community group
+    const posts = await CommunityPostModel.find({ communityGroupId: id }, '_id', { session });
+    const postIds = posts.map((post) => post._id);
+
+    // Delete all comments associated with those posts
+    if (postIds.length > 0) {
+      await communityPostCommentsModel.deleteMany({ postId: { $in: postIds } }, { session });
+    }
+
+    // Delete the posts themselves
+    await CommunityPostModel.deleteMany({ communityGroupId: id }, { session });
+
+    const jobData = {
+      adminId: groupToDelete.adminUserId.toString(),
+      communityGroupId: groupToDelete._id.toString(),
+      receiverIds: receiverIds,
+      type: notificationRoleAccess.DELETED_COMMUNITY_GROUP,
+      message: `${groupToDelete.title} group has been deleted by admin`,
+    };
+
+    await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
+
+    await session.commitTransaction();
+    session.endSession();
+    return { success: true };
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
 };
 
 export const getAllCommunityGroup = async (communityId: string, access: string) => {

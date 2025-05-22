@@ -568,6 +568,8 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
           likeCount: 1,
           createdAt: 1,
           updatedAt: 1,
+          communityName: 1,
+          communityGroupName: 1,
           user: {
             firstName: '$user.firstName',
             lastName: '$user.lastName',

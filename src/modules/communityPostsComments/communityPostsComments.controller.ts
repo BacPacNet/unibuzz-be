@@ -9,21 +9,32 @@ interface extendedRequest extends Request {
   userId?: string;
 }
 
-export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
-  const userID = req.userId;
-  const { communityPostId } = req.params;
-  let comment;
-  req.body.content = he.decode(req.body.content);
-  if (!req.body.content) {
-    return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
-  }
+export const CreateComment = async (req: extendedRequest, res: Response) => {
   try {
-    if (userID && communityPostId) {
-      comment = await communityPostCommentsService.createCommunityComment(userID, communityPostId, req.body);
+    const userID = req.userId;
+    const { communityPostId } = req.params;
+
+    if (!userID || !communityPostId) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Missing user ID or post ID.' });
     }
+
+    const { content = '', ...rest } = req.body;
+    const decodedContent = content.trim() ? he.decode(content) : '';
+
+    if (!decodedContent && !(Array.isArray(req.body.imageUrl) && req.body.imageUrl.length > 0)) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Content or image is required.' });
+    }
+
+    const commentData = {
+      ...rest,
+      content: decodedContent,
+    };
+
+    const comment = await communityPostCommentsService.createCommunityComment(userID, communityPostId, commentData);
+
     return res.status(httpStatus.CREATED).json({ comment });
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 

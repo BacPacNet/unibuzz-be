@@ -19,10 +19,10 @@ const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
     },
     content: {
       type: String,
-      required: true,
+      required: false,
     },
     likeCount: [{ userId: String }],
-    imageUrl: { imageUrl: String, publicId: String },
+    imageUrl: [{ imageUrl: String, publicId: String }],
     replies: [
       {
         type: Schema.Types.ObjectId,

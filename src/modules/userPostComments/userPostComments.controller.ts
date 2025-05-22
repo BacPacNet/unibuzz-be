@@ -12,35 +12,48 @@ interface extendedRequest extends Request {
   userId?: string;
 }
 
-export const CreateComment = async (req: extendedRequest, res: Response, next: NextFunction) => {
+export const CreateComment = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
   const { userPostId } = req.params;
-  req.body.content = he.decode(req.body.content);
 
-  if (!req.body.content && !req?.body?.imageUrl?.length) {
-    return next(new ApiError(httpStatus.NOT_FOUND, 'Content required!'));
+  // Decode HTML content if present
+  if (req.body.content) {
+    req.body.content = he.decode(req.body.content);
   }
-  try {
-    if (userID && userPostId) {
-      const comment: any = await userPostCommentsService.createUserPostComment(userID, userPostId, req.body);
 
-      const notifications = {
+  // Validate input: must have either text or image
+  const hasText = req.body.content?.trim()?.length > 0;
+  const hasImage = Array.isArray(req.body.imageUrl) && req.body.imageUrl.length > 0;
+
+  if (!hasText && !hasImage) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Content or image is required.' });
+  }
+
+  if (!userID || !userPostId) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Missing user ID or post ID.' });
+  }
+
+  try {
+    const comment: any = await userPostCommentsService.createUserPostComment(userID, userPostId, req.body);
+
+    const receiverId = comment.userPostId.user_id;
+
+    // Avoid notifying self
+    if (userID.toString() !== receiverId.toString()) {
+      await notificationQueue.add(NotificationIdentifier.comment_notification, {
         sender_id: userID,
-        receiverId: comment.userPostId.user_id,
+        receiverId,
         userPostId: comment.userPostId._id,
         postCommentId: comment._id,
         type: notificationRoleAccess.COMMENT,
-        message: 'Commented at your Post.',
-      };
-
-      if (userID.toString() !== comment.userPostId.user_id.toString()) {
-        await notificationQueue.add(NotificationIdentifier.comment_notification, notifications);
-      }
-
-      return res.status(httpStatus.CREATED).json({ comment });
+        message: 'Commented on your post.',
+      });
     }
+
+    return res.status(httpStatus.CREATED).json({ comment });
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    console.error('Error creating comment:', error);
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to create comment.', error: error.message });
   }
 };
 
@@ -59,19 +72,18 @@ export const updateComment = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteComment = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteComment = async (req: Request, res: Response) => {
   const { commentId } = req.params;
+
+  if (typeof commentId !== 'string' || !mongoose.Types.ObjectId.isValid(commentId)) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid comment ID' });
+  }
+
   try {
-    if (typeof commentId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(commentId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment ID'));
-      }
-      await userPostCommentsService.deleteUserPostComment(new mongoose.Types.ObjectId(commentId));
-    }
-    return res.status(200).json({ message: 'deleted' });
-  } catch (error) {
-    // console.log(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
+    await userPostCommentsService.deleteUserPostComment(new mongoose.Types.ObjectId(commentId));
+    return res.status(httpStatus.OK).json({ message: 'Deleted successfully' });
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to delete', error: error.message });
   }
 };
 

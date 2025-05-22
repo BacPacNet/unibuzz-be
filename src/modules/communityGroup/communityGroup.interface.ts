@@ -83,6 +83,7 @@ export enum status {
 }
 
 interface users {
+  _id?: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   isRequestAccepted: boolean;
   firstName: String;

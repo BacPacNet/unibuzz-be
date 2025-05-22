@@ -431,7 +431,9 @@ export const notificationWorker = new Worker(
       case NotificationIdentifier.group_invite_notifications:
         await handleSendNotification(job);
         break;
-
+      case NotificationIdentifier.delete_community_group:
+        await handleSendNotification(job);
+        break;
       default:
         console.warn(`Unknown job name: ${job.name}`);
     }

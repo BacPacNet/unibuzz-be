@@ -203,8 +203,6 @@ export const getRecentTimelinePosts = async (userId: string, page: number = 1, l
       ],
     };
 
-    console.log(userPostMatchStage, 'userPostMatchStage');
-
     const communityPostMatchStage = {
       $or: [
         {
@@ -385,8 +383,6 @@ export const getRecentTimelinePosts = async (userId: string, page: number = 1, l
       UserPostModel.countDocuments(userPostMatchStage),
       CommunityPostModel.countDocuments(communityPostMatchStage),
     ]);
-
-    console.log(userPosts, totalUserPosts);
 
     // 5. Combine and sort posts by date
     const allPosts = [...userPosts, ...communityPosts]
