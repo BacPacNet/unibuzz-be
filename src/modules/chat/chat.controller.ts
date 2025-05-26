@@ -68,7 +68,7 @@ export const getUserMessageNotificationTotalCount = async (req: userIdExtend, re
 };
 
 export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
-  const { users, groupName, groupDescription, groupLogo } = req.body;
+  const { users, groupName, groupDescription, groupLogo, community } = req.body;
   const userID = req.userId;
 
   try {
@@ -86,7 +86,14 @@ export const CreateGroupChat = async (req: userIdExtend, res: Response) => {
         };
       });
 
-      const newGroup = await chatService.createGroupChat(userID, usersToAdd, groupName, groupDescription, groupLogo);
+      const newGroup = await chatService.createGroupChat(
+        userID,
+        usersToAdd,
+        groupName,
+        groupDescription,
+        groupLogo,
+        community
+      );
       return res.status(201).json(newGroup);
     }
   } catch (error: any) {

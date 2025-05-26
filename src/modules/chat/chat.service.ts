@@ -267,7 +267,8 @@ export const createGroupChat = async (
   usersToAdd: { userId: string; acceptRequest: boolean }[],
   groupName: string,
   groupDescription: string,
-  groupLogo: media | null = null
+  groupLogo: media | null = null,
+  community: any
 ) => {
   // Validate required fields
   if (!adminId || !groupName) {
@@ -287,6 +288,7 @@ export const createGroupChat = async (
   // Create group data with proper ObjectId types
   const groupData = {
     chatName: groupName.trim(),
+    community: community,
     users: [
       ...normalizedUsers,
       {

@@ -223,6 +223,7 @@ export const joinCommunityGroup = async (req: extendedRequest, res: Response) =>
     const updatedCommunity = await communityGroupService.joinCommunityGroup(userID, groupId as string);
     return res.status(200).json(updatedCommunity);
   } catch (error: any) {
+    console.error(error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

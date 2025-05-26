@@ -100,7 +100,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },
         isRequestAccepted: { type: Boolean, default: false },
-        status: { type: String, enum: ['pending', 'rejected', 'accepted', 'default'], default: status.default },
+        status: { type: String, enum: ['pending', 'rejected', 'accepted', 'default'], default: status.pending },
         firstName: String,
         lastName: String,
         universityName: String,

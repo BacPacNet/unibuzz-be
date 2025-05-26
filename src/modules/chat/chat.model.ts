@@ -7,6 +7,7 @@ const chatSchema = new Schema<chatInterface>(
     isGroupChat: { type: Boolean, default: false },
     groupLogo: { imageUrl: String, publicId: String },
     groupDescription: { type: String },
+    community: { name: String, id: String },
     users: [
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },

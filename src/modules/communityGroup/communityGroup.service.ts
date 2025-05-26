@@ -20,33 +20,43 @@ import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEn
 type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
-  const { selectedUsers, communityGroupType, communityGroupCategory, ...restBody } = body;
+  const { selectedUsers = [], communityGroupCategory, ...restBody } = body;
 
-  let communityGroupToUpdate = await communityGroupModel.findById(id);
+  const communityGroupToUpdate = await communityGroupModel.findById(id);
 
   if (!communityGroupToUpdate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found!');
   }
 
-  communityGroupToUpdate.communityGroupType = communityGroupType;
-
+  // Assign all basic fields (excluding selectedUsers and category)
   Object.assign(communityGroupToUpdate, restBody);
 
+  // Update category map if provided
   if (communityGroupCategory && typeof communityGroupCategory === 'object') {
     communityGroupToUpdate.communityGroupCategory = new Map(Object.entries(communityGroupCategory));
   }
 
-  await communityGroupToUpdate.save();
+  // Add new unique users to the group
+  if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
 
-  if (selectedUsers?.length >= 1 && communityGroupToUpdate?._id) {
+    const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user._id.toString()));
+
+    if (newUsers.length > 0) {
+      communityGroupToUpdate.users.push(...newUsers);
+    }
+
+    // Create notifications for newly added users
     await notificationService.createManyNotification(
       communityGroupToUpdate.adminUserId,
       communityGroupToUpdate._id,
-      selectedUsers,
+      newUsers,
       notificationRoleAccess.GROUP_INVITE,
       'received an invitation to join group'
     );
   }
+
+  await communityGroupToUpdate.save();
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
@@ -55,7 +65,7 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
       throw new Error('Invalid communityGroupId or userId');
     }
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users.userId': userId },
+      { _id: communityGroupId, 'users._id': userId },
       {
         $set: {
           'users.$.isRequestAccepted': true,
@@ -101,7 +111,7 @@ export const rejectCommunityGroupJoinApproval = async (communityGroupId: mongoos
       throw new Error('Invalid communityGroupId or userId');
     }
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users.userId': userId },
+      { _id: communityGroupId, 'users._id': userId },
       {
         $set: {
           'users.$.isRequestAccepted': false,
@@ -181,7 +191,7 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
     }
 
     const receiverIds = groupToDelete.users
-      .map((user) => user.userId)
+      .map((user) => user._id)
       .filter((id) => id, toString() !== groupToDelete.adminUserId.toString());
 
     // Delete the community group
@@ -360,16 +370,14 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
     }
 
-    const userAlreadyMember = communityGroup.users.some(
-      (user) => user.userId.toString() === userID && user.isRequestAccepted
-    );
+    const userAlreadyMember = communityGroup.users.some((user) => user._id.toString() === userID && user.isRequestAccepted);
 
     if (userAlreadyMember) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a member of this community');
     }
 
     communityGroup.users.push({
-      userId: new mongoose.Types.ObjectId(userID),
+      _id: new mongoose.Types.ObjectId(userID),
       firstName: user.firstName,
       lastName: user.lastName,
       profileImageUrl: userProfile.profile_dp?.imageUrl || null,
@@ -438,12 +446,12 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       };
       await notificationService.CreateNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
-      return { success: true, message: 'Request sent successfully' };
+      return { success: true, message: 'Request sent successfully', isGroupPrivate: true };
     } else {
       return {
         success: true,
         message: 'Successfully joined the community group',
-        data: { communityGroup, communities: updateUserProfile?.communities },
+        data: { communityGroup, communities: updateUserProfile?.communities, isGroupPrivate: false },
       };
     }
   } catch (error: any) {
@@ -471,7 +479,7 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
     if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
     // Check if the user is a member of the communityGroup
-    const userIndex = communityGroup.users.findIndex((groupUser) => groupUser.userId.toString() === userID);
+    const userIndex = communityGroup.users.findIndex((groupUser) => groupUser._id.toString() === userID);
 
     if (userIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
@@ -515,7 +523,7 @@ export const acceptPrivateCommunityGroupRequest = async (userId: string, communi
       throw new Error('Invalid communityGroupId or userId');
     }
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users.userId': userId },
+      { _id: communityGroupId, 'users._id': userId },
       {
         $set: {
           'users.$.isRequestAccepted': true,

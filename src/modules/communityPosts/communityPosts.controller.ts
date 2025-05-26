@@ -45,7 +45,9 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
       // }
 
-      const userIds = communityGroup.users.map((item: any) => item.userId.toString());
+      console.log(communityGroup.users);
+
+      const userIds = communityGroup.users.map((item: any) => item._id.toString());
       const userIdSet = new Set(userIds);
 
       if (!userIdSet.has(userId)) {
@@ -146,7 +148,7 @@ export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Respons
     }
 
     const checkIfUserJoinedCommunity = communityGroup.users.some(
-      (user) => user.userId.toString() === userId.toString() && user.status === status.accepted
+      (user) => user._id.toString() === userId.toString() && user.status === status.accepted
     );
 
     if (!checkIfUserJoinedCommunity) {
@@ -197,7 +199,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
         _id: communityGroupId,
         $or: [
           {
-            'users.userId': req.userId,
+            'users._id': userId,
             'users.status': 'accepted',
           },
           {

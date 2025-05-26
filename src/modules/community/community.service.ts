@@ -445,7 +445,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
       {
         $push: {
           users: {
-            id: userId,
+            id: user._id,
             firstName: user.firstName,
             lastName: user.lastName,
             profileImageUrl: userProfile.profile_dp?.imageUrl || null,

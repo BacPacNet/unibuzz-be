@@ -471,7 +471,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
     if (post.communityGroupId) {
       const communityGroup = await communityGroupModel.findOne({
         _id: post.communityGroupId,
-        'users.userId': myUserId,
+        'users._id': myUserId,
       });
       isCommunityGroupMember = !!communityGroup;
 

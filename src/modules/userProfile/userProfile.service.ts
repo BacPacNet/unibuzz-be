@@ -453,17 +453,26 @@ export const addUniversityEmail = async (
   const updatedUserProfile = await UserProfile.findOneAndUpdate(
     {
       users_id: new mongoose.Types.ObjectId(userId),
+      // Ensure that the email is not already added to the profile
+      'email.UniversityEmail': { $ne: universityEmail },
     },
     {
       $push: {
         email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId, logo: communityLogoUrl },
+      },
+      $addToSet: {
+        communities: {
+          communityId,
+          isVerified: true,
+          communityGroups: [],
+        },
       },
     },
     { new: true }
   );
 
   if (!updatedUserProfile) {
-    throw new Error('This university email already exists for the user.');
+    throw new Error('User profile not found or university email already exists.');
   }
 
   return updatedUserProfile;

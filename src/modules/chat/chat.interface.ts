@@ -25,6 +25,7 @@ interface chatInterface {
   isGroupChat: boolean;
   groupLogo: media;
   groupDescription: string;
+  community: { name: String; id: String };
   users: users[];
   blockedBy: mongoose.Types.ObjectId[];
   latestMessage: mongoose.Types.ObjectId | Message;
