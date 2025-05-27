@@ -45,8 +45,6 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
       // }
 
-      console.log(communityGroup.users);
-
       const userIds = communityGroup.users.map((item: any) => item._id.toString());
       const userIdSet = new Set(userIds);
 

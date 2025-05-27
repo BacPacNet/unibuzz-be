@@ -23,18 +23,18 @@ export const createCommunityPost = async (post: communityPostsInterface, userId:
     communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, ['title', 'communityGroupAccess']);
   }
   const postData = { ...post, user_id: userId };
-  const isPostVerified = () => {
-    if (communityGroup) {
-      return communityGroup.communityGroupAccess === 'Private';
-    }
-    return false;
-  };
+  //  const isPostVerified = () => {
+  //    if (communityGroup) {
+  //      return communityGroup.communityGroupAccess === 'Private';
+  //    }
+  //    return false;
+  //  };
 
   return await CommunityPostModel.create({
     ...postData,
     communityName,
     communityGroupName: communityGroup?.title,
-    isPostVerified: isPostVerified(),
+    //isPostVerified: isPostVerified(),
   });
 };
 
