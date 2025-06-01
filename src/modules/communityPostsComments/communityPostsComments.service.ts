@@ -69,7 +69,12 @@ export const updateCommunityPostComment = async (id: mongoose.Types.ObjectId, co
 };
 
 export const deleteCommunityPostComment = async (id: mongoose.Types.ObjectId) => {
-  return await communityPostCommentModel.findByIdAndDelete(id);
+  try {
+    const deletedComment = await communityPostCommentModel.findByIdAndDelete(id);
+    return deletedComment;
+  } catch (error) {
+    throw new Error(`Failed to delete community post comment: ${error}`);
+  }
 };
 
 export const getAllCommunityPostComment = async (commentPostId: string) => {

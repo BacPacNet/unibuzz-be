@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
-import { notificationService } from '.';
+import { notificationModel, notificationService } from '.';
 import { communityGroupService } from '../communityGroup';
 import { notificationStatus } from './notification.interface';
+import { convertToObjectId } from '../../utils/common';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -77,12 +78,16 @@ export const JoinGroup = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
   const { id, groupId } = req.body;
 
-  let status;
   try {
     if (userID && groupId) {
-      status = await communityGroupService.joinCommunityGroup(userID, groupId);
+      const checkIfNotificationExist = await notificationModel.find({ _id: convertToObjectId(id), receiverId: userID });
+      if (!checkIfNotificationExist) {
+        throw new Error('Notification does not exist');
+      }
+      //  const status = await communityGroupService.joinCommunityGroup(userID, groupId);
+      const acceptRequest = await communityGroupService.acceptCommunityGroupJoinApproval(convertToObjectId(groupId), userID);
       await notificationService.updateUserNotification(id, notificationStatus.accepted);
-      return res.status(200).json(status);
+      return res.status(200).json({ message: 'Group joined successfully', data: acceptRequest });
     }
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });

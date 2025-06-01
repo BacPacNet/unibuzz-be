@@ -16,6 +16,7 @@ import CommunityPostModel from '../communityPosts/communityPosts.model';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { convertToObjectId } from '../../utils/common';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -65,7 +66,7 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
       throw new Error('Invalid communityGroupId or userId');
     }
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users._id': userId },
+      { _id: communityGroupId, 'users._id': convertToObjectId(userId) },
       {
         $set: {
           'users.$.isRequestAccepted': true,
@@ -101,6 +102,7 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
 
     return updatedGroup;
   } catch (error: any) {
+    console.error(error);
     throw new Error(error.message);
   }
 };
@@ -357,7 +359,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     }
 
     const community = await communityService.getCommunity(String(communityGroup.communityId));
-    const communityUsersID = community?.users.map((item) => item.id.toString());
+    const communityUsersID = community?.users.map((item) => item._id.toString());
 
     const userIDSet = new Set(communityUsersID);
 
@@ -522,6 +524,8 @@ export const acceptPrivateCommunityGroupRequest = async (userId: string, communi
     if (!communityGroupId || !userId) {
       throw new Error('Invalid communityGroupId or userId');
     }
+
+    console.log(communityGroupId, userId);
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
       { _id: communityGroupId, 'users._id': userId },
       {

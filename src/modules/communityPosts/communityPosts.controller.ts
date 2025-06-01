@@ -107,10 +107,10 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
 
-    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
+    const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
 
     if (!checkIfUserJoinedCommunity) {
-      throw new Error('You are not a member of this community');
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community');
     }
 
     const communityPosts = await communityPostsService.getCommunityPostsByCommunityId(
@@ -122,7 +122,7 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
     return res.status(200).json(communityPosts);
   } catch (error: any) {
     console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    res.status(error.statusCode).json({ success: false, message: error.message });
   }
 };
 
@@ -181,7 +181,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not foundddd' });
     }
 
-    const checkIfUserJoinedCommunity = community.users.some((user) => user.id.toString() === userId.toString());
+    const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
 
     const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject);
 

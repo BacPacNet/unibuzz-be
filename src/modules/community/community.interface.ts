@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 interface User {
-  id: mongoose.Types.ObjectId;
+  _id: mongoose.Types.ObjectId;
   firstName: string;
   lastName: string;
   profileImageUrl: string;

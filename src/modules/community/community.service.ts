@@ -68,7 +68,7 @@ export const getUserCommunities = async (userID: string) => {
           communityGroups: {
             $cond: {
               if: {
-                $in: [new mongoose.Types.ObjectId(userID), '$users.id'],
+                $in: [new mongoose.Types.ObjectId(userID), '$users._id'],
               },
               then: '$communityGroups',
               else: [],
@@ -415,7 +415,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  const community = await communityModel.findOne({ _id: communityId, 'users.id': userId });
+  const community = await communityModel.findOne({ _id: communityId, 'users._id': userId });
 
   if (community && !isVerfied) {
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
@@ -445,7 +445,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
       {
         $push: {
           users: {
-            id: user._id,
+            _id: user._id,
             firstName: user.firstName,
             lastName: user.lastName,
             profileImageUrl: userProfile.profile_dp?.imageUrl || null,
@@ -529,7 +529,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     const updatedUserProfile = await userProfile.save();
 
     // Check if the user is a member of the communityGroup
-    const userIndex = community.users.findIndex((user) => user.id.toString() === userId.toString());
+    const userIndex = community.users.findIndex((user) => user._id.toString() === userId.toString());
 
     if (userIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
