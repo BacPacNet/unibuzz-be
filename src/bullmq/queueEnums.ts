@@ -1,3 +1,3 @@
 export enum QueuesEnum {
-  notification_queue = 'notification-queue',
+  notification_queue = '{notification-queue}',
 }
