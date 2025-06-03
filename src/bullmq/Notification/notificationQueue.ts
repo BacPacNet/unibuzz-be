@@ -2,14 +2,14 @@ import { Queue } from 'bullmq';
 import config from '../../config/config';
 import { QueuesEnum } from '../queueEnums';
 
-const connection = {
+export const redisConnection = {
   host: config.bull_mq_queue.REDIS_HOST,
   port: Number(config.bull_mq_queue.REDIS_PORT),
   tls: {},
 };
 
 export const notificationQueue = new Queue(QueuesEnum.notification_queue, {
-  connection,
+  connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: {
       age: 30 * 24 * 60 * 60,

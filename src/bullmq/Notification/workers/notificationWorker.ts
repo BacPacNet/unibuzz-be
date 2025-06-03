@@ -1,5 +1,4 @@
 import { Worker } from 'bullmq';
-import config from '../../../config/config';
 import { setTimeout as wait } from 'timers/promises';
 import { io } from '../../../index';
 import mongoose from 'mongoose';
@@ -14,10 +13,7 @@ import { getCommunityGroup } from '../../../modules/communityGroup/communityGrou
 import { ApiError } from '../../../modules/errors';
 import httpStatus from 'http-status';
 import { status } from '../../../modules/communityGroup/communityGroup.interface';
-const connection = {
-  host: config.bull_mq_queue.REDIS_HOST || 'localhost',
-  port: Number(config.bull_mq_queue.REDIS_PORT) || 6379,
-};
+import { redisConnection } from '../notificationQueue';
 
 const handleSendNotification = async (job: any) => {
   const { adminId, communityGroupId, receiverIds, type, message } = job.data;
@@ -538,7 +534,7 @@ export const notificationWorker = new Worker(
         console.warn(`Unknown job name: ${job.name}`);
     }
   },
-  { connection }
+  { connection: redisConnection }
 );
 
 notificationWorker.on('ready', () => {
