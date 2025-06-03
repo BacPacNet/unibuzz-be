@@ -52,6 +52,8 @@ interface UserProfileDocument {
   occupation?: string;
   following: following[];
   followers: following[];
+  isCommunityAdmin?: boolean;
+  adminCommunityId?: string;
 }
 
 export { UserProfileDocument };

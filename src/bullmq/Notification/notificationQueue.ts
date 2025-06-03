@@ -5,6 +5,7 @@ import { QueuesEnum } from '../queueEnums';
 const connection = {
   host: config.bull_mq_queue.REDIS_HOST,
   port: Number(config.bull_mq_queue.REDIS_PORT),
+  tls: {},
 };
 
 export const notificationQueue = new Queue(QueuesEnum.notification_queue, {

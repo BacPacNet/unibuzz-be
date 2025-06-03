@@ -23,6 +23,8 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   major: String,
   affiliation: String,
   occupation: String,
+  isCommunityAdmin: Boolean,
+  adminCommunityId: { type: Schema.Types.ObjectId, ref: 'community', default: null, required: false },
   communities: [
     {
       communityId: { type: Schema.Types.ObjectId, ref: 'community' },
