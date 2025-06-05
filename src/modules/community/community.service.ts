@@ -8,6 +8,7 @@ import { getUserById } from '../user/user.service';
 import { communityService } from '.';
 import UniversityModel, { IUniversity } from '../university/university.model';
 import { getUserProfileById } from '../userProfile/userProfile.service';
+import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 
 export const createCommunity = async (
   name: string,
@@ -511,38 +512,88 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
 
 export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
   try {
-    const user = await getUserById(userId);
-    const userProfile = await userProfileService.getUserProfileById(String(userId));
+    // Fetch user and profile in parallel
+    const [user, userProfile, community] = await Promise.all([
+      getUserById(userId),
+      userProfileService.getUserProfileById(String(userId)),
+      getCommunity(communityId),
+    ]);
+
     if (!user || !userProfile) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
 
-    const community = await getCommunity(communityId);
     if (!community) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
     }
 
-    const communityIndex = userProfile.communities.findIndex(
-      (community) => community.communityId.toString() === communityId.toString()
-    );
-    userProfile.communities.splice(communityIndex, 1);
-    const updatedUserProfile = await userProfile.save();
+    // Remove community from user's profile
+    const communityIndex = userProfile.communities.findIndex((c) => c.communityId.toString() === communityId.toString());
 
-    // Check if the user is a member of the communityGroup
-    const userIndex = community.users.findIndex((user) => user._id.toString() === userId.toString());
-
-    if (userIndex === -1) {
+    if (communityIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
     }
 
-    // Remove the user from the community's users array
-    community.users.splice(userIndex, 1);
+    userProfile.communities.splice(communityIndex, 1);
+    await userProfile.save();
 
-    // Save the updated communityGroup
-    await community.save();
-    return { message: 'You have left the community', data: { community: updatedUserProfile.communities } };
+    // Remove user from the community users list
+    const userIndex = community.users.findIndex((u) => u._id.toString() === userId.toString());
+
+    if (userIndex !== -1) {
+      community.users.splice(userIndex, 1);
+      await community.save();
+    }
+
+    // Clean up user from any community groups
+    await cleanUpUserFromCommunityGroups(userId);
+
+    return {
+      message: 'You have left the community',
+      data: { communities: userProfile.communities },
+    };
   } catch (error: any) {
-    console.error(error);
+    console.error('Error in leaveCommunity:', error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
+
+//export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
+//  try {
+//    const user = await getUserById(userId);
+//    const userProfile = await userProfileService.getUserProfileById(String(userId));
+//    if (!user || !userProfile) {
+//      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+//    }
+
+//    const community = await getCommunity(communityId);
+//    if (!community) {
+//      throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+//    }
+
+//    const communityIndex = userProfile.communities.findIndex(
+//      (community) => community.communityId.toString() === communityId.toString()
+//    );
+//    userProfile.communities.splice(communityIndex, 1);
+//    const updatedUserProfile = await userProfile.save();
+
+//    // Check if the user is a member of the communityGroup
+//    const userIndex = community.users.findIndex((user) => user._id.toString() === userId.toString());
+
+//    if (userIndex === -1) {
+//      throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
+//    }
+
+//    await cleanUpUserFromCommunityGroups(userId)
+
+//    // Remove the user from the community's users array
+//    community.users.splice(userIndex, 1);
+
+//    // Save the updated communityGroup
+//    await community.save();
+//    return { message: 'You have left the community', data: { community: updatedUserProfile.communities } };
+//  } catch (error: any) {
+//    console.error(error);
+//    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+//  }
+//};
