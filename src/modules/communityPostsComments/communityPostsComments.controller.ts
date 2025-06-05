@@ -4,6 +4,7 @@ import { communityPostCommentsService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import he from 'he';
+import { Sortby } from '../userPostComments/userPostComments.interface';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -85,13 +86,14 @@ export const getAllCommunityPostComments = async (req: Request, res: Response, n
 
 export const getCommunityPostComments = async (req: extendedRequest, res: Response) => {
   const { communityPostId } = req.params;
-  const { page, limit } = req.query;
+  const { page, limit, sortBy } = req.query;
   try {
     if (communityPostId) {
       let comments = await communityPostCommentsService.getCommunityPostComments(
         communityPostId,
         Number(page),
-        Number(limit)
+        Number(limit),
+        sortBy as Sortby
       );
 
       return res.status(200).json(comments);

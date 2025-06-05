@@ -7,6 +7,7 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 import he from 'he';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { Sortby } from './userPostComments.interface';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -117,10 +118,15 @@ export const LikeUserPostComment = async (req: extendedRequest, res: Response) =
 
 export const getUserPostComments = async (req: extendedRequest, res: Response) => {
   const { userPostId } = req.params;
-  const { page, limit } = req.query;
+  const { page, limit, sortBy } = req.query;
   try {
     if (userPostId) {
-      let comments = await userPostCommentsService.getUserPostComments(userPostId, Number(page), Number(limit));
+      let comments = await userPostCommentsService.getUserPostComments(
+        userPostId,
+        Number(page),
+        Number(limit),
+        sortBy as Sortby
+      );
       return res.status(200).json(comments);
     }
   } catch (error: any) {

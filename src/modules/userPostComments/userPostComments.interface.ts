@@ -1,5 +1,10 @@
 import { Schema } from 'mongoose';
 
+export enum Sortby {
+  ASC = 'asc',
+  DESC = 'desc',
+}
+
 interface Like {
   userId: string;
 }

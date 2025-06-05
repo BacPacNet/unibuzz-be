@@ -107,8 +107,14 @@ export const commentReply = async (commentId: string, userID: string, body: any,
   return parentComment;
 };
 
-export const getUserPostComments = async (postId: string, page: number = 1, limit: number = 2) => {
+export const getUserPostComments = async (
+  postId: string,
+  page: number = 1,
+  limit: number = 2,
+  sortOrder: 'asc' | 'desc' = 'desc'
+) => {
   const skip = (page - 1) * limit;
+  const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
   // Fetch the main comments on the post
   const comments =
     (await userPostCommentsModel
@@ -131,42 +137,48 @@ export const getUserPostComments = async (postId: string, page: number = 1, limi
           ],
         },
       ])
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: mainSortOrder })
       .skip(skip)
       .limit(limit)
       .lean()) || [];
 
   // Helper function to recursively populate replies and calculate total count
   const populateNestedReplies = async (replies: any[] = []): Promise<{ populatedReplies: any[]; totalCount: number }> => {
-    if (!replies || replies.length === 0) return { populatedReplies: [], totalCount: 0 };
+    if (!replies || replies.length === 0) {
+      return { populatedReplies: [], totalCount: 0 };
+    }
 
-    // For each reply, check if it has further replies and populate them recursively
+    // Fetch all replies for this level
+    const replyIds = replies.map((r) => r._id); // fallback if replies are _id references
+    const fetchedReplies = await userPostCommentsModel
+      .find({ _id: { $in: replyIds } })
+      .populate([
+        { path: 'commenterId', select: 'firstName lastName _id' },
+        {
+          path: 'commenterProfileId',
+          select: 'profile_dp university_name study_year degree affiliation occupation role',
+        },
+      ])
+      .sort({ createdAt: 1 }) // Ensure oldest to newest at DB level
+      .lean();
+
+    // Recursively populate nested replies
     const populatedReplies = await Promise.all(
-      replies.map(async (reply: any) => {
-        // Fetch deeper replies
-        const deeperReplies = await userPostCommentsModel
-          .find({ _id: { $in: reply.replies || [] } })
-          .populate([
-            { path: 'commenterId', select: 'firstName lastName _id' },
-            {
-              path: 'commenterProfileId',
-              select: 'profile_dp university_name study_year degree affiliation occupation role',
-            },
-          ])
-          .lean();
-
-        // Recursively populate nested replies and count them
-        const { populatedReplies: nestedReplies, totalCount: nestedCount } = await populateNestedReplies(deeperReplies);
-
+      fetchedReplies.map(async (reply: any) => {
+        const { populatedReplies: nestedReplies, totalCount: nestedCount } = await populateNestedReplies(
+          reply.replies || []
+        );
         return {
           ...reply,
           replies: nestedReplies,
-          totalCount: nestedCount, // Add the count of deeper replies
+          totalCount: nestedCount,
         };
       })
     );
 
-    // Return the populated replies and the total count (number of replies at this level + nested replies)
+    // As an extra safeguard, sort by createdAt (in case MongoDB sort doesn’t apply due to array order)
+    populatedReplies.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
     return {
       populatedReplies,
       totalCount: populatedReplies.length,
