@@ -1,3 +1,4 @@
+import { cacheMiddleware } from '../../config/redis';
 import { userIdAuth } from '../../modules/user';
 import { userPostController } from '../../modules/userPost';
 import express, { Router } from 'express';
@@ -8,7 +9,7 @@ router.route('/').get(userIdAuth, userPostController.getAllUserPosts);
 
 router.route('/').post(userIdAuth, userPostController.createUserPost);
 
-router.route('/timeline').get(userIdAuth, userPostController.getAllTimelinePosts);
+router.route('/timeline').get(userIdAuth, cacheMiddleware(), userPostController.getAllTimelinePosts);
 
 router.route('/:postId').put(userPostController.updateUserPost).delete(userPostController.deleteUserPost);
 

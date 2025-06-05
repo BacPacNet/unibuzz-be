@@ -13,6 +13,7 @@ import { userIdExtend } from 'src/config/userIDType';
 import { loginEmailVerificationService } from '../loginEmailVerification';
 import { communityService } from '../community';
 import { communityGroupService } from '../communityGroup';
+//import { redis } from '../../config/redis';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -38,7 +39,6 @@ export const getUser = catchAsync(async (req: Request, res: Response, next: Next
     if (!user) {
       return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
     }
-
     res.status(httpStatus.OK).json(user);
   } catch (error) {
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');

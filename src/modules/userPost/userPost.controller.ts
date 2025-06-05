@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import he from 'he';
 import { userIdExtend } from 'src/config/userIDType';
+import { redis } from '../../config/redis';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -32,6 +33,7 @@ export const createUserPost = async (req: extendedRequest, res: Response) => {
 
   try {
     let post = await userPostService.createUserPost({ ...body, user_id: req.userId });
+    await redis.del('cache:/v1/userpost/timeline?page=1&limit=10');
     return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -56,13 +58,14 @@ export const updateUserPost = async (req: Request, res: Response, next: NextFunc
 };
 
 // delete post
-export const deleteUserPost = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteUserPost = async (req: extendedRequest, res: Response, next: NextFunction) => {
   const { postId } = req.params;
   try {
     if (typeof postId == 'string') {
       if (!mongoose.Types.ObjectId.isValid(postId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID'));
       }
+      await redis.del('cache:/v1/userpost/timeline?page=1&limit=10');
       await userPostService.deleteUserPost(new mongoose.Types.ObjectId(postId));
     }
     return res.status(200).json({ message: 'deleted' });
