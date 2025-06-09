@@ -13,7 +13,7 @@ interface extendedRequest extends Request {
   userId?: string;
 }
 
-export const CreateComment = async (req: extendedRequest, res: Response) => {
+export const CreateUserPostComment = async (req: extendedRequest, res: Response) => {
   const userID = req.userId;
   const { userPostId } = req.params;
 

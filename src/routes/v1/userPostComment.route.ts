@@ -7,7 +7,7 @@ const router: Router = express.Router();
 router
   .route('/:userPostId')
   .get(userIdAuth, userPostCommentsController.getUserPostComments)
-  .post(userIdAuth, userPostCommentsController.CreateComment);
+  .post(userIdAuth, userPostCommentsController.CreateUserPostComment);
 
 router.route('/comment/:commentId').get(userIdAuth, userPostCommentsController.getCommentById);
 router.route('/:commentId').put(userPostCommentsController.updateComment).delete(userPostCommentsController.deleteComment);

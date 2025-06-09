@@ -34,8 +34,6 @@ export const createUserPostComment = async (userId: string, userPostId: string, 
   ]);
 
   return comment;
-
-  console.log(comment, 'comment');
 };
 
 export const updateUserPostComment = async (commentId: mongoose.Types.ObjectId, comment: any) => {

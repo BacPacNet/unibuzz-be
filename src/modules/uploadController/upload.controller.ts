@@ -5,6 +5,8 @@ import { uploadToS3 } from './upload.service';
 export const uploadToS3Controller = async (req: Request, res: Response) => {
   try {
     const files = (req.files || []) as any[];
+    const context = req.body.context;
+
     const existingKeys = req.body.existingKeys || [];
 
     // Normalize to array
@@ -17,7 +19,7 @@ export const uploadToS3Controller = async (req: Request, res: Response) => {
     const results = await Promise.all(
       files.map((file, index) => {
         const existingKey = keysArray[index] || undefined;
-        return uploadToS3(file, existingKey);
+        return uploadToS3(file, existingKey, context);
       })
     );
 

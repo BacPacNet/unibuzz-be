@@ -33,7 +33,6 @@ export const createUserPost = async (req: extendedRequest, res: Response) => {
 
   try {
     let post = await userPostService.createUserPost({ ...body, user_id: req.userId });
-    await redis.del('cache:/v1/userpost/timeline?page=1&limit=10');
     return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -80,7 +79,7 @@ export const getAllTimelinePosts = async (req: any, res: Response, next: NextFun
   const { page, limit } = req.query;
 
   try {
-    timelinePosts = await userPostService.getRecentTimelinePosts(req.userId, Number(page), Number(limit));
+    timelinePosts = await userPostService.getTimelinePostsFromRelationship(req.userId, Number(page), Number(limit));
 
     return res.status(200).json(timelinePosts);
   } catch (error) {

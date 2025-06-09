@@ -12,30 +12,68 @@ import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import communityModel from '../community/community.model';
 import { convertToObjectId } from '../../utils/common';
+import PostRelationship from '../userPost/postRelationship.model';
 
 export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
   const { communityId, communityGroupId } = post;
 
   const community = await communityModel.findOne({ _id: communityId }, 'name');
-  const communityName = community?.name;
+  if (!community) {
+    throw new Error('Community not found'); // Or handle this error appropriately
+  }
+  const communityName = community.name;
   let communityGroup: any;
   if (communityGroupId) {
-    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, ['title', 'communityGroupAccess']);
+    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, ['title']);
+    if (!communityGroup) {
+      throw new Error('Community Group not found'); // Or handle this error appropriately
+    }
   }
   const postData = { ...post, user_id: userId };
-  //  const isPostVerified = () => {
-  //    if (communityGroup) {
-  //      return communityGroup.communityGroupAccess === 'Private';
-  //    }
-  //    return false;
-  //  };
 
-  return await CommunityPostModel.create({
-    ...postData,
-    communityName,
-    communityGroupName: communityGroup?.title,
-    //isPostVerified: isPostVerified(),
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const createdPost: mongoose.HydratedDocument<communityPostsInterface>[] = await CommunityPostModel.create(
+      [
+        {
+          ...postData,
+          communityName,
+          communityGroupName: communityGroup?.title,
+        },
+      ],
+      { session }
+    );
+
+    if (!createdPost || createdPost.length === 0) {
+      throw new Error('Failed to create community post or post not found after creation.');
+    }
+
+    const finalCreatedPost = createdPost[0]!;
+
+    // Create a record in PostRelationship
+    await PostRelationship.create(
+      [
+        {
+          userId,
+          communityId,
+          communityPostId: finalCreatedPost._id,
+          communityGroupId: communityGroupId,
+          type: communityGroupId ? 'group' : 'community',
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    return finalCreatedPost;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
@@ -79,7 +117,21 @@ export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community
 };
 
 export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
-  return await communityPostsModel.findByIdAndDelete(id);
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    // Delete the community post
+    const result = await communityPostsModel.findByIdAndDelete(id, { session });
+    // Delete the relationship entry
+    await PostRelationship.deleteMany({ communityPostId: id }, { session });
+    await session.commitTransaction();
+    return result;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 export const getCommunityPostsByCommunityId = async (communityId: string, page: number = 1, limit: number = 10) => {
