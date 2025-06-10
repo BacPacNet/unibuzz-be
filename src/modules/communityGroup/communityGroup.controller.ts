@@ -11,6 +11,7 @@ import { notificationRoleAccess, notificationStatus } from '../Notification/noti
 import { notificationService } from '../Notification';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { communityService } from '../community';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -25,6 +26,11 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
     if (!communityId || !userId) {
       return new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
     }
+    const community = await communityService.getCommunity(communityId);
+    if (!community) {
+      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+    }
+
     const getCommunityByName = await communityGroupModel.findOne({ title: body.title });
     if (getCommunityByName?.title) {
       return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group already exists' });
@@ -34,7 +40,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
     if (body.communityGroupType === 'Official') {
       const notifications = {
         sender_id: userId,
-        receiverId: body?.universityAdminId,
+        receiverId: community?.adminId,
         communityGroupId: createCommunityGroup._id,
         type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
         message: 'User has request for an official group status',
