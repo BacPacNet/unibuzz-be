@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
-import { UserProfileDocument } from './userProfile.interface';
+import { EditProfileRequest } from './userProfile.interface';
 import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
 import { notificationRoleAccess } from '../Notification/notification.interface';
@@ -79,22 +79,67 @@ export const getUserProfiles = async (userIds: any) => {
   return await UserProfile.find({ users_id: { $in: userIds } });
 };
 
-export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: UserProfileDocument) => {
+export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: EditProfileRequest) => {
   let userProfileToUpdate: any;
 
   const bioLength = userProfileBody.bio?.trim().length || 0;
   userProfileToUpdate = await UserProfile.findById(id);
 
   if (bioLength > 160) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Bio must not exceed 10 words');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Bio must not exceed 160 characters');
   }
 
   if (!userProfileToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found!');
   }
 
-  const { email, ...updateData } = userProfileBody;
+  // Get 14 days ago date
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+  // Count recent status changes
+  const recentChanges = userProfileToUpdate.statusChangeHistory.filter((entry: any) => entry.updatedAt >= fourteenDaysAgo);
+
+  // Determine which status fields are being updated
+  const statusFields = ['role', 'study_year', 'major', 'occupation', 'affiliation'] as const;
+  const updatedFields = [];
+
+  for (const field of statusFields) {
+    const newValue = userProfileBody[field];
+    if (newValue && userProfileToUpdate[field] !== newValue) {
+      updatedFields.push({
+        field,
+        oldValue: userProfileToUpdate[field],
+        newValue,
+      });
+    }
+  }
+
+  // If there are status field changes, check the limit
+  if (updatedFields.length > 0) {
+    if (recentChanges.length >= 2) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'You can only change your status twice within 14 days');
+    }
+
+    // Add the status change to history
+    userProfileToUpdate.statusChangeHistory.push({
+      updatedAt: new Date(),
+      updatedFields,
+    });
+  }
+
+  const { firstName, lastName, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
+
+  // Update firstName and lastName in User schema if they are provided
+  if (firstName || lastName) {
+    const userToUpdate = await User.findById(userProfileToUpdate.users_id);
+    if (userToUpdate) {
+      if (firstName) userToUpdate.firstName = firstName;
+      if (lastName) userToUpdate.lastName = lastName;
+      await userToUpdate.save();
+    }
+  }
 
   await userProfileToUpdate.save();
 

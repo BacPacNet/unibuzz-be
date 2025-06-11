@@ -227,7 +227,10 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
       },
     ]);
 
-    const total = await CommunityPostModel.countDocuments({ communityId: communityObjectId });
+    const total = await CommunityPostModel.countDocuments({
+      communityId: communityObjectId,
+      communityGroupId: null,
+    });
 
     return {
       finalPost,
@@ -298,14 +301,7 @@ export const getCommunityGroupPostsByCommunityId = async (
           as: 'comments',
         },
       },
-      //   {
-      //     $lookup: {
-      //       from: 'communitypostcomments',
-      //       localField: '_id',
-      //       foreignField: 'communityId',
-      //       as: 'comments',
-      //     },
-      //   },
+
       {
         $addFields: {
           commentCount: { $size: '$comments' },
@@ -346,7 +342,10 @@ export const getCommunityGroupPostsByCommunityId = async (
       },
     ]);
 
-    const total = await CommunityPostModel.countDocuments({ communityId: communityObjectId });
+    const total = await CommunityPostModel.countDocuments({
+      communityId: communityObjectId,
+      communityGroupId: communityGroupObjectId,
+    });
 
     return {
       finalPost,

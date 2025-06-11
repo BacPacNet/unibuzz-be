@@ -9,12 +9,18 @@ import he from 'he';
 import { userIdExtend } from 'src/config/userIDType';
 import mongoose from 'mongoose';
 import { convertToObjectId } from '../../utils/common';
-import { status } from '../communityGroup/communityGroup.interface';
 import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
+import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
 
 interface extendedRequest extends Request {
   userId?: string;
+}
+
+interface CommunityPostQueryParams {
+  page?: string;
+  limit?: string;
+  communityId?: string;
 }
 
 // create community post
@@ -95,75 +101,107 @@ export const deleteCommunityPost = async (req: Request, res: Response, next: Nex
 };
 
 export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) => {
-  const { page, limit } = req.query;
-
-  const { communityId } = req.query as any;
-  const userId = req.userId as string;
-
   try {
-    const community = await communityService.getCommunity(communityId);
+    const { page = '1', limit = '10', communityId } = req.query as unknown as CommunityPostQueryParams;
+    const userId = req.userId as string;
 
-    if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+    if (!communityId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
     }
 
-    const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
+    // Validate community membership
+    await validateCommunityMembership(communityId, userId);
 
-    if (!checkIfUserJoinedCommunity) {
-      throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community');
-    }
-
+    // Get paginated community posts
     const communityPosts = await communityPostsService.getCommunityPostsByCommunityId(
       communityId,
       Number(page),
       Number(limit)
     );
 
-    return res.status(200).json(communityPosts);
+    return res.status(httpStatus.OK).json(communityPosts);
   } catch (error: any) {
-    console.error(error);
-    res.status(error.statusCode).json({ success: false, message: error.message });
+    console.error('Error in getAllCommunityPostV2:', error);
+
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Internal server error',
+    });
   }
 };
 
+/**
+ * Get all posts for a community group
+ * @param req - Express request object with userId extension
+ * @param res - Express response object
+ */
 export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Response) => {
-  const { page, limit } = req.query;
-
-  const { communityId, communityGroupId } = req.query as any;
-  const userId = req.userId as string;
-
   try {
-    const community = await communityService.getCommunity(communityId);
+    const { page = '1', limit = '10', communityId, communityGroupId } = req.query;
+    const userId = req.userId as string;
 
+    // Input validation
+    if (!communityId || !communityGroupId) {
+      return res.status(httpStatus.BAD_REQUEST).json({
+        message: 'Community ID and Community Group ID are required',
+      });
+    }
+
+    // Validate ObjectIds
+    if (
+      !mongoose.Types.ObjectId.isValid(communityId as string) ||
+      !mongoose.Types.ObjectId.isValid(communityGroupId as string)
+    ) {
+      return res.status(httpStatus.BAD_REQUEST).json({
+        message: 'Invalid Community ID or Community Group ID format',
+      });
+    }
+
+    // Get community and validate
+    const community = await communityService.getCommunity(communityId as string);
     if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
+      return res.status(httpStatus.NOT_FOUND).json({
+        message: 'Community not found',
+      });
     }
 
-    const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId));
-
+    // Get community group and validate
+    const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId as string));
     if (!communityGroup) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community Group not found' });
+      return res.status(httpStatus.NOT_FOUND).json({
+        message: 'Community Group not found',
+      });
     }
 
-    const checkIfUserJoinedCommunity = communityGroup.users.some(
-      (user) => user._id.toString() === userId.toString() && user.status === status.accepted
-    );
-
-    if (!checkIfUserJoinedCommunity) {
-      return res.status(httpStatus.UNAUTHORIZED).json({ message: 'You are not a member of this community' });
+    // Check user membership
+    if (!isUserCommunityGroupMember(communityGroup, userId)) {
+      return res.status(httpStatus.UNAUTHORIZED).json({
+        message: 'You are not a member of this community group',
+      });
     }
 
+    // Get posts with pagination
     const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
-      communityId,
-      communityGroupId,
+      communityId as string,
+      communityGroupId as string,
       Number(page),
       Number(limit)
     );
 
-    return res.status(200).json(communityPosts);
+    return res.status(httpStatus.OK).json(communityPosts);
   } catch (error: any) {
-    console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    console.error('Error in getAllCommunityGroupPostV2:', error);
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+      message: 'Failed to fetch community group posts',
+      error: error.message,
+    });
   }
 };
 

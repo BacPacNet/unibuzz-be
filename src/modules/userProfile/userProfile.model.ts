@@ -8,6 +8,10 @@ const userProfileSchema = new Schema<UserProfileDocument>({
     required: true,
   },
   email: [{ UniversityName: String, UniversityEmail: String, communityId: String, logo: String }],
+  displayEmail: {
+    type: String,
+    default: null,
+  },
   profile_dp: { imageUrl: String, publicId: String },
   cover_dp: { imageUrl: String, publicId: String },
   bio: String,
@@ -66,6 +70,18 @@ const userProfileSchema = new Schema<UserProfileDocument>({
         type: Boolean,
         default: false,
       },
+    },
+  ],
+  statusChangeHistory: [
+    {
+      updatedAt: { type: Date, required: true, default: Date.now },
+      updatedFields: [
+        {
+          field: { type: String, enum: ['role', 'study_year', 'major', 'occupation', 'affiliation'], required: true },
+          oldValue: { type: Schema.Types.Mixed },
+          newValue: { type: Schema.Types.Mixed },
+        },
+      ],
     },
   ],
 });

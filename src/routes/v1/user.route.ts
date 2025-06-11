@@ -19,7 +19,7 @@ router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
 router.route('/deActivateUserAccount').put(userIdAuth, userController.deActivateUserAccount);
 router
   .route('/:userId')
-  .get(userIdAuth, validate(userValidation.getUser), cacheMiddleware(), userController.getUser)
+  .get(userIdAuth, validate(userValidation.getUser), userController.getUser)
   .patch(validate(userValidation.updateUser), userController.updateUser)
   .delete(validate(userValidation.deleteUser), userController.deleteUser);
 

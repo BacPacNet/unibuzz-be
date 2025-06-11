@@ -8,25 +8,42 @@ import { communityModel, communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
 import universityModel, { IUniversity } from '../university/university.model';
 import UniversityModel from '../university/university.model';
+import { EditProfileRequest } from './userProfile.interface';
+import { redis } from '../../config/redis';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
   const { userProfileId } = req.params;
+  const updateData = req.body as EditProfileRequest;
 
   try {
-    if (typeof userProfileId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(userProfileId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid User Profile ID'));
-      }
-      const updatedUserProfile = await userProfileService.updateUserProfile(
-        new mongoose.Types.ObjectId(userProfileId),
-        req.body
-      );
-      return res.status(200).json({ updatedUserProfile });
+    // Validate userProfileId
+    if (!userProfileId || !mongoose.Types.ObjectId.isValid(userProfileId)) {
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid User Profile ID'));
     }
+
+    // Validate update data
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return next(new ApiError(httpStatus.BAD_REQUEST, 'No update data provided'));
+    }
+
+    const updatedUserProfile = await userProfileService.updateUserProfile(
+      new mongoose.Types.ObjectId(userProfileId),
+      updateData
+    );
+
+    // Clear cache for this user
+    const cacheKey = `cache:v1/users/${updatedUserProfile.users_id}`;
+    await redis.del(cacheKey);
+
+    return res.status(httpStatus.OK).json({
+      success: true,
+      data: updatedUserProfile,
+    });
   } catch (error: any) {
-    console.log('err', error.message);
-    return res.status(error.statusCode).json({ message: error.message });
+    return next(
+      new ApiError(error.statusCode || httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Error updating user profile')
+    );
   }
 };
 

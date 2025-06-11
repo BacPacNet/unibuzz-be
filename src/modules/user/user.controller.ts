@@ -13,6 +13,7 @@ import { userIdExtend } from 'src/config/userIDType';
 import { loginEmailVerificationService } from '../loginEmailVerification';
 import { communityService } from '../community';
 import { communityGroupService } from '../communityGroup';
+import { redis } from '../../config/redis';
 //import { redis } from '../../config/redis';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
@@ -66,10 +67,31 @@ export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, ne
   }
 });
 
-export const updateUser = catchAsync(async (req: Request, res: Response) => {
-  if (typeof req.params['userId'] === 'string') {
-    const user = await userService.updateUserById(new mongoose.Types.ObjectId(req.params['userId']), req.body);
-    res.send(user);
+export const updateUser = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.params['userId'];
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
+    }
+
+    const user = await userService.updateUserById(new mongoose.Types.ObjectId(userId), req.body);
+
+    if (!user) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    }
+
+    // Clear cache for this user
+    const cacheKey = `cache:${req.originalUrl}`;
+    console.log(cacheKey, 'cacheKey');
+    await redis.del(cacheKey);
+
+    res.status(httpStatus.OK).json({
+      status: 'success',
+      data: user,
+    });
+  } catch (error: any) {
+    next(new ApiError(error.statusCode || httpStatus.INTERNAL_SERVER_ERROR, error.message));
   }
 });
 

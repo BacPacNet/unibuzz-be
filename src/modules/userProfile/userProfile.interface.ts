@@ -33,6 +33,7 @@ export interface UserCommunities {
 interface UserProfileDocument {
   users_id: Schema.Types.ObjectId;
   email: userProfileEmail[];
+  displayEmail: string;
   communities: UserCommunities[];
   profile_dp?: { imageUrl: string; publicId: string };
   cover_dp?: { imageUrl: string; publicId: string };
@@ -54,6 +55,39 @@ interface UserProfileDocument {
   followers: following[];
   isCommunityAdmin?: boolean;
   adminCommunityId?: string;
+  statusChangeHistory: {
+    updatedAt: Date;
+    updatedFields: {
+      field: string;
+      oldValue: any;
+      statusChangeHistory: any;
+    };
+  }[];
 }
 
-export { UserProfileDocument };
+interface EditProfileRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  gender: string;
+  affiliation: string;
+  bio: string;
+  city: string;
+  country: string;
+  degree: string;
+  dob: string;
+  major: string;
+  occupation: string;
+  phone_number: string;
+  study_year: string;
+  profilePicture: any;
+  profile_dp: ProfileDp;
+  role: string;
+}
+
+interface ProfileDp {
+  imageUrl: string;
+  publicId: string;
+}
+
+export { UserProfileDocument, EditProfileRequest };
