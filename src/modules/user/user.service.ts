@@ -90,6 +90,44 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
   return userProfile[0];
 };
 
+export const getUserProfileByUsername = async (userName: string) => {
+  const userProfile = await User.aggregate([
+    {
+      $match: {
+        userName: userName,
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: '_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$profile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'profile.communities',
+        foreignField: '_id',
+        as: 'communityDetails',
+      },
+    },
+    {
+      $project: {
+        password: 0,
+      },
+    },
+  ]);
+  return userProfile[0];
+};
+
 export const getAllUser = async (
   name: string = '',
   page: number,

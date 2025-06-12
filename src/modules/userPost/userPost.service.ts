@@ -60,8 +60,42 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
       },
     },
     {
+      $lookup: {
+        from: 'userpostcomments',
+        let: { commentIds: '$comments._id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ['$_id', '$$commentIds'] },
+            },
+          },
+          {
+            $graphLookup: {
+              from: 'userpostcomments',
+              startWith: '$replies',
+              connectFromField: 'replies',
+              connectToField: '_id',
+              as: 'nestedReplies',
+            },
+          },
+        ],
+        as: 'commentsWithReplies',
+      },
+    },
+    {
       $addFields: {
-        commentCount: { $size: '$comments' },
+        commentCount: {
+          $add: [
+            { $size: '$comments' },
+            {
+              $reduce: {
+                input: '$commentsWithReplies',
+                initialValue: 0,
+                in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+              },
+            },
+          ],
+        },
       },
     },
     {
@@ -297,9 +331,42 @@ export const getRecentTimelinePosts = async (userId: string, page: number = 1, l
           },
         },
         {
+          $lookup: {
+            from: 'userpostcomments',
+            let: { commentIds: '$comments._id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $in: ['$_id', '$$commentIds'] },
+                },
+              },
+              {
+                $graphLookup: {
+                  from: 'userpostcomments',
+                  startWith: '$replies',
+                  connectFromField: 'replies',
+                  connectToField: '_id',
+                  as: 'nestedReplies',
+                },
+              },
+            ],
+            as: 'commentsWithReplies',
+          },
+        },
+        {
           $addFields: {
-            commentCount: { $size: '$comments' },
-            postType: 'user', // Add post type identifier
+            commentCount: {
+              $add: [
+                { $size: '$comments' },
+                {
+                  $reduce: {
+                    input: '$commentsWithReplies',
+                    initialValue: 0,
+                    in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                  },
+                },
+              ],
+            },
           },
         },
         {
@@ -379,9 +446,42 @@ export const getRecentTimelinePosts = async (userId: string, page: number = 1, l
           },
         },
         {
+          $lookup: {
+            from: 'communitypostcomments',
+            let: { commentIds: '$comments._id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $in: ['$_id', '$$commentIds'] },
+                },
+              },
+              {
+                $graphLookup: {
+                  from: 'communitypostcomments',
+                  startWith: '$replies',
+                  connectFromField: 'replies',
+                  connectToField: '_id',
+                  as: 'nestedReplies',
+                },
+              },
+            ],
+            as: 'commentsWithReplies',
+          },
+        },
+        {
           $addFields: {
-            commentCount: { $size: '$comments' },
-            postType: 'community', // Add post type identifier
+            commentCount: {
+              $add: [
+                { $size: '$comments' },
+                {
+                  $reduce: {
+                    input: '$commentsWithReplies',
+                    initialValue: 0,
+                    in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                  },
+                },
+              ],
+            },
           },
         },
         {
@@ -634,8 +734,42 @@ const getUserPostsForUserIds = async (
         },
       },
       {
+        $lookup: {
+          from: 'userpostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'userpostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -734,8 +868,42 @@ export const getCommunityPostsForUser = async (
           },
         },
         {
+          $lookup: {
+            from: 'communitypostcomments',
+            let: { commentIds: '$comments._id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $in: ['$_id', '$$commentIds'] },
+                },
+              },
+              {
+                $graphLookup: {
+                  from: 'communitypostcomments',
+                  startWith: '$replies',
+                  connectFromField: 'replies',
+                  connectToField: '_id',
+                  as: 'nestedReplies',
+                },
+              },
+            ],
+            as: 'commentsWithReplies',
+          },
+        },
+        {
           $addFields: {
-            commentCount: { $size: '$comments' },
+            commentCount: {
+              $add: [
+                { $size: '$comments' },
+                {
+                  $reduce: {
+                    input: '$commentsWithReplies',
+                    initialValue: 0,
+                    in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                  },
+                },
+              ],
+            },
           },
         },
         {
@@ -857,8 +1025,43 @@ export const getUserPost = async (postId: string, myUserId: string = '') => {
       },
 
       {
+        $lookup: {
+          from: 'userpostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'userpostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
 
@@ -952,9 +1155,42 @@ export const getFullTimelinePosts = async (userId: string, page: number = 1, lim
         },
       },
       {
+        $lookup: {
+          from: 'userpostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'userpostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
-          postType: 'user',
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -1038,9 +1274,42 @@ export const getFullTimelinePosts = async (userId: string, page: number = 1, lim
         },
       },
       {
+        $lookup: {
+          from: 'communitypostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'communitypostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
-          postType: 'community',
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -1129,9 +1398,42 @@ export const getFullTimelinePosts = async (userId: string, page: number = 1, lim
         },
       },
       {
+        $lookup: {
+          from: 'communitypostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'communitypostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
-          postType: 'communityGroup',
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -1290,9 +1592,42 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           {
+            $lookup: {
+              from: 'userpostcomments',
+              let: { commentIds: '$comments._id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: { $in: ['$_id', '$$commentIds'] },
+                  },
+                },
+                {
+                  $graphLookup: {
+                    from: 'userpostcomments',
+                    startWith: '$replies',
+                    connectFromField: 'replies',
+                    connectToField: '_id',
+                    as: 'nestedReplies',
+                  },
+                },
+              ],
+              as: 'commentsWithReplies',
+            },
+          },
+          {
             $addFields: {
-              commentCount: { $size: '$comments' },
-              postType: 'user',
+              commentCount: {
+                $add: [
+                  { $size: '$comments' },
+                  {
+                    $reduce: {
+                      input: '$commentsWithReplies',
+                      initialValue: 0,
+                      in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                    },
+                  },
+                ],
+              },
             },
           },
           {
@@ -1370,9 +1705,42 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           {
+            $lookup: {
+              from: 'communitypostcomments',
+              let: { commentIds: '$comments._id' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: { $in: ['$_id', '$$commentIds'] },
+                  },
+                },
+                {
+                  $graphLookup: {
+                    from: 'communitypostcomments',
+                    startWith: '$replies',
+                    connectFromField: 'replies',
+                    connectToField: '_id',
+                    as: 'nestedReplies',
+                  },
+                },
+              ],
+              as: 'commentsWithReplies',
+            },
+          },
+          {
             $addFields: {
-              commentCount: { $size: '$comments' },
-              postType: 'community',
+              commentCount: {
+                $add: [
+                  { $size: '$comments' },
+                  {
+                    $reduce: {
+                      input: '$commentsWithReplies',
+                      initialValue: 0,
+                      in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                    },
+                  },
+                ],
+              },
             },
           },
           {

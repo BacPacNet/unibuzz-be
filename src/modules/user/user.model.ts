@@ -22,6 +22,7 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       type: String,
       required: true,
       trim: true,
+      index: true,
     },
     email: {
       type: String,
@@ -34,6 +35,7 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
           throw new Error('Invalid email');
         }
       },
+      index: true,
     },
     password: {
       type: String,

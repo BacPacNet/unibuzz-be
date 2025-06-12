@@ -46,6 +46,24 @@ export const getUser = catchAsync(async (req: Request, res: Response, next: Next
   }
 });
 
+export const getUserByUsername = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userName = req.params['userName'] as string;
+
+    if (!userName) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Username is required');
+    }
+
+    const user = await userService.getUserProfileByUsername(userName);
+    if (!user) {
+      return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
+    }
+    res.status(httpStatus.OK).json(user);
+  } catch (error) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');
+  }
+});
+
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction) => {
   const { page, limit, name, universityName, studyYear, major, occupation, affiliation } = req.query as any;
   try {

@@ -188,8 +188,42 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
         },
       },
       {
+        $lookup: {
+          from: 'communitypostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'communitypostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
         $addFields: {
-          commentCount: { $size: '$comments' },
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -301,10 +335,43 @@ export const getCommunityGroupPostsByCommunityId = async (
           as: 'comments',
         },
       },
-
+      {
+        $lookup: {
+          from: 'communitypostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'communitypostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
       {
         $addFields: {
-          commentCount: { $size: '$comments' },
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
         },
       },
       {
@@ -460,8 +527,42 @@ export const getAllCommunityPost = async (
           },
         },
         {
+          $lookup: {
+            from: 'communitypostcomments',
+            let: { commentIds: '$comments._id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $in: ['$_id', '$$commentIds'] },
+                },
+              },
+              {
+                $graphLookup: {
+                  from: 'communitypostcomments',
+                  startWith: '$replies',
+                  connectFromField: 'replies',
+                  connectToField: '_id',
+                  as: 'nestedReplies',
+                },
+              },
+            ],
+            as: 'commentsWithReplies',
+          },
+        },
+        {
           $addFields: {
-            commentCount: { $size: '$comments' },
+            commentCount: {
+              $add: [
+                { $size: '$comments' },
+                {
+                  $reduce: {
+                    input: '$commentsWithReplies',
+                    initialValue: 0,
+                    in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                  },
+                },
+              ],
+            },
           },
         },
         {
@@ -566,10 +667,48 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
           as: 'comments',
         },
       },
+      {
+        $lookup: {
+          from: 'communitypostcomments',
+          let: { commentIds: '$comments._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ['$_id', '$$commentIds'] },
+              },
+            },
+            {
+              $graphLookup: {
+                from: 'communitypostcomments',
+                startWith: '$replies',
+                connectFromField: 'replies',
+                connectToField: '_id',
+                as: 'nestedReplies',
+              },
+            },
+          ],
+          as: 'commentsWithReplies',
+        },
+      },
+      {
+        $addFields: {
+          commentCount: {
+            $add: [
+              { $size: '$comments' },
+              {
+                $reduce: {
+                  input: '$commentsWithReplies',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
+                },
+              },
+            ],
+          },
+        },
+      },
 
       {
         $addFields: {
-          commentCount: { $size: { $ifNull: ['$comments', []] } }, // Count comments here
           isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
           isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
 

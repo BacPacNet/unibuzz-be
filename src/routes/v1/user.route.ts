@@ -17,6 +17,9 @@ router.route('/changeUserPassword').put(userIdAuth, userController.changeUserPas
 router.route('/changeUserName').put(userIdAuth, userController.changeUserName);
 router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
 router.route('/deActivateUserAccount').put(userIdAuth, userController.deActivateUserAccount);
+
+router.route('/username/:userName').get(userIdAuth, userController.getUserByUsername);
+
 router
   .route('/:userId')
   .get(userIdAuth, validate(userValidation.getUser), userController.getUser)
