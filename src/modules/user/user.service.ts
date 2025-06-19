@@ -602,6 +602,16 @@ export const UserEmailAndUserNameAvailability = async (email: string, userName: 
   return { message: 'Both email and username are available' };
 };
 
+export const UserEmailAvailability = async (email: string) => {
+  const userEmail = await User.findOne({ email });
+
+  if (!userEmail) {
+    throw new ApiError(httpStatus.CONFLICT, 'Email does not exist');
+  }
+
+  return { message: 'Email is available' };
+};
+
 export const changeUserName = async (userID: string, userName: string, newUserName: string, password: string) => {
   const user = await User.findById(userID);
 

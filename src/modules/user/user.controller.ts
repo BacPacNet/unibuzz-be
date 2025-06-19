@@ -238,6 +238,17 @@ export const checkUserEmailAndUserNameAvailability = async (req: Request, res: R
   }
 };
 
+export const checkUserEmailAvailability = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  try {
+    await userService.UserEmailAvailability(email);
+    return res.status(httpStatus.OK).json({ message: 'Email is available', isAvailable: true });
+  } catch (error: any) {
+    return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
+  }
+};
+
 export const changeUserName = async (req: userIdExtend, res: Response) => {
   const { userName, newUserName, password } = req.body;
   const userID = req.userId;

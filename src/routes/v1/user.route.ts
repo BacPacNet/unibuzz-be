@@ -13,6 +13,8 @@ router
 
 router.route('/connections').get(userIdAuth, cacheMiddleware(), userController.getAllUser);
 router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
+router.route('/check-email-availability').post(userController.checkUserEmailAvailability);
+
 router.route('/changeUserPassword').put(userIdAuth, userController.changeUserPassword);
 router.route('/changeUserName').put(userIdAuth, userController.changeUserName);
 router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
