@@ -58,7 +58,6 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
 
     res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
   } catch (error: any) {
-    console.log('errr', error);
     console.error('Registration failed:', error);
     res.status(httpStatus.INTERNAL_SERVER_ERROR).send({ message: 'Registration failed', error: error.message });
   } finally {
