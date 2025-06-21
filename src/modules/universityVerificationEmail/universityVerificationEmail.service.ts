@@ -2,8 +2,18 @@ import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import universityVerificationEmailModal from './universityVerificationEmail.modal';
 import { sendEmail } from '../email/email.service';
+import { universityModal } from '../university';
 
 export const createUniversityEmailVerificationOtp = async (email: string) => {
+  const domain = email.split('@')[1];
+
+  // Step 1: Check if domain exists in any university's domain list
+  const university = await universityModal.findOne({ domains: domain });
+
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_ACCEPTABLE,'Email domain is not associated with this university.');
+  }
+  
   const data = {
     email,
     otp: Math.floor(100000 + Math.random() * 900000),
