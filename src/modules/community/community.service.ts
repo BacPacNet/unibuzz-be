@@ -546,7 +546,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     }
 
     // Clean up user from any community groups
-    await cleanUpUserFromCommunityGroups(userId);
+    await cleanUpUserFromCommunityGroups(userId, communityId);
 
     return {
       message: 'You have left the community',

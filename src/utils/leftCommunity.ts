@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
  *
  * @param userId - The ID of the user to remove.
  */
-const cleanUpUserFromCommunityGroups = async (userId: mongoose.Types.ObjectId | string) => {
+const cleanUpUserFromCommunityGroups = async (userId: mongoose.Types.ObjectId | string, communityId: string) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -15,7 +15,9 @@ const cleanUpUserFromCommunityGroups = async (userId: mongoose.Types.ObjectId | 
     await communityGroupModel.deleteMany({ adminUserId: userId }).session(session);
 
     // 2️⃣ Remove user from all community groups' users array
-    await communityGroupModel.updateMany({ 'users._id': userId }, { $pull: { users: { _id: userId } } }).session(session);
+    await communityGroupModel
+      .updateMany({ communityId, 'users._id': userId }, { $pull: { users: { _id: userId } } })
+      .session(session);
 
     await session.commitTransaction();
     session.endSession();
