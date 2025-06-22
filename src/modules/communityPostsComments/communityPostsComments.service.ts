@@ -6,9 +6,41 @@ import { notificationRoleAccess } from '../Notification/notification.interface';
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { convertToObjectId } from '../../utils/common';
+import CommunityPostModel from '../communityPosts/communityPosts.model';
 
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
   const { commenterProfileId, adminId } = body;
+
+  const communityDetail = await CommunityPostModel.aggregate([
+  {
+    $match: { _id: new mongoose.Types.ObjectId(communityPostId) }
+  },
+  {
+    $lookup: {
+      from: 'communities',
+      localField: 'communityId',
+      foreignField: '_id',
+      as: 'community'
+    }
+  },
+  {
+    $lookup: {
+      from: 'communitygroups',
+      localField: 'communityGroupId',
+      foreignField: '_id',
+      as: 'communityGroup'
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      communityName: { $arrayElemAt: ['$community.name', 0] },
+      communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] }
+    }
+  }
+]);
+
+const {communityName, communityGroupTitle} = communityDetail[0]
 
   const comment = await communityPostCommentModel.create({
     ...body,
@@ -19,13 +51,16 @@ export const createCommunityComment = async (userID: string, communityPostId: st
   });
 
   if (userID !== adminId) {
+     const message = communityGroupTitle
+    ? `commented on your community post in ${communityName} at ${communityGroupTitle}`
+    : `commented on your community post in ${communityName}`;
     await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, {
       sender_id: userID,
       receiverId: adminId,
       communityPostId,
       communityPostCommentId: comment._id,
       type: notificationRoleAccess.COMMUNITY_COMMENT,
-      message: 'commented on your community post',
+      message
     });
   }
 
