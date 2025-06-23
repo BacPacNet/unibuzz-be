@@ -299,7 +299,7 @@ const handleCommentNotification = async (job: any) => {
 };
 
 const handleCommunityPostCommentNotification = async (job: any) => {
-  const { sender_id, receiverId, communityPostId, communityPostCommentId } = job.data;
+  const { sender_id, receiverId, communityPostId, communityPostCommentId, message } = job.data;
 
   const senderObjectId = new mongoose.Types.ObjectId(sender_id);
   const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
@@ -346,7 +346,7 @@ const handleCommunityPostCommentNotification = async (job: any) => {
       communityPostId: postObjectId,
       type: notificationRoleAccess.COMMUNITY_COMMENT,
       communityPostCommentId: commentObjectId,
-      message: 'commented on your community post',
+      message: message,
       commentedBy: {
         totalCount: 1,
         newFiveUsers: [newUserEntry],
