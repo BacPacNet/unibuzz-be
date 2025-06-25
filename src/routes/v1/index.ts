@@ -22,6 +22,7 @@ import endorseRoute from './endorsementAI.route';
 import chatbotRoute from './chatbot.route';
 import contactRoute from './contact.route';
 import uploadRoute from './upload.route';
+import reportBug from './reportBug';
 
 const router = express.Router();
 
@@ -114,6 +115,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/upload',
     route: uploadRoute,
+  },
+    {
+    path: '/report-bug',
+    route: reportBug,
   },
 ];
 
