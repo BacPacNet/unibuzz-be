@@ -30,6 +30,7 @@ const communityPostCommentsShema = new Schema<communityPostCommentsInterface>(
       },
     ],
     level: { type: Number, required: true, default: 0 },
+    isCommentVerified: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

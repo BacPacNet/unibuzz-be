@@ -12,6 +12,7 @@ interface communityPostCommentsInterface {
   imageUrl?: { imageUrl: String; publicId: String };
   replies: [Schema.Types.ObjectId];
   level: number;
+  isCommentVerified: boolean
 }
 
 export { communityPostCommentsInterface };
