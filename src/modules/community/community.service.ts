@@ -2,13 +2,14 @@ import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import communityModel from './community.model';
 import { User } from '../user';
-import { userProfileService } from '../userProfile';
+import { UserProfile, userProfileService } from '../userProfile';
 import mongoose, { PipelineStage } from 'mongoose';
 import { getUserById } from '../user/user.service';
 import { communityService } from '.';
 import UniversityModel, { IUniversity } from '../university/university.model';
 import { getUserProfileById } from '../userProfile/userProfile.service';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
+import { convertToObjectId } from '../../utils/common';
 
 export const createCommunity = async (
   name: string,
@@ -557,6 +558,23 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
+
+export const getCommunityUsersService = async (communityId: string) => {
+  try {
+    const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+    if (!community) {
+      throw new Error('Community not found');
+    }
+    const userIds = community.users.map((u) => u._id);
+    console.log(userIds, 'userIds')
+    const users = await UserProfile.find({ users_id: { $in: userIds } });
+    return users;
+  } catch (error: any) {
+    console.error('Error in getCommunityUsersService:', error);
+   throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+  }
+};
+
 
 //export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
 //  try {

@@ -5,6 +5,7 @@ import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from 'src/config/userIDType';
+import { getCommunityUsersService } from './community.service';
 
 // get all userCommunity
 export const getAllUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
@@ -146,5 +147,19 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
     return res.status(200).json(user);
   } catch (error: any) {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+export const getCommunityUsersController = async (req: userIdExtend, res: Response) => {
+  try {
+    const { communityId } = req.params;
+    if(!communityId) {
+      throw new Error('Invalid communityId');
+    }
+    const users = await getCommunityUsersService(communityId);
+    res.status(200).json({ success: true, data: users });
+  } catch (error) {
+    console.error('[getCommunityUsersController] error:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };

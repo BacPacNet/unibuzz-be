@@ -766,6 +766,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
           updatedAt: 1,
           communityName: 1,
           communityGroupName: 1,
+          isPostVerified: 1,
           user: {
             firstName: '$user.firstName',
             lastName: '$user.lastName',
