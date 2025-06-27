@@ -504,10 +504,6 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
         communityIndex
       ]!.communityGroups.filter((group) => group.id.toString() !== groupId);
 
-      // If no groups left in this community, consider removing the whole community entry
-      if (userProfile.communities[communityIndex]!.communityGroups.length === 0) {
-        userProfile.communities.splice(communityIndex, 1);
-      }
     }
 
     const updatedUserProfile = await userProfile.save();

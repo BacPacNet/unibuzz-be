@@ -566,7 +566,6 @@ export const getCommunityUsersService = async (communityId: string) => {
       throw new Error('Community not found');
     }
     const userIds = community.users.map((u) => u._id);
-    console.log(userIds, 'userIds')
     const users = await UserProfile.find({ users_id: { $in: userIds } });
     return users;
   } catch (error: any) {
