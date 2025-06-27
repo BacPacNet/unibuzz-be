@@ -2,6 +2,7 @@ import { status } from '../modules/communityGroup/communityGroup.interface';
 import { communityService } from '../modules/community';
 import { ApiError } from '../modules/errors';
 import httpStatus from 'http-status';
+import { getUserProfileById } from '../.../../modules/userProfile/userProfile.service';
 
 export const validateCommunityMembership = async (communityId: string, userId: string) => {
   const community = await communityService.getCommunity(communityId);
@@ -11,7 +12,12 @@ export const validateCommunityMembership = async (communityId: string, userId: s
   }
 
   const isMember = community.users.some((user) => user._id.toString() === userId.toString());
-  if (!isMember) {
+  
+  const userCommunities = await getUserProfileById(userId)
+
+  const isUserJoinCommunity = userCommunities?.communities.some((c) => c.communityId.toString() === communityId.toString())
+  
+  if (!isMember && isUserJoinCommunity) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community');
   }
 

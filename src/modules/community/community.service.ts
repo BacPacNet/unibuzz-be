@@ -443,7 +443,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 
   if (!userResult) {
     await communityModel.updateOne(
-      { _id: communityId },
+      { _id: communityId,'users._id': { $ne: user._id } },
       {
         $push: {
           users: {
@@ -538,13 +538,11 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     userProfile.communities.splice(communityIndex, 1);
     await userProfile.save();
 
-    // Remove user from the community users list
-    const userIndex = community.users.findIndex((u) => u._id.toString() === userId.toString());
-
-    if (userIndex !== -1) {
-      community.users.splice(userIndex, 1);
-      await community.save();
-    }
+    // Remove user from the community users list using atomic update
+    await communityModel.updateOne(
+      { _id: communityId },
+      { $pull: { users: { _id: userId } } }
+    );
 
     // Clean up user from any community groups
     await cleanUpUserFromCommunityGroups(userId, communityId);
@@ -570,7 +568,7 @@ export const getCommunityUsersService = async (communityId: string) => {
     return users;
   } catch (error: any) {
     console.error('Error in getCommunityUsersService:', error);
-   throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
 
