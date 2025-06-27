@@ -48,9 +48,6 @@ export const getAllUniversity = async (
   if (city) {
     searchConditions.push({ city: { $regex: city, $options: 'i' } });
   }
-  if (name) {
-    searchConditions.push({ name: { $regex: name, $options: 'i' } });
-  }
   if (country) {
     searchConditions.push({ country: { $regex: country, $options: 'i' } });
   }
@@ -60,10 +57,43 @@ export const getAllUniversity = async (
   if (type) {
     searchConditions.push({ type: { $regex: type, $options: 'i' } });
   }
+  if (name) {
+    searchConditions.push({
+      name: { $regex: name, $options: 'i' },
+    });
+  }
 
   const matchStage = searchConditions.length > 0 ? { $match: { $and: searchConditions } } : { $match: {} };
 
-  const aggregation: any = [matchStage, { $skip: startIndex }, { $limit: limit }];
+  const aggregation: any = [
+    matchStage,
+    {
+      // Sorting to prioritize:
+      // 1. Exact match
+      // 2. Starts with
+      // 3. Default alphabetical
+      $addFields: {
+        nameMatchRank: {
+          $switch: {
+            branches: [
+              { case: { $eq: [{ $toLower: '$name' }, name.toLowerCase()] }, then: 0 },
+              { case: { $regexMatch: { input: '$name', regex: `^${name}`, options: 'i' } }, then: 1 },
+              { case: { $regexMatch: { input: '$name', regex: name, options: 'i' } }, then: 2 },
+            ],
+            default: 3,
+          },
+        },
+      },
+    },
+    { $sort: { nameMatchRank: 1, name: 1 } },
+    { $skip: startIndex },
+    { $limit: limit },
+    {
+      $project: {
+        nameMatchRank: 0, // Clean up rank field from output
+      },
+    },
+  ];
 
   const Universities = await universityModal.aggregate(aggregation).option({ allowDiskUse: true });
 
@@ -77,6 +107,7 @@ export const getAllUniversity = async (
     totalUniversities,
   };
 };
+
 
 export const searchUniversityByQuery = async (searchTerm: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;

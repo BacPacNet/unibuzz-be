@@ -4,6 +4,7 @@ import * as universityService from './university.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { userIdExtend } from 'src/config/userIDType';
+import { SearchParamsType } from './university.interface';
 
 // create university
 export const createUniversity = async (req: Request, res: Response) => {
@@ -54,21 +55,38 @@ export const deleteUniversity = async (req: Request, res: Response, next: NextFu
 export const getAllUniversity = async (req: Request, res: Response, next: NextFunction) => {
   const { page, limit, searchQuery } = req.query;
 
-  const searchParams = searchQuery ? JSON.parse(searchQuery as string) : {};
+    let searchParams: SearchParamsType  = {};
 
-  try {
-    let allUniversity = await universityService.getAllUniversity(
-      Number(page),
-      Number(limit),
-      searchParams.Search,
-      searchParams.city,
-      searchParams.country,
-      searchParams.region,
-      searchParams.type
+  if (searchQuery) {
+    try {
+      searchParams = JSON.parse(searchQuery as string);
+
+      // Additional structure validation if needed:
+      if (typeof searchParams !== 'object' || Array.isArray(searchParams)) {
+        throw new Error('Invalid searchQuery format.');
+      }
+    } catch (error) {
+      console.error('Invalid searchQuery:', error);
+      return (new ApiError(httpStatus.BAD_REQUEST, 'Invalid searchQuery. Ensure it is valid JSON.'));
+    }
+  }
+
+  
+
+   try {
+    const allUniversity = await universityService.getAllUniversity(
+      Number(page) || 1,
+      Number(limit) || 10,
+      searchParams['Search'] || '',
+      searchParams['city'] || '',
+      searchParams['country'] || '',
+      searchParams['region'] || '',
+      searchParams['type'] || ''
     );
+
     return res.status(200).json(allUniversity);
   } catch (error) {
-    console.log(error);
+    console.error('Error in getAllUniversity:', error);
     next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get University'));
   }
 };

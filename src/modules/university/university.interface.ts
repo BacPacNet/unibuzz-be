@@ -43,6 +43,14 @@ interface TopUniInfo {
   programs?: Program[];
 }
 
+type SearchParamsType = {
+  Search?: string;
+  city?: string;
+  country?: string;
+  region?: string;
+  type?: string;
+};
+
 // Interface for College
 interface College extends Document {
   name: string;
@@ -55,4 +63,5 @@ interface College extends Document {
   images?: string[];
   logos?: string[];
 }
-export { College };
+export { College, SearchParamsType };
+
