@@ -458,7 +458,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
             occupation: userProfile.occupation,
             affiliation: userProfile.affiliation,
             role: userProfile.role,
-            isVerified: isVerfied,
+            isVerified: isVerfied || isCommunityVerified,
           },
         },
       }

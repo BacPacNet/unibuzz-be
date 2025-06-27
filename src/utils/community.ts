@@ -6,18 +6,17 @@ import { getUserProfileById } from '../.../../modules/userProfile/userProfile.se
 
 export const validateCommunityMembership = async (communityId: string, userId: string) => {
   const community = await communityService.getCommunity(communityId);
-
   if (!community) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
 
   const isMember = community.users.some((user) => user._id.toString() === userId.toString());
-  
   const userCommunities = await getUserProfileById(userId)
 
   const isUserJoinCommunity = userCommunities?.communities.some((c) => c.communityId.toString() === communityId.toString())
   
-  if (!isMember && isUserJoinCommunity) {
+
+  if (!isMember && !isUserJoinCommunity) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community');
   }
 
