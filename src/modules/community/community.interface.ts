@@ -30,4 +30,11 @@ interface communityInterface {
   communityGroups: mongoose.Types.ObjectId[];
 }
 
-export { communityInterface };
+interface GetCommunityUsersOptions {
+  isVerified: boolean;
+  searchQuery?: string | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
+}
+
+export { communityInterface,GetCommunityUsersOptions };

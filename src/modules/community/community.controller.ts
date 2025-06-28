@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from 'src/config/userIDType';
 import { getCommunityUsersService } from './community.service';
+import { GetCommunityUsersOptions } from './community.interface';
 
 // get all userCommunity
 export const getAllUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
@@ -153,12 +154,19 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
 export const getCommunityUsersController = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
-    const {isVerified = false} = req.query
-    if(!communityId) {
+    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions
+    console.log(page, limit, 'pagelimt')
+    if (!communityId) {
       throw new Error('Invalid communityId');
     }
-    const users = await getCommunityUsersService(communityId, isVerified as boolean);
-    res.status(200).json({ success: true, data: users });
+    const options: GetCommunityUsersOptions = {
+      isVerified,
+      searchQuery,
+      page: Number(page),
+      limit: Number(limit)
+    }
+    const users = await getCommunityUsersService(communityId, options);
+    res.status(200).json({ success: true, ...users });
   } catch (error) {
     console.error('[getCommunityUsersController] error:', error);
     res.status(500).json({ success: false, message: 'Internal Server Error' });

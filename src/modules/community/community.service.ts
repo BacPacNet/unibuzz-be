@@ -10,6 +10,9 @@ import UniversityModel, { IUniversity } from '../university/university.model';
 import { getUserProfileById } from '../userProfile/userProfile.service';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId } from '../../utils/common';
+import { GetCommunityUsersOptions } from './community.interface';
+
+
 
 export const createCommunity = async (
   name: string,
@@ -557,30 +560,39 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   }
 };
 
-export const getCommunityUsersService = async (communityId: string, isVerified: boolean) => {
+
+
+export const getCommunityUsersService = async (
+  communityId: string,
+  options: GetCommunityUsersOptions
+) => {
   try {
-    const community = await communityModel.findById(convertToObjectId(communityId)).lean()
+    const {
+      isVerified,
+      searchQuery,
+      page = 1,
+      limit = 10,
+    } = options;
+
+    const community = await communityModel.findById(convertToObjectId(communityId)).lean();
     if (!community) {
-      throw new Error('Community not found')
+      throw new Error('Community not found');
     }
 
-    let userList = community.users
-
+    let userList = community.users;
     if (isVerified) {
-      userList = userList.filter((u) => u?.isVerified === true)
+      userList = userList.filter((u) => u?.isVerified === true);
     }
 
-    const userIds = userList.map((u) => u._id)
+    const userIds = userList.map((u) => u._id);
 
-    const usersWithProfile = await UserProfile.aggregate([
-      {
-        $match: {
-          users_id: { $in: userIds },
-        },
-      },
+    const matchStage: any = { users_id: { $in: userIds } };
+
+    const pipeline: any[] = [
+      { $match: matchStage },
       {
         $lookup: {
-          from: 'users', // collection name in MongoDB (should be plural, confirm in your DB)
+          from: 'users', // confirm collection name
           localField: 'users_id',
           foreignField: '_id',
           as: 'user',
@@ -596,21 +608,87 @@ export const getCommunityUsersService = async (communityId: string, isVerified: 
         $addFields: {
           firstName: '$user.firstName',
           lastName: '$user.lastName',
+          createdAt: '$user.createdAt',
         },
       },
-      {
-        $project: {
-          user: 0, // remove the joined user object if not needed
-        },
-      },
-    ])
+    ];
 
-    return usersWithProfile
+    if (searchQuery && searchQuery.trim() !== '') {
+      const regex = new RegExp(searchQuery.trim(), 'i');
+      pipeline.push({
+        $match: {
+          $or: [
+            { firstName: { $regex: regex } },
+            { lastName: { $regex: regex } },
+          ],
+        },
+      });
+    }
+
+    // Pagination
+    const skip = (page - 1) * limit;
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+
+    pipeline.push({
+      $project: {
+        user: 0, // remove joined user object if not needed
+      },
+    });
+
+    const usersWithProfile = await UserProfile.aggregate(pipeline);
+
+    // Total count for pagination
+    const countPipeline: any[] = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'users_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          firstName: '$user.firstName',
+          lastName: '$user.lastName',
+        },
+      },
+    ];
+
+    if (searchQuery && searchQuery.trim() !== '') {
+      const regex = new RegExp(searchQuery.trim(), 'i');
+      countPipeline.push({
+        $match: {
+          $or: [
+            { firstName: { $regex: regex } },
+            { lastName: { $regex: regex } },
+          ],
+        },
+      });
+    }
+
+    countPipeline.push({ $count: 'total' });
+    const countResult = await UserProfile.aggregate(countPipeline);
+    const total = countResult[0]?.total ?? 0;
+
+    return {
+      data: usersWithProfile,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   } catch (error: any) {
-    console.error('Error in getCommunityUsersService:', error)
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred')
+    console.error('Error in getCommunityUsersService:', error);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
-}
+};
+
 
 
 //export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
