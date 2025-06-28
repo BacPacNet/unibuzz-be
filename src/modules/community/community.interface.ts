@@ -12,6 +12,7 @@ interface User {
   occupation: string;
   affiliation: string;
   role: string;
+  isVerified?: boolean
 }
 
 interface communityInterface {

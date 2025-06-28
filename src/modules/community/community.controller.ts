@@ -153,10 +153,11 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
 export const getCommunityUsersController = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
+    const {isVerified = false} = req.query
     if(!communityId) {
       throw new Error('Invalid communityId');
     }
-    const users = await getCommunityUsersService(communityId);
+    const users = await getCommunityUsersService(communityId, isVerified as boolean);
     res.status(200).json({ success: true, data: users });
   } catch (error) {
     console.error('[getCommunityUsersController] error:', error);

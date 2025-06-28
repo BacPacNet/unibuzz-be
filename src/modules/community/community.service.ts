@@ -443,7 +443,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 
   if (!userResult) {
     await communityModel.updateOne(
-      { _id: communityId,'users._id': { $ne: user._id } },
+      { _id: communityId, 'users._id': { $ne: user._id } },
       {
         $push: {
           users: {
@@ -557,20 +557,60 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   }
 };
 
-export const getCommunityUsersService = async (communityId: string) => {
+export const getCommunityUsersService = async (communityId: string, isVerified: boolean) => {
   try {
-    const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+    const community = await communityModel.findById(convertToObjectId(communityId)).lean()
     if (!community) {
-      throw new Error('Community not found');
+      throw new Error('Community not found')
     }
-    const userIds = community.users.map((u) => u._id);
-    const users = await UserProfile.find({ users_id: { $in: userIds } });
-    return users;
+
+    let userList = community.users
+
+    if (isVerified) {
+      userList = userList.filter((u) => u?.isVerified === true)
+    }
+
+    const userIds = userList.map((u) => u._id)
+
+    const usersWithProfile = await UserProfile.aggregate([
+      {
+        $match: {
+          users_id: { $in: userIds },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users', // collection name in MongoDB (should be plural, confirm in your DB)
+          localField: 'users_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      {
+        $unwind: {
+          path: '$user',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          firstName: '$user.firstName',
+          lastName: '$user.lastName',
+        },
+      },
+      {
+        $project: {
+          user: 0, // remove the joined user object if not needed
+        },
+      },
+    ])
+
+    return usersWithProfile
   } catch (error: any) {
-    console.error('Error in getCommunityUsersService:', error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+    console.error('Error in getCommunityUsersService:', error)
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred')
   }
-};
+}
 
 
 //export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
