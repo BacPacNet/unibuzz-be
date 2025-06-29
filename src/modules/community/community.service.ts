@@ -56,6 +56,35 @@ export const getUserCommunities = async (userID: string) => {
     const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
 
     // First get all communities with their groups
+    // const communities = await communityModel.aggregate([
+    //   {
+    //     $match: { _id: { $in: getAllUserCommunityIds } },
+    //   },
+    //   {
+    //     $lookup: {
+    //       from: 'communitygroups',
+    //       localField: '_id',
+    //       foreignField: 'communityId',
+    //       as: 'communityGroups',
+    //     },
+    //   },
+    //   {
+    //     $addFields: {
+    //       communityGroups: {
+    //         $cond: {
+    //           if: {
+    //             $in: [new mongoose.Types.ObjectId(userID), '$users._id'],
+    //           },
+    //           then: '$communityGroups',
+    //           else: [],
+    //         },
+    //       },
+    //     },
+    //   },
+    // ]);
+
+    const userObjectId = new mongoose.Types.ObjectId(userID);
+
     const communities = await communityModel.aggregate([
       {
         $match: { _id: { $in: getAllUserCommunityIds } },
@@ -70,30 +99,75 @@ export const getUserCommunities = async (userID: string) => {
       },
       {
         $addFields: {
+          // Determine if user is in this community
+          isUserInCommunity: {
+            $gt: [
+              {
+                $size: {
+                  $filter: {
+                    input: '$users',
+                    as: 'u',
+                    cond: { $eq: ['$$u._id', userObjectId] },
+                  },
+                },
+              },
+              0,
+            ],
+          },
+          // Extract isVerified for this user
+          isVerified: {
+            $let: {
+              vars: {
+                matchedUser: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: '$users',
+                        as: 'u',
+                        cond: { $eq: ['$$u._id', userObjectId] },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+              in: '$$matchedUser.isVerified',
+            },
+          },
+        },
+      },
+      {
+        // Filter communityGroups if user is not in the community
+        $addFields: {
           communityGroups: {
             $cond: {
-              if: {
-                $in: [new mongoose.Types.ObjectId(userID), '$users._id'],
-              },
+              if: '$isUserInCommunity',
               then: '$communityGroups',
               else: [],
             },
           },
         },
       },
+      {
+        // Optionally remove helper field
+        $project: {
+          isUserInCommunity: 0,
+        },
+      },
     ]);
 
     // Now enrich with verification status in JavaScript
-    const communitiesWithVerification = communities.map((community) => {
-      const communityInProfile = userProfile.communities.find((c) => c.communityId.toString() === community._id.toString());
+    // const communitiesWithVerification = communities.map((community) => {
+    //   const communityInProfile = userProfile.communities.find((c) => c.communityId.toString() === community._id.toString());
 
-      return {
-        ...community,
-        isVerified: communityInProfile ? communityInProfile.isVerified : false,
-      };
-    });
+    //   return {
+    //     ...community,
+    //     isVerified: communityInProfile ? communityInProfile.isVerified : false,
+    //   };
+    // });
 
-    return communitiesWithVerification;
+    return communities
+      ;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
