@@ -368,9 +368,9 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     //   (community) => community.communityId.toString() === communityGroup.communityId.toString()
     // );
 
-    if (!isUserVerified) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
-    }
+    // if (!isUserVerified) {
+    //   throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
+    // }
 
     const userAlreadyMember = communityGroup.users.some((user) => user._id.toString() === userID && user.isRequestAccepted);
 
