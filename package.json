@@ -17,6 +17,7 @@
   "scripts": {
     "start": "pm2 start ecosystem.config.json --no-daemon",
     "start:build": "tsc --build && pm2 start ecosystem.config.json --no-daemon",
+    "start:prod": "NODE_ENV=production node dist/index.js",
     "compile": "tsc --build",
     "compile:watch": "tsc --build --watch",
     "pre:dev": "cross-env NODE_ENV=development nodemon --experimental-modules --es-module-specifier-resolution=node dist/index.js",
@@ -31,9 +32,10 @@
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check **/*.ts",
     "prettier:fix": "prettier --write **/*.ts",
-    "docker:prod": "docker-compose -f docker-compose.yml -f docker-compose.prod.yml up",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
     "docker:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:test": "docker-compose -f docker-compose.yml -f docker-compose.test.yml up",
+    "docker:build": "docker build -f Dockerfile.prod -t unibuzz-api:latest .",
     "prepare": "husky install",
     "release": "standard-version && git push --follow-tags origin master",
     "commit": "git add -A && cz"

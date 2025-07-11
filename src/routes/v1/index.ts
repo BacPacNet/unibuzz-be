@@ -128,10 +128,6 @@ const devIRoute: IRoute[] = [
     path: '/docs',
     route: docsRoute,
   },
-  {
-    path: '/health',
-    route: router.get('/', (_req, res) => res.status(200).json({ message: 'Everything is good here' })),
-  },
 ];
 
 defaultIRoute.forEach((route) => {

@@ -23,6 +23,31 @@ const envVarsSchema = Joi.object()
     EMAIL_FROM: Joi.string().description('the from field in the emails sent by the app'),
     CLIENT_URL: Joi.string().required().description('Client url'),
     OPENAI_API_KEY: Joi.string().required().description('Open AI API key'),
+    // Redis configuration for BullMQ
+    REDIS_HOST: Joi.string().required().description('Redis host'),
+    REDIS_PORT: Joi.number().default(6379).description('Redis port'),
+    REDIS_PASSWORD: Joi.string().optional().description('Redis password'),
+    // AWS Configuration
+    AWS_ACCESS_KEY_ID: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Access Key ID'),
+    AWS_SECRET_ACCESS_KEY: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Secret Access Key'),
+    AWS_REGION: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Region'),
+    AWS_S3_BUCKET_NAME: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS S3 Bucket Name'),
   })
   .unknown();
 
@@ -70,6 +95,13 @@ const config = {
   bull_mq_queue: {
     REDIS_HOST: envVars.REDIS_HOST,
     REDIS_PORT: envVars.REDIS_PORT,
+    REDIS_PASSWORD: envVars.REDIS_PASSWORD,
+  },
+  aws: {
+    accessKeyId: envVars.AWS_ACCESS_KEY_ID,
+    secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
+    region: envVars.AWS_REGION,
+    s3BucketName: envVars.AWS_S3_BUCKET_NAME,
   },
 };
 

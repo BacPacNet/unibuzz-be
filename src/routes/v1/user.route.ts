@@ -2,7 +2,6 @@ import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
 // import { auth } from '../../modules/auth';
 import { userController, userIdAuth, userValidation } from '../../modules/user';
-import { cacheMiddleware } from '../../config/redis';
 
 const router: Router = express.Router();
 
@@ -11,7 +10,7 @@ router
   .post(validate(userValidation.createUser), userController.createUser)
   .get(userIdAuth, userController.getUsersWithProfileData);
 
-router.route('/connections').get(userIdAuth, cacheMiddleware(), userController.getAllUser);
+router.route('/connections').get(userIdAuth, userController.getAllUser);
 router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
 router.route('/check-email-availability').post(userController.checkUserEmailAvailability);
 

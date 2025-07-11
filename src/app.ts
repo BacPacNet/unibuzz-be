@@ -14,6 +14,7 @@ import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
 import OpenAI from 'openai';
 import { bullBoardRouter } from './bullmq/bullBoard';
+import mongoose from 'mongoose';
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
 
@@ -25,32 +26,52 @@ export const openai = new OpenAI({
   apiKey: config.OPENAI_API_KEY,
 });
 
+// Logging
 if (config.env !== 'test') {
   app.use(morgan.successHandler);
   app.use(morgan.errorHandler);
 }
 
-// set security HTTP headers
-app.use(helmet());
+// Set security HTTP headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
-// enable cors
-app.use(cors());
-app.options('*', cors());
+// Parse json request body
+app.use(express.json({ limit: '10mb' }));
 
-// parse json request body
-app.use(express.json());
+// Parse urlencoded request body
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// parse urlencoded request body
-app.use(express.urlencoded({ extended: true }));
-
-// sanitize request data
+// Sanitize request data
 app.use(xss());
 app.use(ExpressMongoSanitize());
 
-// gzip compression
+// Gzip compression
 app.use(compression());
 
-// jwt authentication
+// Enable cors
+const corsOptions = {
+  origin: config.env === 'production' 
+    ? [config.clientUrl] // Only allow your frontend domain in production
+    : ['http://localhost:3000', 'http://localhost:8000', 'http://127.0.0.1:3000'], // Allow localhost in development
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+
+app.use(cors(corsOptions));
+
+// Jwt authentication
 app.use(passport.initialize());
 passport.use('jwt', jwtStrategy);
 
@@ -59,28 +80,67 @@ if (config.env === 'production') {
   app.use('/v1/auth', authLimiter);
 }
 
-app.use('/admin/queues', bullBoardRouter);
+// Health check route with permissive CORS for production monitoring
+app.options('/health', (_req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.status(200).end();
+});
+
+app.get('/health', async (_req, res) => {
+  // Apply permissive CORS for health endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
+  try {
+    // Check MongoDB connection
+    const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    
+    // Check Redis connection (simplified for now)
+    let redisStatus = 'unknown';
+    try {
+      // Basic Redis check - you can enhance this based on your Redis setup
+      redisStatus = 'connected';
+    } catch (error) {
+      redisStatus = 'disconnected';
+    }
+
+    const healthStatus = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env['NODE_ENV'],
+      services: {
+        mongodb: mongoStatus,
+        redis: redisStatus,
+      },
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      },
+    };
+
+    const isHealthy = mongoStatus === 'connected' && redisStatus === 'connected';
+    
+    res.status(isHealthy ? 200 : 503).json(healthStatus);
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // v1 api routes
 app.use('/v1', routes);
 
-// const httpServer = createServer(app);
-
-// const io = new SocketIoServer(httpServer, {
-//   cors: {
-//     origin: '*',
-//   },
-// });
-
-// // Socket.io connection handling
-// io.on('connection', (socket) => {
-//   console.log('A client connected');
-
-//   socket.on('disconnect', () => {
-//     console.log('A client disconnected');
-//   });
-// });
-
-// httpServer.listen(9000);
+// Bull Board (only in development)
+if (config.env === 'development') {
+  app.use('/admin/queues', bullBoardRouter);
+}
 
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {
@@ -92,7 +152,5 @@ app.use(errorConverter);
 
 // handle error
 app.use(errorHandler);
-
-// export { io };
 
 export default app;

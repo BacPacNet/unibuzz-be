@@ -1,14 +1,32 @@
-version: '3'
+version: '3.8'
 
 services:
   mongo:
     volumes:
       - ./data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+  
+  redis:
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redispassword}
+    volumes:
+      - ./redis-data:/data
   
   app:
-    container_name: ts-node-app-dev
+    container_name: unibuzz-api-dev
     command: yarn dev -L
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redispassword}
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./dist:/usr/src/app/dist
 
 volumes:
   mongo-data:
+    driver: local
+  redis-data:
     driver: local
