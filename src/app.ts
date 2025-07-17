@@ -33,17 +33,19 @@ if (config.env !== 'test') {
 }
 
 // Set security HTTP headers
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false,
-}));
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // Parse json request body
 app.use(express.json({ limit: '10mb' }));
@@ -60,9 +62,10 @@ app.use(compression());
 
 // Enable cors
 const corsOptions = {
-  origin: config.env === 'production' 
-    ? [config.clientUrl] // Only allow your frontend domain in production
-    : ['http://localhost:3000', 'http://localhost:8000', 'http://127.0.0.1:3000'], // Allow localhost in development
+  origin:
+    config.env === 'production'
+      ? [config.clientUrl] // Only allow your frontend domain in production
+      : ['http://localhost:3000', 'http://localhost:8000', 'http://127.0.0.1:3000'], // Allow localhost in development
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -93,11 +96,11 @@ app.get('/health', async (_req, res) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   try {
     // Check MongoDB connection
     const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-    
+
     // Check Redis connection (simplified for now)
     let redisStatus = 'unknown';
     try {
@@ -123,7 +126,7 @@ app.get('/health', async (_req, res) => {
     };
 
     const isHealthy = mongoStatus === 'connected' && redisStatus === 'connected';
-    
+
     res.status(isHealthy ? 200 : 503).json(healthStatus);
   } catch (error) {
     res.status(503).json({
