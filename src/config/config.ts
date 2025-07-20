@@ -1,5 +1,6 @@
 import Joi from 'joi';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const envVarsSchema = Joi.object()
   .keys({
@@ -21,6 +22,32 @@ const envVarsSchema = Joi.object()
     SMTP_PASSWORD: Joi.string().description('password for email server'),
     EMAIL_FROM: Joi.string().description('the from field in the emails sent by the app'),
     CLIENT_URL: Joi.string().required().description('Client url'),
+    OPENAI_API_KEY: Joi.string().required().description('Open AI API key'),
+    // Redis configuration for BullMQ
+    REDIS_HOST: Joi.string().required().description('Redis host'),
+    REDIS_PORT: Joi.number().default(6379).description('Redis port'),
+    REDIS_PASSWORD: Joi.string().optional().description('Redis password'),
+    // AWS Configuration
+    AWS_ACCESS_KEY_ID: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Access Key ID'),
+    AWS_SECRET_ACCESS_KEY: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Secret Access Key'),
+    AWS_REGION: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS Region'),
+    AWS_S3_BUCKET_NAME: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }).description('AWS S3 Bucket Name'),
   })
   .unknown();
 
@@ -29,7 +56,6 @@ const { value: envVars, error } = envVarsSchema.prefs({ errors: { label: 'key' }
 if (error) {
   throw new Error(`Config validation error: ${error.message}`);
 }
-
 const config = {
   env: envVars.NODE_ENV,
   port: envVars.PORT,
@@ -65,6 +91,18 @@ const config = {
     from: envVars.EMAIL_FROM,
   },
   clientUrl: envVars.CLIENT_URL,
+  OPENAI_API_KEY: envVars.OPENAI_API_KEY,
+  bull_mq_queue: {
+    REDIS_HOST: envVars.REDIS_HOST,
+    REDIS_PORT: envVars.REDIS_PORT,
+    REDIS_PASSWORD: envVars.REDIS_PASSWORD,
+  },
+  aws: {
+    accessKeyId: envVars.AWS_ACCESS_KEY_ID,
+    secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
+    region: envVars.AWS_REGION,
+    s3BucketName: envVars.AWS_S3_BUCKET_NAME,
+  },
 };
 
 export default config;

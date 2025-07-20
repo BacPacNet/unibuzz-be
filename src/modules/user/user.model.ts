@@ -3,8 +3,8 @@ import validator from 'validator';
 import bcrypt from 'bcryptjs';
 import toJSON from '../toJSON/toJSON';
 import paginate from '../paginate/paginate';
-import { IUserDoc, IUserModel } from './user.interfaces';
-import { roles } from 'src/config/roles';
+import { communityGroupRole, communityGroupRoleAccess, IUserDoc, IUserModel } from './user.interfaces';
+import { roles } from '../../config/roles';
 
 const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
   {
@@ -18,6 +18,12 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       required: true,
       trim: true,
     },
+    userName: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
     email: {
       type: String,
       required: true,
@@ -29,27 +35,30 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
           throw new Error('Invalid email');
         }
       },
+      index: true,
     },
     password: {
       type: String,
       required: true,
       trim: true,
       minlength: 8,
-      validate(value: string) {
-        if (!value.match(/\d/) || !value.match(/[a-zA-Z]/)) {
-          throw new Error('Password must contain at least one letter and one number');
-        }
+
+      validate: {
+        validator: function (value: string) {
+          const pattern = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+          return pattern.test(value);
+        },
+        message:
+          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
       },
       private: true, // used by the toJSON plugin
     },
 
     gender: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
-
-    dob: { type: String, required: true, trim: true },
 
     role: {
       type: String,
@@ -59,8 +68,39 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
 
     isEmailVerified: {
       type: Boolean,
+      default: true,
+    },
+    isUserDeactive: {
+      type: Boolean,
       default: false,
     },
+    userVerifiedCommunities: [
+      {
+        communityId: String,
+        communityName: String,
+        role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
+        communityGroups: [
+          {
+            communityGroupName: String,
+            communityGroupId: String,
+            role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
+          },
+        ],
+      },
+    ],
+    userUnVerifiedCommunities: [
+      {
+        communityId: String,
+        communityName: String,
+        communityGroups: [
+          {
+            communityGroupName: String,
+            communityGroupId: String,
+            role: { type: String, enum: communityGroupRole, default: communityGroupRoleAccess.Member },
+          },
+        ],
+      },
+    ],
   },
   {
     timestamps: true,

@@ -7,9 +7,11 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   password: Joi.string().required().custom(password),
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
+  userName: Joi.string().required(),
   gender: Joi.string().required(),
-  dob: Joi.string().required(),
   createdAt: Joi.string(),
+  userVerifiedCommunities: Joi.string(),
+  userUnVerifiedCommunities: Joi.string(),
 };
 
 export const register = {
@@ -20,6 +22,7 @@ export const login = {
   body: Joi.object().keys({
     email: Joi.string().required(),
     password: Joi.string().required(),
+    rememberme: Joi.boolean(),
   }),
 };
 
@@ -42,11 +45,10 @@ export const forgotPassword = {
 };
 
 export const resetPassword = {
-  query: Joi.object().keys({
-    token: Joi.string().required(),
-  }),
   body: Joi.object().keys({
-    password: Joi.string().required().custom(password),
+    email: Joi.string().email().required(),
+    resetToken: Joi.string().required(),
+    newPassword: Joi.string().required().custom(password),
   }),
 };
 
