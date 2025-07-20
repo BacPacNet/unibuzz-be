@@ -1,32 +1,48 @@
-# development stage
-FROM node:18 AS base
+# Build stage
+FROM node:18-alpine AS builder
 
 WORKDIR /usr/src/app
 
-ENV NODE_OPTIONS="--max-old-space-size=8192"
+# Copy package files
+COPY package.json yarn.lock ./
 
-COPY package.json yarn.lock tsconfig.json ecosystem.config.json ./
+# Install dependencies
+RUN yarn install --frozen-lockfile --production=false
 
-COPY ./src ./src
+# Copy source code
+COPY . .
 
-RUN ls -a
+# Build the application
+RUN yarn compile
 
-EXPOSE  3000
+# Production stage
+FROM node:18-alpine AS production
 
-RUN yarn install --frozen-lockfile && yarn compile
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
 
-# production stage
+WORKDIR /usr/src/app
 
-#FROM base as production
+# Copy package files
+COPY package.json yarn.lock ./
 
-#WORKDIR /usr/prod/app
+# Install only production dependencies
+RUN yarn install --frozen-lockfile --production=true && yarn cache clean
 
-#ENV NODE_ENV=production
+# Copy built application from builder stage
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/ecosystem.config.json ./
 
-#COPY package.json yarn.lock ecosystem.config.json ./
+# Switch to non-root user
+USER nodejs
 
-#RUN yarn install --production=false --pure-lockfile
+# Expose port
+EXPOSE 3000
 
-#COPY --from=base /usr/src/app/dist ./dist
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-CMD [ "yarn", "run", "dev"]
+# Start the application
+CMD ["yarn", "start"] 

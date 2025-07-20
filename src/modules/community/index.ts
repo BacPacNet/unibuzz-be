@@ -1,6 +1,21 @@
-import * as communityInterface from './community.interface';
-import communityModel from './community.model';
-import * as communityService from './community.service';
 import * as communityController from './community.controller';
+import * as communityService from './community.service';
+import communityModel from './community.model';
+import { communityInterface } from './community.interface';
+import {
+  checkUserCommunityMembership,
+  requireVerifiedCommunityMember,
+  requireCommunityMember,
+  checkCommunityVerificationStatus,
+} from './community.middleware';
 
-export { communityModel, communityInterface, communityService, communityController };
+export {
+  communityController,
+  communityService,
+  communityModel,
+  communityInterface,
+  checkUserCommunityMembership,
+  requireVerifiedCommunityMember,
+  requireCommunityMember,
+  checkCommunityVerificationStatus,
+};

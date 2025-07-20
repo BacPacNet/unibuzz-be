@@ -154,8 +154,7 @@ export const leaveCommunity = async (req: userIdExtend, res: Response, next: Nex
 export const getCommunityUsersController = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
-    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions
-    console.log(page, limit, 'pagelimt')
+    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
     if (!communityId) {
       throw new Error('Invalid communityId');
     }
@@ -163,8 +162,8 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
       isVerified,
       searchQuery,
       page: Number(page),
-      limit: Number(limit)
-    }
+      limit: Number(limit),
+    };
     const users = await getCommunityUsersService(communityId, options);
     res.status(200).json({ success: true, ...users });
   } catch (error) {
