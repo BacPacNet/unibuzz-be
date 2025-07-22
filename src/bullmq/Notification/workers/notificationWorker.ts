@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import { setTimeout as wait } from 'timers/promises';
-import { io } from '../../../index';
+import { io, onlineUsers } from '../../../index';
 import mongoose from 'mongoose';
 import { notificationModel, notificationService } from '../../../modules/Notification';
 import { NotificationIdentifier } from '../NotificationEnums';
@@ -14,6 +14,7 @@ import { ApiError } from '../../../modules/errors';
 import httpStatus from 'http-status';
 import { status } from '../../../modules/communityGroup/communityGroup.interface';
 import { redisConnection } from '../notificationQueue';
+import { sendPushNotification } from '../../../modules/pushNotification/pushNotification.service';
 
 const handleSendNotification = async (job: any) => {
   const { adminId, communityGroupId, receiverIds, type, message } = job.data;
@@ -183,7 +184,15 @@ const handleLikeNotification = async (job: any) => {
     await notificationService.CreateNotification(newNotification);
   }
 
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
+
+  
 };
 const handleCommunityPostLikeNotification = async (job: any) => {
   const { sender_id, receiverId, communityPostId } = job.data;
@@ -234,8 +243,12 @@ const handleCommunityPostLikeNotification = async (job: any) => {
 
     await notificationService.CreateNotification(newNotification);
   }
-
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 const handleCommentNotification = async (job: any) => {
   const { sender_id, receiverId, userPostId, postCommentId } = job.data;
@@ -295,7 +308,12 @@ const handleCommentNotification = async (job: any) => {
     await notificationService.CreateNotification(newNotification);
   }
 
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 
 const handleCommunityPostCommentNotification = async (job: any) => {
@@ -356,9 +374,12 @@ const handleCommunityPostCommentNotification = async (job: any) => {
     await notificationService.CreateNotification(newNotification);
   }
 
-  io.emit(`notification_${receiverId}`, {
-    type: NotificationIdentifier.like_notification,
-  });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 
 const CreateFollowNotification = async (job: any) => {
@@ -374,7 +395,12 @@ const CreateFollowNotification = async (job: any) => {
     message: 'Started following you',
   };
   await notificationService.CreateNotification(newNotification);
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 
 const DeleteFollowNotification = async (job: any) => {
@@ -388,7 +414,12 @@ const DeleteFollowNotification = async (job: any) => {
     type: notificationRoleAccess.FOLLOW,
   });
 
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 
 const CreateOfficialGroupRequestNotification = async (job: any) => {
@@ -408,7 +439,12 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
 
   await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
   const { sender_id, receiverId, communityGroupId } = job.data;
@@ -426,7 +462,12 @@ const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
   };
   await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
   const { sender_id, receiverId, communityGroupId } = job.data;
@@ -444,7 +485,12 @@ const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
   };
   await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
   const { sender_id, receiverId, communityGroupId } = job.data;
@@ -462,7 +508,12 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
   };
   await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
   const { sender_id, receiverId, communityGroupId } = job.data;
@@ -480,7 +531,12 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
   };
   await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
+  const isUserOnline = onlineUsers.isUserOnline(receiverId);
+  if (isUserOnline) {
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
+  } else {
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+  }
 };
 
 export const notificationWorker = new Worker(

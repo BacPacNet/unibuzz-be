@@ -13,6 +13,8 @@ export const handleConnection = (socket: Socket, io: Server, onlineUsers: Online
     socket.join(userID);
 
     onlineUsers.addUser(userID, socket.id);
+
+
     // socket.emit(SocketConnectionEnums.CONNECTED, userID);
   });
 

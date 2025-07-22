@@ -10,7 +10,7 @@ import { notificationWorker } from './bullmq/Notification/workers/notificationWo
 
 let server: any;
 let io: any;
-const onlineUsers = new OnlineUsers();
+export const onlineUsers = new OnlineUsers();
 mongoose.connect(config.mongoose.url).then(() => {
   logger.info('Connected to MongoDB');
   server = app.listen(config.port, () => {

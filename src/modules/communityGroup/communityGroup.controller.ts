@@ -67,6 +67,7 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
       }
+      // console.log('body', body);
       await communityGroupService.updateCommunityGroup(new mongoose.Types.ObjectId(groupId), req.body);
       return res.status(200).json({ message: 'Updated Successfully' });
     }

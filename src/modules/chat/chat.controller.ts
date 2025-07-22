@@ -193,7 +193,7 @@ export const toggleBlock = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { userIdToBlock } = req.params;
   const { chatId } = req.body;
-
+  console.log('userIdToBlock', userIdToBlock);
   try {
     if (userID && userIdToBlock) {
       const blocked = await chatService.toggleBlock(userID, userIdToBlock, chatId);
