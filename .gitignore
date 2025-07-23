@@ -9,7 +9,6 @@ dist
 yarn-error.log
 
 # Environment varibales
-firebase-adminsdk.json
 .env*
 !.env*.example
 

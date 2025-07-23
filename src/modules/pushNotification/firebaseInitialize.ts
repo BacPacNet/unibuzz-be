@@ -1,5 +1,10 @@
 import admin from 'firebase-admin';
-import serviceAccount from './unibuzz-2024-firebase-adminsdk.json' assert { type: 'json' };
+import config from '../../config/config';
+
+
+const serviceAccount = JSON.parse(
+    Buffer.from(config.fcm.config, "base64").toString("utf8")
+  );
 
 if (!admin.apps.length) {
   admin.initializeApp({
