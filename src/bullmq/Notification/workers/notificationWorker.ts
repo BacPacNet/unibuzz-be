@@ -189,7 +189,10 @@ const handleLikeNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+        sender_id: sender_id.toString(),receiverId: receiverId.toString(),
+        type: notificationRoleAccess.REACTED_TO_POST,
+        postId: userPostId.toString()});
   }
 
   
@@ -247,7 +250,11 @@ const handleCommunityPostLikeNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
+        communityPostId: communityPostId.toString()});
   }
 };
 const handleCommentNotification = async (job: any) => {
@@ -312,7 +319,13 @@ const handleCommentNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+        type: notificationRoleAccess.COMMENT,
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        commentId: postCommentId.toString(),
+        postId: userPostId.toString(),
+      });
   }
 };
 
@@ -378,7 +391,13 @@ const handleCommunityPostCommentNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.COMMUNITY_COMMENT,
+        commentId: communityPostCommentId.toString(),
+        postId: communityPostId.toString(),
+      });
   }
 };
 
@@ -399,7 +418,11 @@ const CreateFollowNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',  {
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.FOLLOW,
+      });
   }
 };
 
@@ -417,9 +440,10 @@ const DeleteFollowNotification = async (job: any) => {
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
-  } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
-  }
+  } 
+//   else {
+//     sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+//   }
 };
 
 const CreateOfficialGroupRequestNotification = async (job: any) => {
@@ -437,13 +461,20 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
     message: 'User has requested an official group status',
   };
 
-  await notificationService.CreateNotification(notifications);
+ const res =  (await notificationService.CreateNotification(notifications)).populate("communityGroupId")
 
+ console.log("res",res);
+ 
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
+    
+      });
   }
 };
 const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
