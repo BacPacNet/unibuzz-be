@@ -26,7 +26,7 @@ export const sendNotification = async (req: extendedRequest, res: Response, next
   try {
     if (!userID) return next(new ApiError(httpStatus.NOT_FOUND, 'userId Required'));
 
-    const created = await pushNotificationService.sendPushNotification(userID, 'BE', "Let's go!");
+    const created = await pushNotificationService.sendTestPushNotifications(userID);
 
     return res.status(201).json({ message: 'pushed notification', created });
   } catch (error) {

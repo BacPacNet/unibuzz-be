@@ -1,9 +1,12 @@
 import { Server, Socket } from 'socket.io';
 import { Message, ReactedMessage } from './messageTypes';
 import { SocketMessageEnums } from './socketEnum';
+import { sendMessagePushNotification } from '../modules/pushNotification/pushNotification.service';
 
 export const handleNewMessage = (socket: Socket, io: Server) => {
   socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
+
+    
     const chat = newMessageReceived.chat;
     if (!chat.users) return console.log('chat.users not defined');
 
@@ -18,7 +21,17 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
         socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
         io.emit(`message_notification_${user.userId}`);
       } else {
-        console.log(`User ${user} is not in the room, cannot send message`);
+
+        sendMessagePushNotification(user.userId.toString(), newMessageReceived.sender.firstName || "User", newMessageReceived.content.length ? newMessageReceived.content : "You have a new message",{
+            sender_id: newMessageReceived.sender.id,
+            receiverId: user.userId.toString(),
+            type: "MESSAGE_NOTIFICATION",
+            chatId:newMessageReceived.chat._id,
+
+          },
+          'message_channel'
+        );
+
       }
     });
   });
@@ -43,3 +56,10 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
     });
   });
 };
+
+
+
+
+
+
+
