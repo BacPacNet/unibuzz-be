@@ -35,7 +35,17 @@ const handleSendNotification = async (job: any) => {
   for (let i = 0; i < receiverIds.length; i += chunkSize) {
     const chunk = receiverIds.slice(i, i + chunkSize);
     chunk.forEach((userId: string) => {
+        const isUserOnline = onlineUsers.isUserOnline(userId);
+        
+        if (isUserOnline) {
       io.emit(`notification_${userId}`, { type });
+    } else {
+      sendPushNotification(userId, 'Notification', "You are invited to join group",{
+        sender_id: adminId.toString(),
+        receiverId: userId.toString(),
+        type:NotificationIdentifier.group_invite_notifications,
+      });
+    }
     });
     await wait(10); // debounce between batches
   }
@@ -441,9 +451,7 @@ const DeleteFollowNotification = async (job: any) => {
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
   } 
-//   else {
-//     sendPushNotification(receiverId, 'Notification', 'You have a new notification');
-//   }
+
 };
 
 const CreateOfficialGroupRequestNotification = async (job: any) => {
@@ -461,15 +469,16 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
     message: 'User has requested an official group status',
   };
 
- const res =  (await notificationService.CreateNotification(notifications)).populate("communityGroupId")
+  const notification = await notificationService.CreateNotification(notifications);
+  const res:any = await notification.populate("communityGroupId");
 
- console.log("res",res);
  
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification',{
+
+    sendPushNotification(receiverId, 'Official Group Request',res.communityGroupId.title + " has requested an official group status",{
         sender_id: sender_id.toString(),
         receiverId: receiverId.toString(),
         type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
@@ -491,13 +500,19 @@ const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
     type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
     message: 'Your Request has been Rejected',
   };
-  await notificationService.CreateNotification(notifications);
+  const notification = await notificationService.CreateNotification(notifications);
+  const res:any = await notification.populate("communityGroupId");
+
 
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Private Group Request', "Your Request to join " + res.communityGroupId.title +' has been Rejected',{
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
+    });
   }
 };
 const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
@@ -514,13 +529,19 @@ const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
     type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
     message: 'Your Request has been Accepted',
   };
-  await notificationService.CreateNotification(notifications);
+  const notification = await notificationService.CreateNotification(notifications);
+  const res:any = await notification.populate("communityGroupId");
+
 
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Private Group Request', "Your Request to join " + res.communityGroupId.title +' has been Accepted',{
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
+    });
   }
 };
 const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
@@ -537,13 +558,18 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
     type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
     message: 'Your Request has been Accepted',
   };
-  await notificationService.CreateNotification(notifications);
+  const notification = await notificationService.CreateNotification(notifications);
+  const res:any = await notification.populate("communityGroupId");
 
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Official Group Request', "Your Request to join " + res.communityGroupId.title +'has been Accepted',{
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
+    });
   }
 };
 const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
@@ -560,13 +586,18 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
     message: 'Your Request has been Rejected',
   };
-  await notificationService.CreateNotification(notifications);
+  const notification = await notificationService.CreateNotification(notifications);
+  const res:any = await notification.populate("communityGroupId");
 
   const isUserOnline = onlineUsers.isUserOnline(receiverId);
   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
   } else {
-    sendPushNotification(receiverId, 'Notification', 'You have a new notification');
+    sendPushNotification(receiverId, 'Official Group Request', "Your Request to join " + res.communityGroupId.title +'has been Rejected',{
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
+    });
   }
 };
 
