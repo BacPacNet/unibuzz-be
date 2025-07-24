@@ -27,6 +27,7 @@ const envVarsSchema = Joi.object()
     REDIS_HOST: Joi.string().required().description('Redis host'),
     REDIS_PORT: Joi.number().default(6379).description('Redis port'),
     REDIS_PASSWORD: Joi.string().optional().description('Redis password'),
+    // Firebase Configuration
     // AWS Configuration
     AWS_ACCESS_KEY_ID: Joi.string().when('NODE_ENV', {
       is: 'production',
@@ -102,6 +103,9 @@ const config = {
     secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
     region: envVars.AWS_REGION,
     s3BucketName: envVars.AWS_S3_BUCKET_NAME,
+  },
+  fcm: {
+    config: envVars.FIREBASE_CONFIG,
   },
 };
 
