@@ -46,9 +46,7 @@ export const sendMessagePushNotification = async (
 ) => {
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
 
-  if (!pushNotification) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'notification not found!');
-  }
+  if (!pushNotification) return;
 
   const message = {
     notification: {
