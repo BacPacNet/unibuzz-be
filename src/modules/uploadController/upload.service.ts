@@ -11,12 +11,12 @@ const s3 = new AWS.S3({
 
 const BUCKET_NAME = process.env['AWS_S3_BUCKET_NAME']!;
 
-export async function uploadToS3(file: Express.Multer.File, existingKey?: string, context?: string) {
+export async function uploadToS3(file: Express.Multer.File, existingKey?: string, context?: string, userId?: string) {
   const fileExt = path.extname(file.originalname);
   const baseName = path.basename(file.originalname, fileExt); // e.g., "logo"
   const uniqueSuffix = uuidv4(); // generate unique ID to prevent overwrites
 
-  const key = existingKey || `uploads/${context}/${baseName}-${uniqueSuffix}${fileExt}`;
+  const key = existingKey || `uploads/${context}/${userId}/${baseName}-${uniqueSuffix}${fileExt}`;
 
   const params = {
     Bucket: BUCKET_NAME,
