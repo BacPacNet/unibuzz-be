@@ -62,33 +62,14 @@ app.use(compression());
 
 // Enable cors
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    const allowedOrigins =
-      config.env === 'production'
-        ? [config.clientUrl] // Only allow your frontend domain in production
-        : [
-            config.clientUrl,
-            'http://localhost:3000',
-            'http://localhost:8000',
-            'https://dev-unibuzz.vercel.app',
-            // Add any other development URLs you need
-          ];
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin:
+    config.env === 'production'
+      ? [config.clientUrl] // Only allow your frontend domain in production
+      : [config.clientUrl, 'http://localhost:3000', 'http://localhost:8000', 'https://dev-unibuzz.vercel.app'], // Allow localhost in development
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 
 app.use(cors(corsOptions));
