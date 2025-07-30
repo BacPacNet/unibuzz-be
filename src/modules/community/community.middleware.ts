@@ -43,7 +43,9 @@ export const checkUserCommunityMembership = (options: CommunityVerificationOptio
       }
 
       // Find the community in user's communities array
-      const userCommunity = userProfile.communities.find((community) => community.communityId.toString() === communityId);
+      const userCommunity = userProfile.communities.find(
+        (community: { communityId: string }) => community.communityId.toString() === communityId
+      );
 
       if (!userCommunity) {
         return next(new ApiError(httpStatus.FORBIDDEN, 'User is not a member of this community'));

@@ -50,13 +50,15 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
  * @param {mongoose.Types.ObjectId} id
  * @returns {Promise<IUserDoc | null>}
  */
-export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
+export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> =>
+  User.findOne({ _id: id, isUserDeactive: { $ne: true } });
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
   const userProfile = await User.aggregate([
     {
       $match: {
         _id: id,
+        isUserDeactive: { $ne: true },
       },
     },
     {
@@ -95,6 +97,7 @@ export const getUserProfileByUsername = async (userName: string) => {
     {
       $match: {
         userName: userName,
+        isUserDeactive: { $ne: true },
       },
     },
     {
@@ -150,6 +153,7 @@ export const getAllUser = async (
 
   const matchStage: any = {
     _id: { $ne: new mongoose.Types.ObjectId(userId) },
+    isUserDeactive: { $ne: true },
   };
 
   if (firstNametoPush) {
@@ -308,7 +312,9 @@ export const getUsersWithProfile = async (name: string = '', userId: string) => 
     }
   }
 
-  const user: (IUser & { _id: string })[] | null = await User.find(query).select('firstName lastName _id ').lean();
+  const user: (IUser & { _id: string })[] | null = await User.find({ ...query, isUserDeactive: { $ne: true } })
+    .select('firstName lastName _id ')
+    .lean();
 
   const userIds = user && user.map((user) => user._id);
 
@@ -344,7 +350,7 @@ export const joinCommunityAfterEmailVerification = async (
   let community: any = await communityModel.findOne({ name: communityName });
   const userProfile = await userProfileService.getUserProfileById(String(userId));
 
-  const userSet = new Set(userProfile?.communities.map((community) => community.communityId));
+  const userSet = new Set(userProfile?.communities.map((community: { communityId: any }) => community.communityId));
 
   let status = { isUniversityCommunity: false, isAlreadyJoined: false };
 
@@ -406,6 +412,7 @@ export const findUsersByCommunityId = async (
       query = {
         'userVerifiedCommunities.communityId': communityId,
         _id: { $ne: userID },
+        isUserDeactive: { $ne: true },
       };
 
       if (name) {
@@ -423,12 +430,18 @@ export const findUsersByCommunityId = async (
         const nameConditions = [{ firstName: nameRegex }, { lastName: nameRegex }];
 
         query = {
-          $and: [{ $or: communityConditions }, { $or: nameConditions }, { _id: { $ne: userID } }],
+          $and: [
+            { $or: communityConditions },
+            { $or: nameConditions },
+            { _id: { $ne: userID } },
+            { isUserDeactive: { $ne: true } },
+          ],
         };
       } else {
         query = {
           $or: communityConditions,
           _id: { $ne: userID },
+          isUserDeactive: { $ne: true },
         };
       }
     }
@@ -459,12 +472,14 @@ export const findUsersByCommunityGroupId = async (communityGroupId: string, name
       _id: {
         $ne: string; // or mongoose.Types.ObjectId if using ObjectId type
       };
+      isUserDeactive: { $ne: true };
       firstName?: string | RegExp;
     }
 
     let query: UserQuery = {
       'userVerifiedCommunities.communityGroups.communityGroupId': communityGroupId,
       _id: { $ne: userID },
+      isUserDeactive: { $ne: true },
     };
 
     const nameRegex = new RegExp(name, 'i');

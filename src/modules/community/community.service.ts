@@ -11,8 +11,7 @@ import { getUserProfileById } from '../userProfile/userProfile.service';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId } from '../../utils/common';
 import { GetCommunityUsersOptions } from './community.interface';
-
-
+import { UserCommunities } from '../userProfile/userProfile.interface';
 
 export const createCommunity = async (
   name: string,
@@ -47,13 +46,13 @@ export const getCommunityFromUniversityId = async (universityId: string) => {
 
 export const getUserCommunities = async (userID: string) => {
   try {
-    const user = await User.findById(userID).lean();
+    const user = await User.findOne({ _id: userID, isUserDeactive: { $ne: true } }).lean();
     if (!user) throw new Error('User not found');
 
     const userProfile = await userProfileService.getUserProfileById(userID);
     if (!userProfile) throw new Error('User Profile not found');
 
-    const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
+    const getAllUserCommunityIds = userProfile.communities.map((community: UserCommunities) => community.communityId);
 
     // First get all communities with their groups
     // const communities = await communityModel.aggregate([
@@ -166,8 +165,7 @@ export const getUserCommunities = async (userID: string) => {
     //   };
     // });
 
-    return communities
-      ;
+    return communities;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
@@ -502,11 +500,12 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 
   const communityToJoin = await communityModel.findById(communityId);
   let isCommunityVerified = userProfile?.email.some(
-    (userCommunity) => userCommunity.communityId.toString() === communityToJoin?._id.toString()
+    (userCommunity: { UniversityName: string; UniversityEmail: string; communityId: string; logo: string }) =>
+      userCommunity.communityId.toString() === communityToJoin?._id.toString()
   );
 
   let isAlreadyJoined = userProfile.communities.some(
-    (community) => community.communityId.toString() === communityId.toString()
+    (community: UserCommunities) => community.communityId.toString() === communityId.toString()
   );
   if (!isAlreadyJoined) {
     userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerfied, communityGroups: [] });
@@ -553,10 +552,14 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
     let community = await communityModel.findOne({ university_id: universityId });
     let userProfile = await getUserProfileById(userId);
     let numberOfUnverifiedJoinCommunity =
-      userProfile?.communities?.reduce((acc, community) => (community?.isVerified === false ? acc + 1 : acc), 0) || 0;
+      userProfile?.communities?.reduce(
+        (acc: number, community: UserCommunities) => (community?.isVerified === false ? acc + 1 : acc),
+        0
+      ) || 0;
 
     let isCommunityVerified = userProfile?.email.some(
-      (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
+      (userCommunity: { UniversityName: string; UniversityEmail: string; communityId: string; logo: string }) =>
+        userCommunity.communityId.toString() === community?._id.toString()
     );
     if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
       return new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
@@ -606,7 +609,9 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     }
 
     // Remove community from user's profile
-    const communityIndex = userProfile.communities.findIndex((c) => c.communityId.toString() === communityId.toString());
+    const communityIndex = userProfile.communities.findIndex(
+      (c: UserCommunities) => c.communityId.toString() === communityId.toString()
+    );
 
     if (communityIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
@@ -616,10 +621,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     await userProfile.save();
 
     // Remove user from the community users list using atomic update
-    await communityModel.updateOne(
-      { _id: communityId },
-      { $pull: { users: { _id: userId } } }
-    );
+    await communityModel.updateOne({ _id: communityId }, { $pull: { users: { _id: userId } } });
 
     // Clean up user from any community groups
     await cleanUpUserFromCommunityGroups(userId, communityId);
@@ -634,19 +636,9 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   }
 };
 
-
-
-export const getCommunityUsersService = async (
-  communityId: string,
-  options: GetCommunityUsersOptions
-) => {
+export const getCommunityUsersService = async (communityId: string, options: GetCommunityUsersOptions) => {
   try {
-    const {
-      isVerified,
-      searchQuery,
-      page = 1,
-      limit = 10,
-    } = options;
+    const { isVerified, searchQuery, page = 1, limit = 10 } = options;
 
     const community = await communityModel.findById(convertToObjectId(communityId)).lean();
     if (!community) {
@@ -691,10 +683,7 @@ export const getCommunityUsersService = async (
       const regex = new RegExp(searchQuery.trim(), 'i');
       pipeline.push({
         $match: {
-          $or: [
-            { firstName: { $regex: regex } },
-            { lastName: { $regex: regex } },
-          ],
+          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
         },
       });
     }
@@ -736,10 +725,7 @@ export const getCommunityUsersService = async (
       const regex = new RegExp(searchQuery.trim(), 'i');
       countPipeline.push({
         $match: {
-          $or: [
-            { firstName: { $regex: regex } },
-            { lastName: { $regex: regex } },
-          ],
+          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
         },
       });
     }
@@ -762,8 +748,6 @@ export const getCommunityUsersService = async (
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
-
-
 
 //export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
 //  try {

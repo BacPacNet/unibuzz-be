@@ -284,7 +284,9 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
   if (!userProfile) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
   }
-  const isUserAllowtoCreateGroup = userProfile?.email.some((item) => item.communityId === communityId);
+  const isUserAllowtoCreateGroup = userProfile?.email.some(
+    (item: { communityId: string }) => item.communityId === communityId
+  );
 
   if (!isUserAllowtoCreateGroup) {
     throw new ApiError(httpStatus.FORBIDDEN, 'User is not allowed to create group');
@@ -352,7 +354,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     //check if community is private and user is verified
     const isCommunityPrivate = communityGroup?.communityGroupAccess === CommunityGroupAccess.Private;
     const isUserVerified = userProfile?.email.some(
-      (community) => community.communityId.toString() === communityGroup.communityId?.toString()
+      (community: { communityId: string }) => community.communityId.toString() === communityGroup.communityId?.toString()
     );
 
     if (!isUserVerified && isCommunityPrivate) {
@@ -449,12 +451,17 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       };
       await notificationService.CreateNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
-      sendPushNotification(communityGroup.adminUserId.toString(), 'Private Group Request', user.firstName+" has requested to join your private group" + communityGroup.title ,{
-        sender_id: userID,
-        receiverId: communityGroup.adminUserId.toString(),
-        type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
-      });
-      
+      sendPushNotification(
+        communityGroup.adminUserId.toString(),
+        'Private Group Request',
+        user.firstName + ' has requested to join your private group' + communityGroup.title,
+        {
+          sender_id: userID,
+          receiverId: communityGroup.adminUserId.toString(),
+          type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
+        }
+      );
+
       return { success: true, message: 'Request sent successfully', isGroupPrivate: true };
     } else {
       return {
@@ -501,16 +508,15 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
     await communityGroup.save();
 
     // Find the community that contains this group
-    const communityIndex = userProfile.communities.findIndex((community) =>
-      community.communityGroups.some((group) => group.id.toString() === groupId)
+    const communityIndex = userProfile.communities.findIndex((community: { communityGroups: { id: string }[] }) =>
+      community.communityGroups.some((group: { id: string }) => group.id.toString() === groupId)
     );
 
     if (communityIndex !== -1) {
       // Filter out the group from the communityGroup array
       userProfile.communities[communityIndex]!.communityGroups = userProfile.communities[
         communityIndex
-      ]!.communityGroups.filter((group) => group.id.toString() !== groupId);
-
+      ]!.communityGroups.filter((group: { id: string }) => group.id.toString() !== groupId);
     }
 
     const updatedUserProfile = await userProfile.save();

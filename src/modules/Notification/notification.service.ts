@@ -71,6 +71,11 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
       },
     },
     {
+      $match: {
+        'senderDetails.isUserDeactive': { $ne: true },
+      },
+    },
+    {
       $lookup: {
         from: 'userprofiles',
         localField: 'sender_id',
@@ -224,6 +229,11 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       $unwind: {
         path: '$senderDetails',
         preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $match: {
+        'senderDetails.isUserDeactive': { $ne: true },
       },
     },
     {

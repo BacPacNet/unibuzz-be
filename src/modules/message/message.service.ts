@@ -24,7 +24,7 @@ export const createmessage = async (
     latestMessage.content += `\n${content}`;
     await latestMessage.save();
     return messageModel.findById(latestMessage._id).populate([
-      { path: 'sender', select: 'firstName lastName _id' },
+      { path: 'sender', select: 'firstName lastName _id', match: { isUserDeactive: { $ne: true } } },
       { path: 'senderProfile', select: 'profile_dp' },
       { path: 'chat', select: 'users' },
     ]);
@@ -43,7 +43,7 @@ export const createmessage = async (
   await chatModel.findByIdAndUpdate(chatId, { latestMessage: newMessage._id });
 
   const message = await messageModel.findById(newMessage._id).populate([
-    { path: 'sender', select: 'firstName lastName _id' },
+    { path: 'sender', select: 'firstName lastName _id', match: { isUserDeactive: { $ne: true } } },
     { path: 'senderProfile', select: 'profile_dp' },
     { path: 'chat', select: 'users' },
   ]);
@@ -55,7 +55,7 @@ export const getMessages = async (chatId: string) => {
   const messages = await messageModel
     .find({ chat: chatId })
     .populate([
-      { path: 'sender', select: 'firstName lastName _id' },
+      { path: 'sender', select: 'firstName lastName _id', match: { isUserDeactive: { $ne: true } } },
       { path: 'senderProfile', select: '  profile_dp' },
     ])
     .sort({ createdAt: 1 });

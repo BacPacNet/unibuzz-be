@@ -56,11 +56,48 @@ export const getUserFollowing = async (name: string, userId: string) => {
     }
   }
 
-  const userFollowing: any = await followingRelationship.find(query).populate('following_user_id').lean();
+  const userFollowing: any = await followingRelationship
+    .find(query)
+    .populate({
+      path: 'following_user_id',
+      match: { isUserDeactive: { $ne: true } },
+    })
+    .lean();
   const userIds = userFollowing.map((user: any) => user.following_user_id._id);
-  const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
-    'profile_dp university_name study_year degree major users_id major occupation'
-  );
+  const userProfiles = await UserProfile.aggregate([
+    {
+      $match: { users_id: { $in: userIds } },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $match: {
+        'user.isUserDeactive': { $ne: true },
+      },
+    },
+    {
+      $project: {
+        profile_dp: 1,
+        university_name: 1,
+        study_year: 1,
+        degree: 1,
+        major: 1,
+        users_id: 1,
+        occupation: 1,
+        'user.password': 0,
+        'user.__v': 0,
+      },
+    },
+  ]);
 
   const userWithProfile = userFollowing.map((user: any) => {
     const profile = userProfiles.find((profile) => profile.users_id.toString() == user.following_user_id._id.toString());
@@ -92,11 +129,48 @@ export const getUserFollowers = async (name: string, userId: string) => {
     }
   }
 
-  const userFollowers: any = await followingRelationship.find(query).populate('user_id').lean();
+  const userFollowers: any = await followingRelationship
+    .find(query)
+    .populate({
+      path: 'user_id',
+      match: { isUserDeactive: { $ne: true } },
+    })
+    .lean();
   const userIds = userFollowers.map((user: any) => user.user_id._id);
-  const userProfiles = await UserProfile.find({ users_id: { $in: userIds } }).select(
-    'profile_dp university_name study_year degree major users_id major occupation'
-  );
+  const userProfiles = await UserProfile.aggregate([
+    {
+      $match: { users_id: { $in: userIds } },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $match: {
+        'user.isUserDeactive': { $ne: true },
+      },
+    },
+    {
+      $project: {
+        profile_dp: 1,
+        university_name: 1,
+        study_year: 1,
+        degree: 1,
+        major: 1,
+        users_id: 1,
+        occupation: 1,
+        'user.password': 0,
+        'user.__v': 0,
+      },
+    },
+  ]);
 
   const userWithProfile = userFollowers.map((user: any) => {
     const profile = userProfiles.find((profile) => profile.users_id.toString() == user.user_id._id.toString());

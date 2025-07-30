@@ -63,20 +63,110 @@ export const buildEmailField = async (universityEmail: string, universityName: s
 };
 
 export const getUserProfile = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id }).populate({
-    path: 'university_id',
-    select: 'name country logos images',
-  });
-  return userProfile;
+  const userProfile = await UserProfile.aggregate([
+    {
+      $match: { users_id: new mongoose.Types.ObjectId(id) },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $match: {
+        'user.isUserDeactive': { $ne: true },
+      },
+    },
+    {
+      $lookup: {
+        from: 'universities',
+        localField: 'university_id',
+        foreignField: '_id',
+        as: 'university_id',
+      },
+    },
+    {
+      $unwind: {
+        path: '$university_id',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        'user.password': 0,
+        'user.__v': 0,
+      },
+    },
+  ]);
+
+  return userProfile[0];
 };
 export const getUserProfileById = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id });
+  const userProfileResult = await UserProfile.aggregate([
+    {
+      $match: { users_id: new mongoose.Types.ObjectId(id) },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $match: {
+        'user.isUserDeactive': { $ne: true },
+      },
+    },
+    {
+      $project: {
+        'user.password': 0,
+        'user.__v': 0,
+      },
+    },
+  ]);
 
-  return userProfile;
+  return userProfileResult[0];
 };
 
 export const getUserProfiles = async (userIds: any) => {
-  return await UserProfile.find({ users_id: { $in: userIds } });
+  return await UserProfile.aggregate([
+    {
+      $match: { users_id: { $in: userIds } },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: '$user',
+    },
+    {
+      $match: {
+        'user.isUserDeactive': { $ne: true },
+      },
+    },
+    {
+      $project: {
+        'user.password': 0,
+        'user.__v': 0,
+      },
+    },
+  ]);
 };
 
 export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: EditProfileRequest) => {

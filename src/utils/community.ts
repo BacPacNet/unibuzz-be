@@ -11,10 +11,11 @@ export const validateCommunityMembership = async (communityId: string, userId: s
   }
 
   const isMember = community.users.some((user) => user._id.toString() === userId.toString());
-  const userCommunities = await getUserProfileById(userId)
+  const userCommunities = await getUserProfileById(userId);
 
-  const isUserJoinCommunity = userCommunities?.communities.some((c) => c.communityId.toString() === communityId.toString())
-  
+  const isUserJoinCommunity = userCommunities?.communities.some(
+    (c: { communityId: string }) => c.communityId.toString() === communityId.toString()
+  );
 
   if (!isMember && !isUserJoinCommunity) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community');

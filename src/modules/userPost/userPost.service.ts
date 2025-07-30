@@ -240,7 +240,7 @@ export const deleteUserPost = async (id: mongoose.Types.ObjectId) => {
 
 export const getUserJoinedCommunityIds = async (id: mongoose.Schema.Types.ObjectId) => {
   const userProfile = await userProfileService.getUserProfileById(String(id));
-  return userProfile?.communities.map((community) => community.communityId);
+  return userProfile?.communities.map((community: { communityId: string }) => community.communityId);
 };
 
 //interface PaginatedPosts {

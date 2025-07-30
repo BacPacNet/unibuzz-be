@@ -12,7 +12,10 @@ export const getChat = async (yourId: string, userId: string) => {
       isGroupChat: false,
       $and: [{ users: { $elemMatch: { userId: yourId } } }, { users: { $elemMatch: { userId: userId } } }],
     })
-    .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
+    .populate([
+      { path: 'users.userId', select: 'firstName lastName', match: { isUserDeactive: { $ne: true } } },
+      { path: 'latestMessage' },
+    ])
     .lean();
 
   const userProfiledata = await UserProfile.find({ users_id: userId }).select(
@@ -65,7 +68,10 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
 
   const createdChat: chatInterface | null = await chatModel
     .findById(chat._id)
-    .populate([{ path: 'users.userId', select: 'firstName lastName' }, { path: 'latestMessage' }])
+    .populate([
+      { path: 'users.userId', select: 'firstName lastName', match: { isUserDeactive: { $ne: true } } },
+      { path: 'latestMessage' },
+    ])
     .lean();
 
   const userProfiledata = await UserProfile.find({ users_id: userId }).select(
@@ -110,6 +116,7 @@ export const getUserChats = async (userId: string) => {
     .populate({
       path: 'users.userId',
       select: 'firstName lastName',
+      match: { isUserDeactive: { $ne: true } },
     })
     .populate('latestMessage')
     .lean();
@@ -526,8 +533,8 @@ export const toggleBlock = async (userId: string, userToBlockId: string, chatId:
       chat.isBlock = false;
     }
 
-    const userToblockProfile = userProfile.followers.find((user) => user.userId.toString() == userToBlockId);
-    const userToblockProfileFollwing = userProfile.following.find((user) => user.userId.toString() == userToBlockId);
+    const userToblockProfile = userProfile.followers.find((user: any) => user.userId.toString() == userToBlockId);
+    const userToblockProfileFollwing = userProfile.following.find((user: any) => user.userId.toString() == userToBlockId);
 
     if (userToblockProfile) {
       userToblockProfile.isBlock = false;
@@ -545,8 +552,8 @@ export const toggleBlock = async (userId: string, userToBlockId: string, chatId:
       chat.blockedBy.push(new mongoose.Types.ObjectId(userId));
     }
 
-    const userToblockProfile = userProfile.followers.find((user) => user.userId.toString() == userToBlockId);
-    const userToblockProfileFollwing = userProfile.following.find((user) => user.userId.toString() == userToBlockId);
+    const userToblockProfile = userProfile.followers.find((user: any) => user.userId.toString() == userToBlockId);
+    const userToblockProfileFollwing = userProfile.following.find((user: any) => user.userId.toString() == userToBlockId);
     if (userToblockProfile) {
       userToblockProfile.isBlock = true;
     }
