@@ -26,7 +26,6 @@ export const sendPushNotification = async (userId: string, title: string, body: 
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
 
   if (!pushNotification) return;
-  console.log('pushNotification', pushNotification);
 
   const message = {
     notification: {
