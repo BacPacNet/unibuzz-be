@@ -26,6 +26,7 @@ export const sendPushNotification = async (userId: string, title: string, body: 
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
 
   if (!pushNotification) return;
+  console.log('pushNotification', pushNotification);
 
   const message = {
     notification: {
@@ -36,8 +37,16 @@ export const sendPushNotification = async (userId: string, title: string, body: 
     token: pushNotification.token,
   };
 
-  const response = await admin.messaging().send(message);
-  return response;
+  try {
+    const response = await admin.messaging().send(message);
+
+    return response;
+  } catch (error: any) {
+    console.error('Failed to send push notification:', error.message);
+    if (error.errorInfo?.code === 'messaging/registration-token-not-registered') {
+      console.warn('Deleted invalid push token for user:', userId);
+    }
+  }
 };
 
 export const sendMessagePushNotification = async (userId: string, title: string, body: string, data: any = {}) => {
@@ -55,8 +64,16 @@ export const sendMessagePushNotification = async (userId: string, title: string,
     token: pushNotification.token,
   };
 
-  const response = await admin.messaging().send(message);
-  return response;
+  try {
+    const response = await admin.messaging().send(message);
+
+    return response;
+  } catch (error: any) {
+    console.error('Failed to send push notification:', error.message);
+    if (error.errorInfo?.code === 'messaging/registration-token-not-registered') {
+      console.warn('Deleted invalid push token for user:', userId);
+    }
+  }
 };
 
 export const sendTestPushNotifications = async (userId: string) => {
