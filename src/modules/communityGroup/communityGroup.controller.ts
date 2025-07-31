@@ -67,6 +67,7 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
       }
+      // console.log('body', body);
       await communityGroupService.updateCommunityGroup(new mongoose.Types.ObjectId(groupId), req.body);
       return res.status(200).json({ message: 'Updated Successfully' });
     }
@@ -277,8 +278,6 @@ export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Re
   try {
     // Check if the adminUserId matches adminId
     const communityGroupAdmin = await communityGroupModel.find({ adminUserId: adminId, _id: groupId });
-
-    console.log(communityGroupAdmin, 'communityGroupAdmin');
 
     if (communityGroupAdmin.length === 0) {
       throw new Error('You are not admin');

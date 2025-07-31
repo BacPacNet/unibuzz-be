@@ -65,7 +65,7 @@ const corsOptions = {
   origin:
     config.env === 'production'
       ? [config.clientUrl] // Only allow your frontend domain in production
-      : ['http://localhost:3000', 'http://localhost:8000', 'http://127.0.0.1:3000'], // Allow localhost in development
+      : [config.clientUrl, 'http://localhost:3000', 'http://localhost:8000', 'https://dev-unibuzz.vercel.app'], // Allow localhost in development
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

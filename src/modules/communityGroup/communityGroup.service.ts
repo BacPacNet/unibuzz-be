@@ -17,6 +17,7 @@ import communityPostCommentsModel from '../communityPostsComments/communityPosts
 import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { convertToObjectId } from '../../utils/common';
+import { sendPushNotification } from '../pushNotification/pushNotification.service';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -448,6 +449,12 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       };
       await notificationService.CreateNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
+      sendPushNotification(communityGroup.adminUserId.toString(), 'Private Group Request', user.firstName+" has requested to join your private group" + communityGroup.title ,{
+        sender_id: userID,
+        receiverId: communityGroup.adminUserId.toString(),
+        type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
+      });
+      
       return { success: true, message: 'Request sent successfully', isGroupPrivate: true };
     } else {
       return {
