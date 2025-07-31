@@ -33,3 +33,15 @@ export const sendNotification = async (req: extendedRequest, res: Response, next
     next(error);
   }
 };
+export const deleteNotification = async (req: extendedRequest, res: Response, next: NextFunction) => {
+  const userID = req.userId;
+  try {
+    if (!userID) return next(new ApiError(httpStatus.NOT_FOUND, 'userId Required'));
+
+    await pushNotificationService.deletePushNotification(userID);
+
+    return res.status(201).json({ message: 'token Deleted' });
+  } catch (error) {
+    next(error);
+  }
+};

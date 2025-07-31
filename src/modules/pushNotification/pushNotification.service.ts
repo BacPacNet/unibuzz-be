@@ -18,6 +18,9 @@ export const createPushNotification = async (userId: string, token: string) => {
 
   return pushNotification;
 };
+export const deletePushNotification = async (userId: string) => {
+  return await pushNotificationModal.findOneAndDelete({ user_Id: userId });
+};
 
 export const sendPushNotification = async (userId: string, title: string, body: string, data: any = {}) => {
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
@@ -37,15 +40,8 @@ export const sendPushNotification = async (userId: string, title: string, body: 
   return response;
 };
 
-export const sendMessagePushNotification = async (
-  userId: string,
-  title: string,
-  body: string,
-  data: any = {},
-  channelId: string = 'message_channel'
-) => {
+export const sendMessagePushNotification = async (userId: string, title: string, body: string, data: any = {}) => {
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
-
   if (!pushNotification) return;
 
   const message = {
@@ -57,13 +53,6 @@ export const sendMessagePushNotification = async (
       ...data,
     },
     token: pushNotification.token,
-    android: {
-      notification: {
-        channelId,
-        tag: 'msg_tag',
-        priority: 'high' as const,
-      },
-    },
   };
 
   const response = await admin.messaging().send(message);

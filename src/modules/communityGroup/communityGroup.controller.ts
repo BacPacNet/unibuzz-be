@@ -279,8 +279,6 @@ export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Re
     // Check if the adminUserId matches adminId
     const communityGroupAdmin = await communityGroupModel.find({ adminUserId: adminId, _id: groupId });
 
-    console.log(communityGroupAdmin, 'communityGroupAdmin');
-
     if (communityGroupAdmin.length === 0) {
       throw new Error('You are not admin');
     }
