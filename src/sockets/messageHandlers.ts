@@ -5,8 +5,6 @@ import { sendMessagePushNotification } from '../modules/pushNotification/pushNot
 
 export const handleNewMessage = (socket: Socket, io: Server) => {
   socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
-
-    
     const chat = newMessageReceived.chat;
     if (!chat.users) return console.log('chat.users not defined');
 
@@ -21,17 +19,17 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
         socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
         io.emit(`message_notification_${user.userId}`);
       } else {
-
-        sendMessagePushNotification(user.userId.toString(), newMessageReceived.sender.firstName || "User", newMessageReceived.content.length ? newMessageReceived.content : "You have a new message",{
+        sendMessagePushNotification(
+          user.userId.toString(),
+          newMessageReceived.sender.firstName || 'User',
+          newMessageReceived.content.length ? newMessageReceived.content : 'You have a new message',
+          {
             sender_id: newMessageReceived.sender.id,
             receiverId: user.userId.toString(),
-            type: "MESSAGE_NOTIFICATION",
-            chatId:newMessageReceived.chat._id,
-
-          },
-          'message_channel'
+            type: 'MESSAGE_NOTIFICATION',
+            chatId: newMessageReceived.chat._id,
+          }
         );
-
       }
     });
   });
@@ -56,10 +54,3 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
     });
   });
 };
-
-
-
-
-
-
-

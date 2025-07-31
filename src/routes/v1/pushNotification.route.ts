@@ -4,7 +4,10 @@ import { pushNotificationController } from '../../modules/pushNotification';
 
 const router: Router = Router();
 
-router.route('/').post(userIdAuth, pushNotificationController.CreatePushNotificationToken);
+router
+  .route('/')
+  .post(userIdAuth, pushNotificationController.CreatePushNotificationToken)
+  .delete(userIdAuth, pushNotificationController.deleteNotification);
 
 router.route('/:userID').put(pushNotificationController.sendNotification);
 
