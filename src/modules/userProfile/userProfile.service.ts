@@ -495,29 +495,65 @@ export const addUniversityEmail = async (
   communityId: string,
   communityLogoUrl: string
 ) => {
-  const updatedUserProfile = await UserProfile.findOneAndUpdate(
-    {
-      users_id: new mongoose.Types.ObjectId(userId),
-      // Ensure that the email is not already added to the profile
-      'email.UniversityEmail': { $ne: universityEmail },
+  // First, check if the user profile exists and get current communities
+  const userProfile = await UserProfile.findOne({
+    users_id: new mongoose.Types.ObjectId(userId),
+  });
+
+  if (!userProfile) {
+    throw new Error('User profile not found.');
+  }
+
+  // Check if the university email already exists
+  const emailExists = userProfile.email.some((email) => email.UniversityEmail === universityEmail);
+  if (emailExists) {
+    throw new Error('University email already exists in profile.');
+  }
+
+  // Check if community already exists in communities array
+  const communityExists = userProfile.communities.some((community) => community.communityId.toString() === communityId);
+
+  let updateOperation: any = {
+    $push: {
+      email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId, logo: communityLogoUrl },
     },
-    {
-      $push: {
-        email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId, logo: communityLogoUrl },
+  };
+
+  if (communityExists) {
+    // Update existing community's isVerified flag to true
+    updateOperation.$set = {
+      'communities.$[elem].isVerified': true,
+    };
+  } else {
+    // Add new community to communities array
+    updateOperation.$push = {
+      ...updateOperation.$push,
+      communities: {
+        communityId: new mongoose.Types.ObjectId(communityId),
+        isVerified: true,
+        communityGroups: [],
       },
-      $addToSet: {
-        communities: {
-          communityId,
-          isVerified: true,
-          communityGroups: [],
-        },
-      },
-    },
-    { new: true }
-  );
+    };
+  }
+
+  const filterQuery: any = {
+    users_id: new mongoose.Types.ObjectId(userId),
+  };
+
+  if (communityExists) {
+    filterQuery['communities.communityId'] = new mongoose.Types.ObjectId(communityId);
+  }
+
+  // Prepare options for findOneAndUpdate, omitting arrayFilters if not needed
+  const updateOptions: any = { new: true };
+  if (communityExists) {
+    updateOptions.arrayFilters = [{ 'elem.communityId': new mongoose.Types.ObjectId(communityId) }];
+  }
+
+  const updatedUserProfile = await UserProfile.findOneAndUpdate(filterQuery, updateOperation, updateOptions);
 
   if (!updatedUserProfile) {
-    throw new Error('User profile not found or university email already exists.');
+    throw new Error('Failed to update user profile.');
   }
 
   return updatedUserProfile;
