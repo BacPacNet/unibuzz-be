@@ -12,8 +12,6 @@ import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId } from '../../utils/common';
 import { GetCommunityUsersOptions } from './community.interface';
 
-
-
 export const createCommunity = async (
   name: string,
   adminId: string,
@@ -114,26 +112,6 @@ export const getUserCommunities = async (userID: string) => {
               0,
             ],
           },
-          // Extract isVerified for this user
-          isVerified: {
-            $let: {
-              vars: {
-                matchedUser: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: '$users',
-                        as: 'u',
-                        cond: { $eq: ['$$u._id', userObjectId] },
-                      },
-                    },
-                    0,
-                  ],
-                },
-              },
-              in: '$$matchedUser.isVerified',
-            },
-          },
         },
       },
       {
@@ -156,18 +134,17 @@ export const getUserCommunities = async (userID: string) => {
       },
     ]);
 
-    // Now enrich with verification status in JavaScript
-    // const communitiesWithVerification = communities.map((community) => {
-    //   const communityInProfile = userProfile.communities.find((c) => c.communityId.toString() === community._id.toString());
+    // Now enrich with verification status from userProfile
+    const communitiesWithVerification = communities.map((community) => {
+      const communityInProfile = userProfile.communities.find((c) => c.communityId.toString() === community._id.toString());
 
-    //   return {
-    //     ...community,
-    //     isVerified: communityInProfile ? communityInProfile.isVerified : false,
-    //   };
-    // });
+      return {
+        ...community,
+        isVerified: communityInProfile ? communityInProfile.isVerified : false,
+      };
+    });
 
-    return communities
-      ;
+    return communitiesWithVerification;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
@@ -616,10 +593,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     await userProfile.save();
 
     // Remove user from the community users list using atomic update
-    await communityModel.updateOne(
-      { _id: communityId },
-      { $pull: { users: { _id: userId } } }
-    );
+    await communityModel.updateOne({ _id: communityId }, { $pull: { users: { _id: userId } } });
 
     // Clean up user from any community groups
     await cleanUpUserFromCommunityGroups(userId, communityId);
@@ -634,19 +608,9 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
   }
 };
 
-
-
-export const getCommunityUsersService = async (
-  communityId: string,
-  options: GetCommunityUsersOptions
-) => {
+export const getCommunityUsersService = async (communityId: string, options: GetCommunityUsersOptions) => {
   try {
-    const {
-      isVerified,
-      searchQuery,
-      page = 1,
-      limit = 10,
-    } = options;
+    const { isVerified, searchQuery, page = 1, limit = 10 } = options;
 
     const community = await communityModel.findById(convertToObjectId(communityId)).lean();
     if (!community) {
@@ -691,10 +655,7 @@ export const getCommunityUsersService = async (
       const regex = new RegExp(searchQuery.trim(), 'i');
       pipeline.push({
         $match: {
-          $or: [
-            { firstName: { $regex: regex } },
-            { lastName: { $regex: regex } },
-          ],
+          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
         },
       });
     }
@@ -736,10 +697,7 @@ export const getCommunityUsersService = async (
       const regex = new RegExp(searchQuery.trim(), 'i');
       countPipeline.push({
         $match: {
-          $or: [
-            { firstName: { $regex: regex } },
-            { lastName: { $regex: regex } },
-          ],
+          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
         },
       });
     }
@@ -762,8 +720,6 @@ export const getCommunityUsersService = async (
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
-
-
 
 //export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
 //  try {
