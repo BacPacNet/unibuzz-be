@@ -157,6 +157,7 @@ export const getUserFilteredCommunities = async (
   sortBy: string,
   filters?: {
     selectedType?: string[];
+    selectedLabel?: string[];
     selectedFilters?: Record<string, string[]>;
   }
 ): Promise<any[]> => {
@@ -181,30 +182,61 @@ export const getUserFilteredCommunities = async (
       },
     ];
 
+
+
     if (filters) {
-      const { selectedType, selectedFilters } = filters;
+        const { selectedType, selectedFilters, selectedLabel } = filters;
+      
+        if (selectedType?.length || selectedLabel?.length) {
 
-      if (selectedType?.length) {
-        const typeConditions: any[] = [];
-        if (selectedType.includes('Private')) typeConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
-        if (selectedType.includes('Public')) typeConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
-        if (selectedType.includes('Official')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
-        if (selectedType.includes('Casual')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
+          
+          const filterConditions: any[] = [];
+          
 
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $filter: {
-                input: '$communityGroups',
-                as: 'group',
-                cond: {
-                  $or: typeConditions,
+          if (selectedType?.length) {
+            const accessConditions: any[] = [];
+            const typeConditions: any[] = [];
+            
+            if (selectedType.includes('Private')) accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
+            if (selectedType.includes('Public')) accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
+            if (selectedType.includes('Official')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
+            if (selectedType.includes('Casual')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
+            
+      
+            if (accessConditions.length && typeConditions.length) {
+              filterConditions.push({
+                $or: [
+                  { $and: accessConditions },
+                  { $and: typeConditions }
+                ]
+              });
+            } else if (accessConditions.length) {
+              filterConditions.push({ $or: accessConditions });
+            } else if (typeConditions.length) {
+              filterConditions.push({ $or: typeConditions });
+            }
+          }
+          
+         
+          if (selectedLabel?.length) {
+            filterConditions.push({ $in: ['$$group.communityGroupLabel', selectedLabel] });
+          }
+          
+      
+          pipeline.push({
+            $addFields: {
+              communityGroups: {
+                $filter: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  cond: {
+                    $and: filterConditions
+                  },
                 },
               },
             },
-          },
-        });
-      }
+          });
+        }
 
       if (selectedFilters && Object.keys(selectedFilters).length) {
         pipeline.push({
