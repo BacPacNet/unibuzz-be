@@ -426,11 +426,11 @@ export const editGroupChat = async (
 
 export const getGroupChatMembers = async (userID: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);
-  console.log('caht', chat?.users, 'user', userID);
-
   const isMember = chat?.users.some((user) => user.userId.toString() == userID);
 
-  console.log('isme', isMember);
+  if (!isMember) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
+  }
 
   const chatWithUserDetails = await chatModel.aggregate([
     {
