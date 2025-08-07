@@ -424,6 +424,79 @@ export const editGroupChat = async (
   return updatedGroup;
 };
 
+export const getGroupChatMembers = async (userID: string, chatId: string) => {
+  const chat = await chatModel.findById(chatId);
+  const isMember = chat?.users.some((user) => user.userId.toString() == userID);
+
+  if (!isMember) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
+  }
+
+  const chatWithUserDetails = await chatModel.aggregate([
+    {
+      $match: { _id: new mongoose.Types.ObjectId(chatId) },
+    },
+    {
+      $unwind: '$users',
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'users.userId',
+        foreignField: '_id',
+        as: 'users.userId',
+      },
+    },
+    {
+      $unwind: '$users.userId',
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'users.userId._id',
+        foreignField: 'users_id',
+        as: 'users.userProfile',
+      },
+    },
+    {
+      $unwind: {
+        path: '$users.userProfile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $addFields: {
+        'users.userId.profileDp': '$users.userProfile.profile_dp.imageUrl',
+        'users.userId.studyYear': '$users.userProfile.study_year',
+        'users.userId.major': '$users.userProfile.major',
+        'users.userId.occupation': '$users.userProfile.occupation',
+        'users.userId.affiliation': '$users.userProfile.affiliation',
+        'users.userId.role': '$users.userProfile.role',
+      },
+    },
+    {
+      $group: {
+        _id: '$_id',
+        chatName: { $first: '$chatName' },
+        groupDescription: { $first: '$groupDescription' },
+        community: { $first: '$community' },
+        isGroupChat: { $first: '$isGroupChat' },
+        groupAdmin: { $first: '$groupAdmin' },
+        users: { $push: '$users' },
+        createdAt: { $first: '$createdAt' },
+        updatedAt: { $first: '$updatedAt' },
+      },
+    },
+    {
+      $project: {
+        'users.userProfile': 0,
+        'users.userId.password': 0,
+      },
+    },
+  ]);
+
+  return chatWithUserDetails[0];
+};
 export const toggleAddToGroup = async (userID: string, userToToggleId: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);
   let updated = false;

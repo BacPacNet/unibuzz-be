@@ -145,6 +145,20 @@ export const EditGroupChat = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const GetGroupChatMember = async (req: userIdExtend, res: Response) => {
+  const { groupId } = req.params;
+  const userID = req.userId;
+
+  try {
+    if (userID && groupId) {
+      const members = await chatService.getGroupChatMembers(userID, groupId);
+      return res.status(201).json({ members });
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const ToggleAddToGroup = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   const { userToToggleId } = req.body;
