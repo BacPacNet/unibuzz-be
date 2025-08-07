@@ -1,64 +1,83 @@
 import mongoose from 'mongoose';
-import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupLabel, CommunityGroupType } from '../../config/community.type';
 
 export const allowedCategories = new Set([
-  'Academic Focus',
-  'Recreation and Hobbies',
-  'Advocacy and Awareness',
+  'Academic',
+  'Educational',
+  'Interest',
+  'Events & Activities',
   'Personal Growth',
+  'Advocacy and Awareness',
   'Professional Development',
-  'Others',
+  'Utility & Campus Life',
 ]);
 
 export const allowedSubcategories: Record<string, string[]> = {
-  'Academic Focus': [
-    'Science & Technology',
-    'Arts & Humanities',
+
+  'Academic': [
+    'Science',
+    'Technology',
+    'Arts and Humanities',
     'Social Sciences',
     'Education',
-    'Business & Economics',
+    'Business and Economics',
     'Health & Medicine',
     'Environmental Studies',
-    'Law & Policy',
+    'Laws & Policy',
     'Mathematics & Statistics',
     'Engineering',
+    'Coding',
+    'Robotics',
+    'Philosophy & Religion',
+    'Literature & Language',
+    'Agriculture',
+    'Architecture & Design',
+    'Media & Communication',
+    'Hospitality & Tourism',
   ],
-  'Recreation and Hobbies': [
+  'Educational': ['Course Discussion', 'Exam Prep', 'Study Materials', 'Research', 'Study Group', 'Peer Tutoring'],
+  'Interest': [
     'Sports & Fitness',
     'Music & Performing Arts',
     'Gaming & Esports',
     'Outdoor Activities',
     'Crafting & DIY',
     'Culinary Arts',
-    'Media Arts',
+    'Media',
     'Dance',
     'Travel & Exploration',
-    'Literature & Writing',
-    'Others',
+    'Literature',
+    'Culture',
+    'Finance & Advice',
+    'Language Learning',
+    'Memes & Fun',
   ],
-  'Advocacy and Awareness': [
-    'Environmental Conservation',
-    'Human Rights',
-    'Gender Equality',
-    'LGBTQ+ Advocacy',
-    'Mental Health',
-    'Disability Rights',
-    'Animal Welfare',
-    'Political Activism',
-    'Scientific Education',
-    'Others',
+  'Events & Activities': [
+    'Fest',
+    'Competition',
+    'Talks & Webinar',
+    'Workshop',
+    'Social Meetup',
+    'Event Organizing',
+    'Volunteering',
   ],
   'Personal Growth': [
     'Mindfulness & Meditation',
     'Physical Health',
     'Leadership Development',
-    'Finance Advice',
     'Stress Management',
     'Public Speaking',
     'Confidence Building',
     'Sex Education',
-    'Language Learning',
-    'Others',
+  ],
+  'Advocacy and Awareness': [
+    'Environmental Conservation',
+    'Human Rights',
+    'Gender Equality',
+    'LGBTQ+',
+    'Mental Health',
+    'Animal Welfare',
+    'Political Activism',
   ],
   'Professional Development': [
     'Entrepreneurship & Startups',
@@ -66,13 +85,21 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Professional Workshops',
     'Internships',
     'Networking & Mixers',
-    'Alumni Connections',
     'Job Hunting',
-    'Certificates',
-    'Business Communication',
-    'Others',
+    'Certificates & Licenses',
   ],
-  Others: [],
+  'Utility & Campus Life': [
+    'Cab Sharing',
+    'Housing & Roommates',
+    'Buy/Sell/Exchange',
+    'Lost & Found',
+    'Local Services',
+    'Student Hacks',
+    'Study Exchange',
+    'Study Abroad',
+    'Alumni Connections',
+  ],
+ 
 };
 
 export enum status {
@@ -110,6 +137,7 @@ interface communityGroupInterface {
   memberCount: number;
   communityGroupType: CommunityGroupType;
   communityGroupAccess: CommunityGroupAccess;
+  communityGroupLabel: CommunityGroupLabel;
   communityGroupCategory: Map<string, string[]>;
   users: users[];
   status: status;
