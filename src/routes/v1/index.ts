@@ -24,6 +24,7 @@ import contactRoute from './contact.route';
 import uploadRoute from './upload.route';
 import reportBug from './reportBug';
 import pushNotification from './pushNotification.route';
+import healthRoute from './health.route';
 
 const router = express.Router();
 
@@ -124,6 +125,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/push-notification',
     route: pushNotification,
+  },
+  {
+    path: '/health',
+    route: healthRoute,
   },
 ];
 

@@ -107,16 +107,15 @@ export const getAllUniversity = async (
   };
 };
 
-
 export const searchUniversityByQuery = async (searchTerm: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
 
   const universities = await universityModal
     .find({
       $or: [
-        { name: { $regex: searchTerm, $options: 'i' } },
-        { country: { $regex: searchTerm, $options: 'i' } },
-        { type: { $regex: searchTerm, $options: 'i' } },
+        { name: { $regex: `^${searchTerm}`, $options: 'i' } },
+        { country: { $regex: `^${searchTerm}`, $options: 'i' } },
+        { type: { $regex: `^${searchTerm}`, $options: 'i' } },
       ],
     })
     .skip(skip)
@@ -124,9 +123,9 @@ export const searchUniversityByQuery = async (searchTerm: string, page: number =
 
   const totalCount = await universityModal.countDocuments({
     $or: [
-      { name: { $regex: searchTerm, $options: 'i' } },
-      { country: { $regex: searchTerm, $options: 'i' } },
-      { type: { $regex: searchTerm, $options: 'i' } },
+      { name: { $regex: `^${searchTerm}`, $options: 'i' } },
+      { country: { $regex: `^${searchTerm}`, $options: 'i' } },
+      { type: { $regex: `^${searchTerm}`, $options: 'i' } },
     ],
   });
 
