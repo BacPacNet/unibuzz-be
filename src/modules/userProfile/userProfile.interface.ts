@@ -83,6 +83,9 @@ interface EditProfileRequest {
   profilePicture: any;
   profile_dp: ProfileDp;
   role: string;
+  university_name?: string;
+  university_id?: string;
+  universityLogo?: string;
 }
 
 interface ProfileDp {

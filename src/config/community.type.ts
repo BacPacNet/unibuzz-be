@@ -10,6 +10,13 @@ export enum CommunityGroupAccess {
   Public = 'Public',
   Private = 'Private',
 }
+
+export enum CommunityGroupLabel {
+  Course = 'Course',
+  Club = 'Club',
+  Circle = 'Circle',
+  Other = 'Other',
+}
 export enum userPostType {
   PUBLIC = 'PUBLIC',
   FOLLOWER_ONLY = 'FOLLOWER_ONLY',

@@ -9,6 +9,8 @@ router.route('/notification').get(userIdAuth, chatController.getUserMessageNotif
 router.route('/notification-count').get(userIdAuth, chatController.getUserMessageNotificationTotalCount);
 
 router.route('/group').post(userIdAuth, chatController.CreateGroupChat);
+// should be that group member
+router.route('/group/:groupId/members').get(userIdAuth, chatController.GetGroupChatMember);
 router.route('/acceptRequest').put(userIdAuth, chatController.acceptSingleRequest);
 router.route('/acceptGroupRequest').put(userIdAuth, chatController.acceptGroupRequest);
 router.route('/starred').put(userIdAuth, chatController.toggleStarred);
