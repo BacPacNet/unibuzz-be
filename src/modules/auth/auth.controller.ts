@@ -9,6 +9,7 @@ import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
 import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 import { communityService } from '../community';
+import ApiError from '../errors/ApiError';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   try {
@@ -27,8 +28,14 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
       isJoinUniversity,
       isUniversityVerified,
       universityLogo,
+      isEmailVerified,
       ...body
     } = req.body;
+
+    if (!isEmailVerified) {
+      // throw error
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Email not verified');
+    }
 
     // Register user
     const user = await userService.registerUser(body);
