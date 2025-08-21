@@ -300,3 +300,15 @@ export const deActivateUserAccount = async (req: userIdExtend, res: Response) =>
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const IsNewUserToggle = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+
+  try {
+    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    let UserData = await userService.IsNewUserFalse(userID);
+    return res.status(200).json({ message: 'success', UserData });
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};

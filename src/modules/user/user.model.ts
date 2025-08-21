@@ -74,6 +74,10 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       type: Boolean,
       default: false,
     },
+    isNewUser: {
+      type: Boolean,
+      default: true,
+    },
     userVerifiedCommunities: [
       {
         communityId: String,
