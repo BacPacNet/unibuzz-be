@@ -43,6 +43,7 @@ export interface IUser {
   userUnVerifiedCommunities: unverifiedInterface[];
   profile: UserProfileDocument;
   isUserDeactive: boolean;
+  isNewUser: boolean;
 }
 
 export interface IUserDoc extends IUser, Document {
