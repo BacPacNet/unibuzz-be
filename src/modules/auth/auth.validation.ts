@@ -12,6 +12,7 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   createdAt: Joi.string(),
   userVerifiedCommunities: Joi.string(),
   userUnVerifiedCommunities: Joi.string(),
+  isNewUser: Joi.boolean(),
 };
 
 export const register = {

@@ -6,7 +6,6 @@ export const redisConnection = {
   host: config.bull_mq_queue.REDIS_HOST,
   port: Number(config.bull_mq_queue.REDIS_PORT),
   ...((config.env === 'development' || config.env === 'production') && { tls: {} }),
-  // ...(config.env === 'production' && { tls: {} }),
 };
 
 export const notificationQueue = new Queue(QueuesEnum.notification_queue, {

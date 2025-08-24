@@ -68,11 +68,15 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
 
     isEmailVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     isUserDeactive: {
       type: Boolean,
       default: false,
+    },
+    isNewUser: {
+      type: Boolean,
+      default: true,
     },
     userVerifiedCommunities: [
       {

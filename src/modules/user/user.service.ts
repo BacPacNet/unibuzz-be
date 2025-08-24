@@ -687,3 +687,16 @@ export const deActivateUserAccount = async (userID: string, userName: string, em
   user.save();
   return user;
 };
+
+export const IsNewUserFalse = async (userID: string) => {
+  const user = await User.findById(userID);
+
+  if (!user) {
+    throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
+  }
+
+  user.isNewUser = false;
+
+  user.save();
+  return user;
+};

@@ -27,6 +27,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
       isJoinUniversity,
       isUniversityVerified,
       universityLogo,
+      isEmailVerified,
       ...body
     } = req.body;
 
