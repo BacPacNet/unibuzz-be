@@ -13,8 +13,7 @@ export const allowedCategories = new Set([
 ]);
 
 export const allowedSubcategories: Record<string, string[]> = {
-
-  'Academic': [
+  Academic: [
     'Science',
     'Technology',
     'Arts and Humanities',
@@ -35,8 +34,8 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Media & Communication',
     'Hospitality & Tourism',
   ],
-  'Educational': ['Course Discussion', 'Exam Prep', 'Study Materials', 'Research', 'Study Group', 'Peer Tutoring'],
-  'Interest': [
+  Educational: ['Course Discussion', 'Exam Prep', 'Study Materials', 'Research', 'Study Group', 'Peer Tutoring'],
+  Interest: [
     'Sports & Fitness',
     'Music & Performing Arts',
     'Gaming & Esports',
@@ -99,7 +98,6 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Study Abroad',
     'Alumni Connections',
   ],
- 
 };
 
 export enum status {
@@ -141,6 +139,10 @@ interface communityGroupInterface {
   communityGroupCategory: Map<string, string[]>;
   users: users[];
   status: status;
+  isCommunityGroupLive: boolean;
+  inviteUsers: {
+    userId: mongoose.Types.ObjectId;
+  }[];
 }
 
 export { communityGroupInterface };

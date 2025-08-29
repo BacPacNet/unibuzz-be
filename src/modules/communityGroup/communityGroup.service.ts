@@ -154,20 +154,13 @@ export const rejectCommunityGroupJoinApproval = async (communityGroupId: mongoos
 };
 
 export const RejectCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
-  let communityGroupToUpdate;
-
-  communityGroupToUpdate = await communityGroupModel.findById(id);
-
-  if (!communityGroupToUpdate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+  const groupToDelete = await communityGroupModel.findById(id);
+  if (!groupToDelete) {
+    throw new Error('Community group not found');
   }
-
-  communityGroupToUpdate.status = status.rejected;
-
-  const updatedCommunityGroup = await communityGroupToUpdate.save();
-  return updatedCommunityGroup;
+  await communityGroupModel.findByIdAndDelete(id);
 };
-export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
+export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, userId: string) => {
   let communityGroupToUpdate;
 
   communityGroupToUpdate = await communityGroupModel.findById(id);
@@ -178,6 +171,70 @@ export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId) 
 
   communityGroupToUpdate.status = status.accepted;
   communityGroupToUpdate.communityGroupType = CommunityGroupType.OFFICIAL;
+  communityGroupToUpdate.isCommunityGroupLive = true;
+
+  if (communityGroupToUpdate?.inviteUsers?.length > 0) {
+    const inviteUsers = communityGroupToUpdate.inviteUsers
+      .map((user) => ({
+        users_id: user.userId.toString(),
+      }))
+      .filter((user) => user.users_id !== userId.toString());
+
+    await notificationService.createManyNotification(
+      communityGroupToUpdate.adminUserId,
+      communityGroupToUpdate._id,
+      inviteUsers,
+      notificationRoleAccess.GROUP_INVITE,
+      'received an invitation to join group'
+    );
+  }
+
+  if (userId.toString() === communityGroupToUpdate.adminUserId.toString()) {
+    return;
+  }
+
+  const [adminUserDetails, adminUserProfile] = await Promise.all([
+    getUserById(new mongoose.Types.ObjectId(userId)),
+    getUserProfileById(userId),
+  ]);
+
+  const adminUser = {
+    _id: adminUserDetails?._id,
+    firstName: adminUserDetails?.firstName,
+    lastName: adminUserDetails?.lastName,
+    profileImageUrl: adminUserProfile?.profile_dp?.imageUrl || null,
+    universityName: adminUserProfile?.university_name as string,
+    year: adminUserProfile?.study_year as string,
+    degree: adminUserProfile?.degree as string,
+    major: adminUserProfile?.major as string,
+    occupation: adminUserProfile?.occupation as string,
+    affiliation: adminUserProfile?.affiliation as string,
+    role: adminUserProfile?.role,
+    isRequestAccepted: true,
+    status: status.accepted,
+  };
+  //   const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
+
+  communityGroupToUpdate.users.push(adminUser as any);
+
+  await UserProfile.findOneAndUpdate(
+    {
+      _id: adminUserProfile?._id,
+      'communities.communityId': communityGroupToUpdate.communityId,
+    },
+    {
+      $push: {
+        'communities.$.communityGroups': {
+          id: communityGroupToUpdate._id,
+          status: status.accepted,
+        },
+      },
+    },
+    {
+      new: true,
+      returnDocument: 'after',
+    }
+  );
 
   const updatedCommunityGroup = await communityGroupToUpdate.save();
   return updatedCommunityGroup;
@@ -277,8 +334,14 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
   return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
-export const createCommunityGroup = async (body: any, communityId: string, userId: string) => {
-  const { communityGroupCategory, selectedUsers, communityGroupType,communityGroupLabel } = body;
+export const createCommunityGroup = async (
+  body: any,
+  communityId: string,
+  userId: string,
+  isOfficial: boolean,
+  isAdminOfCommunity: boolean = false
+) => {
+  const { communityGroupCategory, selectedUsers, communityGroupType, communityGroupLabel } = body;
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -290,20 +353,31 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
     throw new ApiError(httpStatus.FORBIDDEN, 'User is not allowed to create group');
   }
 
-  const groupStatus = communityGroupType?.toLowerCase() === CommunityGroupType.OFFICIAL ? status.pending : status.default;
+  const inviteUsers = selectedUsers.map((user: any) => ({
+    userId: user.users_id,
+  }));
+
+  const groupStatus =
+    isAdminOfCommunity && communityGroupType?.toLowerCase() === CommunityGroupType.OFFICIAL
+      ? status.accepted
+      : !isAdminOfCommunity && communityGroupType?.toLowerCase() === CommunityGroupType.OFFICIAL
+      ? status.pending
+      : status.default;
   const createdGroup = await communityGroupModel.create({
     ...body,
-    communityGroupType: CommunityGroupType.CASUAL,
-    communityGroupLabel:communityGroupLabel,
+    communityGroupType: groupStatus == status.accepted ? CommunityGroupType.OFFICIAL : CommunityGroupType.CASUAL,
+    communityGroupLabel: communityGroupLabel,
     status: groupStatus,
     communityId: communityId,
     adminUserId: userId,
     communityGroupCategory,
+    isCommunityGroupLive: groupStatus == status.accepted || groupStatus == status.default ? true : false,
+    inviteUsers: inviteUsers,
   });
 
   await communityGroupService.joinCommunityGroup(userId, createdGroup._id.toString(), true);
 
-  if (selectedUsers?.length >= 1 && createdGroup?._id) {
+  if (selectedUsers?.length >= 1 && createdGroup?._id && (!isOfficial || isAdminOfCommunity)) {
     await notificationService.createManyNotification(
       createdGroup.adminUserId,
       createdGroup._id,
@@ -315,17 +389,29 @@ export const createCommunityGroup = async (body: any, communityId: string, userI
   return createdGroup;
 };
 
-export const getCommunityGroupById = async (groupId: string) => {
-  const communityGroup = await communityGroupModel
+export const getCommunityGroupById = async (groupId: string, userId: string) => {
+  const communityGroup = (await communityGroupModel
     .findById(groupId)
     .populate({
       path: 'communityId', // Assuming this is the reference to communityModel
-      select: 'communityLogoUrl', // Selecting only the communityLogo field
+      select: 'communityLogoUrl adminId name', // Selecting only the communityLogo field
     })
-    .lean();
+    .lean()) as Document &
+    communityGroupInterface & {
+      communityId: { communityLogoUrl: string; adminId: string; name: string };
+    };
 
+  const communityAdminId = communityGroup?.communityId?.adminId.toString();
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+  }
+
+  if (
+    !communityGroup.isCommunityGroupLive &&
+    communityGroup.adminUserId.toString() !== userId &&
+    communityAdminId !== userId.toString()
+  ) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
   }
 
   return communityGroup;
@@ -348,6 +434,10 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
     const communityGroup = await getCommunityGroup(groupId);
     if (!communityGroup) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    }
+
+    if (!communityGroup.isCommunityGroupLive && communityGroup.adminUserId.toString() !== userID) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
     }
 
     //check if community is private and user is verified
@@ -450,12 +540,17 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       };
       await notificationService.CreateNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
-      sendPushNotification(communityGroup.adminUserId.toString(), 'Private Group Request', user.firstName+" has requested to join your private group" + communityGroup.title ,{
-        sender_id: userID,
-        receiverId: communityGroup.adminUserId.toString(),
-        type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
-      });
-      
+      sendPushNotification(
+        communityGroup.adminUserId.toString(),
+        'Private Group Request',
+        user.firstName + ' has requested to join your private group' + communityGroup.title,
+        {
+          sender_id: userID,
+          receiverId: communityGroup.adminUserId.toString(),
+          type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
+        }
+      );
+
       return { success: true, message: 'Request sent successfully', isGroupPrivate: true };
     } else {
       return {
@@ -511,7 +606,6 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
       userProfile.communities[communityIndex]!.communityGroups = userProfile.communities[
         communityIndex
       ]!.communityGroups.filter((group) => group.id.toString() !== groupId);
-
     }
 
     const updatedUserProfile = await userProfile.save();

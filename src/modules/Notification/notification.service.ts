@@ -14,6 +14,7 @@ export const createManyNotification = async (
   message: string
 ) => {
   const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?.users_id));
+
   const jobData = {
     adminId: adminId.toString(),
     communityGroupId: communityGroupId.toString(),
@@ -523,4 +524,18 @@ export const markNotificationsAsRead = async (userID: string) => {
   } catch (error: any) {
     throw new Error(error.message);
   }
+};
+
+export const findNotificationByCommunityGroupId = async (
+  communityGroupId: string,
+  receiverId: string,
+  sender_id: string
+) => {
+  return await notificationModel
+    .findOne({
+      communityGroupId,
+      receiverId,
+      sender_id,
+    })
+    .sort({ createdAt: -1 });
 };
