@@ -15,6 +15,7 @@ import httpStatus from 'http-status';
 import { status } from '../../../modules/communityGroup/communityGroup.interface';
 import { redisConnection } from '../notificationQueue';
 import { sendPushNotification } from '../../../modules/pushNotification/pushNotification.service';
+import { communityGroupService } from '../../../modules/communityGroup';
 
 const handleSendNotification = async (job: any) => {
   const { adminId, communityGroupId, receiverIds, type, message } = job.data;
@@ -483,7 +484,7 @@ const DeleteFollowNotification = async (job: any) => {
 };
 
 const CreateOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId } = job.data;
+  const { sender_id, receiverId, communityGroupId, message } = job.data;
 
   const senderObjectId = new mongoose.Types.ObjectId(sender_id);
   const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
@@ -494,7 +495,7 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
     receiverId: receiverObjectId,
     communityGroupId: groupObjectId,
     type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-    message: 'User has requested an official group status',
+    message: message,
   };
 
   const notification = await notificationService.CreateNotification(notifications);
@@ -568,7 +569,7 @@ const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
   //   }
 };
 const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId } = job.data;
+  const { sender_id, receiverId, communityGroupId, message } = job.data;
 
   const senderObjectId = new mongoose.Types.ObjectId(sender_id);
   const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
@@ -579,7 +580,7 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
     receiverId: receiverObjectId,
     communityGroupId: groupObjectId,
     type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
-    message: 'Your Request has been Accepted',
+    message: message,
   };
   const notification = await notificationService.CreateNotification(notifications);
   const res: any = await notification.populate('communityGroupId');
@@ -596,7 +597,7 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
   //   }
 };
 const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId } = job.data;
+  const { sender_id, receiverId, communityGroupId, message } = job.data;
 
   const senderObjectId = new mongoose.Types.ObjectId(sender_id);
   const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
@@ -607,7 +608,7 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
     receiverId: receiverObjectId,
     communityGroupId: groupObjectId,
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
-    message: 'Your Request has been Rejected',
+    message: message,
   };
   const notification = await notificationService.CreateNotification(notifications);
   const res: any = await notification.populate('communityGroupId');
@@ -621,6 +622,8 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
   });
+
+  await communityGroupService.RejectCommunityGroupApproval(groupObjectId);
   //   }
 };
 

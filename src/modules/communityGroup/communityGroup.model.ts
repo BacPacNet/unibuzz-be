@@ -47,7 +47,15 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       enum: ['pending', 'rejected', 'accepted', 'default'],
       default: status.default,
     },
-
+    isCommunityGroupLive: {
+      type: Boolean,
+      default: false,
+    },
+    inviteUsers: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      }
+    ],
     communityGroupCategory: {
       type: Map,
       of: [String],

@@ -11,6 +11,8 @@ import { getUserProfileById } from '../userProfile/userProfile.service';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId } from '../../utils/common';
 import { GetCommunityUsersOptions } from './community.interface';
+import { CommunityGroupType } from '../../config/community.type';
+import { status } from '../communityGroup/communityGroup.interface';
 
 export const createCommunity = async (
   name: string,
@@ -114,13 +116,39 @@ export const getUserCommunities = async (userID: string) => {
           },
         },
       },
+
       {
         // Filter communityGroups if user is not in the community
         $addFields: {
           communityGroups: {
             $cond: {
               if: '$isUserInCommunity',
-              then: '$communityGroups',
+              then: {
+                $filter: {
+                  input: '$communityGroups',
+                  as: 'cg',
+                  cond: {
+                    $or: [
+                      // Always show if adminUserId is 123
+                      { $eq: ['$$cg.adminUserId', userObjectId] },
+
+                      // Otherwise, keep if NOT (CASUAL + pending/rejected)
+                      {
+                        $not: [
+                          {
+                            $and: [
+                              { $eq: ['$$cg.communityGroupType', CommunityGroupType.CASUAL] },
+                              {
+                                $or: [{ $eq: ['$$cg.status', status.pending] }, { $eq: ['$$cg.status', status.rejected] }],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
               else: [],
             },
           },
@@ -181,6 +209,37 @@ export const getUserFilteredCommunities = async (
         },
       },
     ];
+
+    pipeline.push({
+      $addFields: {
+        communityGroups: {
+          $filter: {
+            input: '$communityGroups',
+            as: 'group',
+            cond: {
+              $or: [
+                // Always keep if user is admin of the group
+                { $eq: ['$$group.adminUserId', new mongoose.Types.ObjectId(userID)] },
+
+                // Otherwise, keep if NOT (CASUAL + pending/rejected)
+                {
+                  $not: [
+                    {
+                      $and: [
+                        { $eq: ['$$group.communityGroupType', 'casual'] }, // adjust if your enum is lowercase/uppercase
+                        {
+                          $or: [{ $eq: ['$$group.status', 'pending'] }, { $eq: ['$$group.status', 'rejected'] }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
 
     if (filters) {
       const { selectedType, selectedFilters, selectedLabel } = filters;
