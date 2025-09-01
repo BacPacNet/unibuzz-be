@@ -3,6 +3,7 @@ interface universityVerificationEmailinterface {
   otp: number;
   isEmailVerified: boolean;
   otpValidTill: Date;
+  expireAt: Date;
 }
 
 export { universityVerificationEmailinterface };
