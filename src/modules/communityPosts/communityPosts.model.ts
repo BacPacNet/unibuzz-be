@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { communityPostsInterface } from './communityPosts.interface';
-import { CommunityType } from '../../config/community.type';
+import { CommunityType, communityPostStatus } from '../../config/community.type';
 
 const communityPostSchema = new Schema<communityPostsInterface>(
   {
@@ -18,6 +18,8 @@ const communityPostSchema = new Schema<communityPostsInterface>(
     likeCount: [{ userId: String }],
     communityPostsType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC'], default: CommunityType.PUBLIC },
     isPostVerified: { type: Boolean },
+    isPostLive: { type: Boolean, default: false },
+    postStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'REJECTED', 'DEFAULT'], default: communityPostStatus.PENDING },
   },
   { timestamps: true }
 );

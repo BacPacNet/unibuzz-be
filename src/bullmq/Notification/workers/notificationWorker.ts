@@ -637,6 +637,83 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
   //   }
 };
 
+const CreatePostLiveRequestNotification = async (job: any) => {
+  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+
+  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+
+  const notifications = {
+    sender_id: senderObjectId,
+    receiverId: receiverObjectId,
+    communityGroupId: groupObjectId,
+    type: notificationRoleAccess.community_post_live_request_notification,
+    message: message,
+    communityPostId: postObjectId,
+  };
+
+  const notification = await notificationService.CreateNotification(notifications);
+
+  const res: any = await notification.populate('communityGroupId');
+
+  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_live_request_notification });
+  sendPushNotification(receiverId, 'Unibuzz', res?.communityGroupId?.title + ' has requested an live status for his post', {
+    sender_id: sender_id.toString(),
+    receiverId: receiverId.toString(),
+    type: notificationRoleAccess.community_post_live_request_notification,
+  });
+};
+const CreatePostAcceptRequestNotification = async (job: any) => {
+  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+
+  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+  const notifications = {
+    sender_id: senderObjectId,
+    receiverId: receiverObjectId,
+    communityGroupId: groupObjectId,
+    type: notificationRoleAccess.community_post_accepted_notification,
+    message: message,
+    communityPostId: postObjectId,
+  };
+
+  await notificationService.CreateNotification(notifications);
+  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_accepted_notification });
+  sendPushNotification(receiverId, 'Unibuzz', ' Your post is approved', {
+    sender_id: sender_id.toString(),
+    receiverId: receiverId.toString(),
+    type: notificationRoleAccess.community_post_accepted_notification,
+  });
+};
+const CreatePostRejectRequestNotification = async (job: any) => {
+  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+
+  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+  const notifications = {
+    sender_id: senderObjectId,
+    receiverId: receiverObjectId,
+    communityGroupId: groupObjectId,
+    type: notificationRoleAccess.community_post_accepted_notification,
+    message: message,
+    communityPostId: postObjectId,
+  };
+
+  await notificationService.CreateNotification(notifications);
+  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_accepted_notification });
+  sendPushNotification(receiverId, 'Unibuzz', ' Your post is Rejected', {
+    sender_id: sender_id.toString(),
+    receiverId: receiverId.toString(),
+    type: notificationRoleAccess.community_post_accepted_notification,
+  });
+};
+
 export const notificationWorker = new Worker(
   QueuesEnum.notification_queue,
   async (job) => {
@@ -683,6 +760,15 @@ export const notificationWorker = new Worker(
         break;
       case NotificationIdentifier.delete_community_group:
         await handleSendNotification(job);
+        break;
+      case NotificationIdentifier.community_post_live_request_notification:
+        await CreatePostLiveRequestNotification(job);
+        break;
+      case NotificationIdentifier.community_post_rejected_notification:
+        await CreatePostRejectRequestNotification(job);
+        break;
+      case NotificationIdentifier.community_post_accepted_notification:
+        await CreatePostAcceptRequestNotification(job);
         break;
       default:
         console.warn(`Unknown job name: ${job.name}`);

@@ -13,4 +13,8 @@ export enum NotificationIdentifier {
   reject_private_join_group_request = 'reject-private-join-group-request-group-request',
   accept_private_join_group_request = 'accept-private-join-group-request-group-request',
   delete_community_group = 'delete-community-group',
+
+  community_post_live_request_notification = 'community_post_live_request_notification',
+  community_post_rejected_notification = 'community_post_rejected_notification',
+  community_post_accepted_notification = 'community_post_accepted_notification',
 }

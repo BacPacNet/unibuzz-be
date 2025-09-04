@@ -8,7 +8,10 @@ router.route('/timelinePost').get(userIdAuth, communityPostsController.getAllCom
 
 router.route('/group').get(userIdAuth, communityPostsController.getAllCommunityGroupPostV2);
 
-router.route('/post/:postId').get(noErrorUserIdAuth, communityPostsController.getPostById);
+router
+  .route('/post/:postId')
+  .get(noErrorUserIdAuth, communityPostsController.getPostById)
+  .put(userIdAuth, communityPostsController.updateCommunityPostLive);
 router.route('/:communityId/:communityGroupId?').get(userIdAuth, communityPostsController.getAllCommunityPost);
 
 router.route('/').post(userIdAuth, communityPostsController.createCommunityPost);
