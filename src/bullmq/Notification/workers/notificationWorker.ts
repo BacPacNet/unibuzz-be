@@ -505,7 +505,7 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
   //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
   //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', res.communityGroupId.title + ' has requested an official group status', {
+  sendPushNotification(receiverId, 'Unibuzz', res?.communityGroupId?.title + ' has requested an official group status', {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
@@ -533,11 +533,16 @@ const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
   //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
   //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res.communityGroupId.title + ' has been Rejected', {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
-  });
+  sendPushNotification(
+    receiverId,
+    'Unibuzz',
+    'Your Request to join ' + res?.communityGroupId?.title + ' has been Rejected',
+    {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
+    }
+  );
   //   }
 };
 const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
@@ -561,11 +566,16 @@ const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
   //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
   //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res.communityGroupId.title + ' has been Accepted', {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
-  });
+  sendPushNotification(
+    receiverId,
+    'Unibuzz',
+    'Your Request to join ' + res?.communityGroupId?.title + ' has been Accepted',
+    {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
+    }
+  );
   //   }
 };
 const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
@@ -589,7 +599,7 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
   //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
   //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res.communityGroupId.title + 'has been Accepted', {
+  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res?.communityGroupId?.title + 'has been Accepted', {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
@@ -617,7 +627,7 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
   //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
   //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res.communityGroupId.title + 'has been Rejected', {
+  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res?.communityGroupId?.title + 'has been Rejected', {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
