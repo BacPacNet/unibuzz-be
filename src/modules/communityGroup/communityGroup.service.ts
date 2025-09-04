@@ -610,6 +610,10 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
 
     const updatedUserProfile = await userProfile.save();
 
+    const filteredUsers = communityGroup.users.filter((user) => user.isRequestAccepted === true);
+
+    communityGroup.users = filteredUsers;
+
     return { communityGroup, communities: updatedUserProfile.communities };
   } catch (error: any) {
     console.error(error);

@@ -45,7 +45,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       isAdminOfCommunity
     );
 
-    if (isOfficial) {
+    if (isOfficial && community?.adminId.toString() !== userId) {
       const notifications = {
         sender_id: userId,
         receiverId: community?.adminId,

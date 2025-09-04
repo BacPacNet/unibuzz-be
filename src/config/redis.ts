@@ -7,7 +7,7 @@ const redis = new Redis({
   host: config.bull_mq_queue.REDIS_HOST,
   port: config.bull_mq_queue.REDIS_PORT,
   maxRetriesPerRequest: null,
-  ...((config.env === 'development' || config.env === 'production') && { tls: {} }),
+  //   ...((config.env === 'development' || config.env === 'production') && { tls: {} }),
 });
 
 // Logging Redis connection status
