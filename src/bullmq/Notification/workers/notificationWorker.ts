@@ -700,7 +700,7 @@ const CreatePostRejectRequestNotification = async (job: any) => {
     sender_id: senderObjectId,
     receiverId: receiverObjectId,
     communityGroupId: groupObjectId,
-    type: notificationRoleAccess.community_post_accepted_notification,
+    type: notificationRoleAccess.community_post_rejected_notification,
     message: message,
     communityPostId: postObjectId,
   };

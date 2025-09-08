@@ -432,6 +432,8 @@ export const getCommunityGroupPostsByCommunityId = async (
           isPostVerified: 1,
           communityName: 1,
           communityGroupName: 1,
+          isPostLive: 1,
+          postStatus: 1,
           user: {
             _id: 1,
             firstName: 1,
@@ -871,6 +873,7 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
       sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
       receiverId: communityToUpdate.user_id?.toString(),
       communityPostId: communityToUpdate?._id?.toString(),
+      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
       type: NotificationIdentifier.community_post_live_request_notification,
       message: 'Your post is rejected',
     };
