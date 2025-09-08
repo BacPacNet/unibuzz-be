@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { CommunityType } from 'src/config/community.type';
+import { communityPostStatus, CommunityType } from '../../config/community.type';
 
 interface Like {
   userId: string;
@@ -20,6 +20,8 @@ interface communityPostsInterface {
   isPostVerified: boolean;
   communityName: string;
   communityGroupName: string;
+  isPostLive: boolean;
+  postStatus: communityPostStatus;
 }
 
 export { communityPostsInterface };

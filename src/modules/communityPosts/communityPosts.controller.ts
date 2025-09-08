@@ -12,6 +12,7 @@ import { convertToObjectId } from '../../utils/common';
 import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
 import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
+import { CommunityGroupType } from '../../config/community.type';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -28,6 +29,9 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
   const userId = req.userId as string;
   const { communityId, communityGroupId } = req.body;
   req.body.content = he.decode(req.body.content);
+  let isOfficialGroup = false;
+  let isPostLive = false;
+
   try {
     if (communityId && !communityGroupId) {
       const community = await communityService.getCommunity(req.body.communityId);
@@ -38,6 +42,7 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       if (!isAdmin) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create post');
       }
+      isPostLive = true;
     }
 
     if (communityId && communityGroupId) {
@@ -46,6 +51,12 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
       }
 
+      //   communityGroup.communityId.adminId.toString() === userId.toString() ||
+      isPostLive =
+        communityGroup.adminUserId.toString() === userId.toString() ||
+        communityGroup.communityGroupType === CommunityGroupType.CASUAL;
+
+      isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
       // const isAdmin = communityGroup.adminUserId.toString() === userId;
       // if (!isAdmin) {
       //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
@@ -62,7 +73,12 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
       }
     }
-    const post = await communityPostsService.createCommunityPost(req.body, new mongoose.Types.ObjectId(userId));
+    const post = await communityPostsService.createCommunityPost(
+      req.body,
+      new mongoose.Types.ObjectId(userId),
+      isPostLive,
+      isOfficialGroup
+    );
 
     return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {
@@ -81,6 +97,27 @@ export const updateCommunityPost = async (req: Request, res: Response, next: Nex
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
       }
       await communityPostsService.updateCommunityPost(new mongoose.Types.ObjectId(postId), req.body);
+      return res.status(200).json({ message: 'Updated Successfully' });
+    }
+  } catch (error: any) {
+    res.status(error.statusCode).json({ message: error.message });
+  }
+};
+
+export const updateCommunityPostLive = async (req: userIdExtend, res: Response, next: NextFunction) => {
+  const { postId } = req.params;
+  const { status } = req.query;
+  const userId = req.userId as string;
+  try {
+    if (typeof postId == 'string') {
+      if (!mongoose.Types.ObjectId.isValid(postId)) {
+        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
+      }
+      await communityPostsService.updateCommunityPostLiveStatus(
+        new mongoose.Types.ObjectId(postId),
+        userId,
+        status as string
+      );
       return res.status(200).json({ message: 'Updated Successfully' });
     }
   } catch (error: any) {
@@ -148,7 +185,7 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
  */
 export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Response) => {
   try {
-    const { page = '1', limit = '10', communityId, communityGroupId } = req.query;
+    const { page = '1', limit = '10', communityId, communityGroupId, filterPostBy } = req.query;
     const userId = req.userId as string;
 
     // Input validation
@@ -190,13 +227,16 @@ export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Respons
         message: 'You are not a member of this community group',
       });
     }
-
+    const isAdminOfCommunityGroup = communityGroup.adminUserId.toString() === userId.toString();
     // Get posts with pagination
     const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
       communityId as string,
       communityGroupId as string,
       Number(page),
-      Number(limit)
+      Number(limit),
+      isAdminOfCommunityGroup,
+      userId,
+      filterPostBy?.toString() || ''
     );
 
     return res.status(httpStatus.OK).json(communityPosts);

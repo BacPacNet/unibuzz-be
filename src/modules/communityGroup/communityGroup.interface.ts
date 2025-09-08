@@ -33,8 +33,9 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Architecture & Design',
     'Media & Communication',
     'Hospitality & Tourism',
+    'Other',
   ],
-  Educational: ['Course Discussion', 'Exam Prep', 'Study Materials', 'Research', 'Study Group', 'Peer Tutoring'],
+  Educational: ['Course Discussion', 'Exam Prep', 'Study Materials', 'Research', 'Study Group', 'Peer Tutoring', 'Other'],
   Interest: [
     'Sports & Fitness',
     'Music & Performing Arts',
@@ -50,6 +51,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Finance & Advice',
     'Language Learning',
     'Memes & Fun',
+    'Other',
   ],
   'Events & Activities': [
     'Fest',
@@ -59,6 +61,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Social Meetup',
     'Event Organizing',
     'Volunteering',
+    'Other',
   ],
   'Personal Growth': [
     'Mindfulness & Meditation',
@@ -68,6 +71,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Public Speaking',
     'Confidence Building',
     'Sex Education',
+    'Other',
   ],
   'Advocacy and Awareness': [
     'Environmental Conservation',
@@ -77,6 +81,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Mental Health',
     'Animal Welfare',
     'Political Activism',
+    'Other',
   ],
   'Professional Development': [
     'Entrepreneurship & Startups',
@@ -86,6 +91,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Networking & Mixers',
     'Job Hunting',
     'Certificates & Licenses',
+    'Other',
   ],
   'Utility & Campus Life': [
     'Cab Sharing',
@@ -97,6 +103,7 @@ export const allowedSubcategories: Record<string, string[]> = {
     'Study Exchange',
     'Study Abroad',
     'Alumni Connections',
+    'Other',
   ],
 };
 
