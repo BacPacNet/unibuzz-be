@@ -498,14 +498,11 @@ const CreateOfficialGroupRequestNotification = async (job: any) => {
     message: message,
   };
 
-  const notification = await notificationService.CreateNotification(notifications);
-  const res: any = await notification.populate('communityGroupId');
+  await notificationService.CreateNotification(notifications);
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
-  //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', res?.communityGroupId?.title + ' has requested an official group status', {
+
+  sendPushNotification(receiverId, 'Unibuzz', message, {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
@@ -592,14 +589,10 @@ const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
     type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
     message: message,
   };
-  const notification = await notificationService.CreateNotification(notifications);
-  const res: any = await notification.populate('communityGroupId');
+  await notificationService.CreateNotification(notifications);
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
-  //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res?.communityGroupId?.title + 'has been Accepted', {
+  sendPushNotification(receiverId, 'Unibuzz', message, {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
@@ -620,14 +613,11 @@ const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
     message: message,
   };
-  const notification = await notificationService.CreateNotification(notifications);
-  const res: any = await notification.populate('communityGroupId');
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
+  await notificationService.CreateNotification(notifications);
+
   io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
-  //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', 'Your Request to join ' + res?.communityGroupId?.title + 'has been Rejected', {
+  sendPushNotification(receiverId, 'Unibuzz', message, {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
     type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,

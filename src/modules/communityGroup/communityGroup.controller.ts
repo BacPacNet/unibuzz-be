@@ -51,7 +51,7 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
         receiverId: community?.adminId,
         communityGroupId: createCommunityGroup._id,
         type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-        message: body.title + ' in ' + community?.name,
+        message: `${body.title} in ${community?.name} has requested an official group status`,
       };
 
       await notificationQueue.add(NotificationIdentifier.official_group_request, notifications);
