@@ -463,12 +463,7 @@ export const getCommunityGroupPostsByCommunityId = async (
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
     });
-    // const pendingTotal = await CommunityPostModel.countDocuments({
-    //   communityId: communityObjectId,
-    //   communityGroupId: communityGroupObjectId,
-    //   isPostLive: false,
-    //   postStatus: communityPostStatus.PENDING,
-    // });
+
     const pendingTotal = await CommunityPostModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,

@@ -45,13 +45,6 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
     );
 
     const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user?.users_id?.toString()));
-    // console.log('selectedUsers', selectedUsers);
-    // console.log('existingUserIds', existingUserIds);
-    // console.log('newUsers', newUsers);
-
-    // if (newUsers.length > 0) {
-    //   communityGroupToUpdate.users.push(...newUsers);
-    // }
 
     // Create notifications for newly added users
     await notificationService.createManyNotification(

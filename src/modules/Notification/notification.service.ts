@@ -149,25 +149,6 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
   };
 };
 
-// export const getUserNotificationCount = async (userID: string) => {
-//   const pipeline: PipelineStage[] = [
-//     {
-//       $match: {
-//         receiverId: new mongoose.Types.ObjectId(userID),
-//         isRead: false,
-//       },
-//     },
-//     {
-//       $count: 'unreadCount',
-//     },
-//   ];
-
-//   const result = await notificationModel.aggregate(pipeline);
-
-//   // If no results, return 0
-//   return result[0]?.unreadCount || 0;
-// };
-
 export const getUserNotificationCount = async (userID: string) => {
   const pipeline: PipelineStage[] = [
     {
