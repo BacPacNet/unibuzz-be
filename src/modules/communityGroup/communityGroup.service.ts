@@ -40,13 +40,18 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
 
   // Add new unique users to the group
   if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
-    const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
+    const existingUserIds = new Set(
+      communityGroupToUpdate.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
+    );
 
-    const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user._id.toString()));
+    const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user?.users_id?.toString()));
+    // console.log('selectedUsers', selectedUsers);
+    // console.log('existingUserIds', existingUserIds);
+    // console.log('newUsers', newUsers);
 
-    if (newUsers.length > 0) {
-      communityGroupToUpdate.users.push(...newUsers);
-    }
+    // if (newUsers.length > 0) {
+    //   communityGroupToUpdate.users.push(...newUsers);
+    // }
 
     // Create notifications for newly added users
     await notificationService.createManyNotification(

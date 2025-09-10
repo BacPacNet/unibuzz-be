@@ -149,6 +149,25 @@ export const getUserNotification = async (userID: string, page: number = 1, limi
   };
 };
 
+// export const getUserNotificationCount = async (userID: string) => {
+//   const pipeline: PipelineStage[] = [
+//     {
+//       $match: {
+//         receiverId: new mongoose.Types.ObjectId(userID),
+//         isRead: false,
+//       },
+//     },
+//     {
+//       $count: 'unreadCount',
+//     },
+//   ];
+
+//   const result = await notificationModel.aggregate(pipeline);
+
+//   // If no results, return 0
+//   return result[0]?.unreadCount || 0;
+// };
+
 export const getUserNotificationCount = async (userID: string) => {
   const pipeline: PipelineStage[] = [
     {
@@ -158,13 +177,31 @@ export const getUserNotificationCount = async (userID: string) => {
       },
     },
     {
+      $group: {
+        _id: {
+          type: '$type',
+          status: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$status', '$_id'],
+          },
+          senderId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$sender_id', '$_id'],
+          },
+          receiverId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$receiverId', '$_id'],
+          },
+          communityGroupId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$communityGroupId', '$_id'],
+          },
+        },
+      },
+    },
+    {
       $count: 'unreadCount',
     },
   ];
 
   const result = await notificationModel.aggregate(pipeline);
 
-  // If no results, return 0
   return result[0]?.unreadCount || 0;
 };
 

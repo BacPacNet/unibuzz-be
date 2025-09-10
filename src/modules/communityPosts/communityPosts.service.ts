@@ -327,13 +327,17 @@ export const getCommunityGroupPostsByCommunityId = async (
           communityGroupId: communityGroupObjectId,
 
           ...(filterPostBy === communityPostFilterType.PENDING_POSTS
-            ? { isPostLive: false }
+            ? {
+                isPostLive: false,
+                ...(isAdminOfCommunityGroup ? {} : { user_id: userObjectId }),
+              }
             : filterPostBy === communityPostFilterType.MY_POSTS
             ? { isPostLive: true, user_id: userObjectId }
             : filterPostBy === ''
             ? { isPostLive: true }
             : {}),
-          ...(isAdminOfCommunityGroup && filterPostBy == communityPostFilterType.PENDING_POSTS
+
+          ...(isAdminOfCommunityGroup && filterPostBy === communityPostFilterType.PENDING_POSTS
             ? { postStatus: { $in: [communityPostStatus.PENDING] } }
             : {}),
         },
@@ -459,11 +463,18 @@ export const getCommunityGroupPostsByCommunityId = async (
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
     });
+    // const pendingTotal = await CommunityPostModel.countDocuments({
+    //   communityId: communityObjectId,
+    //   communityGroupId: communityGroupObjectId,
+    //   isPostLive: false,
+    //   postStatus: communityPostStatus.PENDING,
+    // });
     const pendingTotal = await CommunityPostModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
       isPostLive: false,
       postStatus: communityPostStatus.PENDING,
+      ...(isAdminOfCommunityGroup ? {} : { user_id: userObjectId }),
     });
 
     return {
