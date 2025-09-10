@@ -4,7 +4,12 @@ import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { communityPostsModel } from '.';
-import { CommunityType } from '../../config/community.type';
+import {
+  communityPostFilterType,
+  communityPostStatus,
+  communityPostUpdateStatus,
+  CommunityType,
+} from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 import { communityGroupModel } from '../communityGroup';
 import { notificationRoleAccess } from '../Notification/notification.interface';
@@ -14,7 +19,12 @@ import communityModel from '../community/community.model';
 import { convertToObjectId } from '../../utils/common';
 import PostRelationship from '../userPost/postRelationship.model';
 
-export const createCommunityPost = async (post: communityPostsInterface, userId: mongoose.Types.ObjectId) => {
+export const createCommunityPost = async (
+  post: communityPostsInterface,
+  userId: mongoose.Types.ObjectId,
+  isPostLive: boolean,
+  isOfficialGroup: boolean
+) => {
   const { communityId, communityGroupId } = post;
 
   const community = await communityModel.findOne({ _id: communityId }, 'name');
@@ -24,7 +34,7 @@ export const createCommunityPost = async (post: communityPostsInterface, userId:
   const communityName = community.name;
   let communityGroup: any;
   if (communityGroupId) {
-    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, ['title']);
+    communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, 'title adminUserId');
     if (!communityGroup) {
       throw new Error('Community Group not found'); // Or handle this error appropriately
     }
@@ -40,6 +50,12 @@ export const createCommunityPost = async (post: communityPostsInterface, userId:
           ...postData,
           communityName,
           communityGroupName: communityGroup?.title,
+          isPostLive,
+          postStatus: isOfficialGroup
+            ? isPostLive
+              ? communityPostStatus.SUCCESS
+              : communityPostStatus.PENDING
+            : communityPostStatus.DEFAULT,
         },
       ],
       { session }
@@ -64,6 +80,19 @@ export const createCommunityPost = async (post: communityPostsInterface, userId:
       ],
       { session }
     );
+
+    if (!isPostLive) {
+      const notifications = {
+        sender_id: userId?.toString(),
+        receiverId: communityGroup?.adminUserId?.toString(),
+        communityGroupId: communityGroupId?.toString(),
+        type: NotificationIdentifier.community_post_live_request_notification,
+        message: 'Your post is pending for approval',
+        communityPostId: finalCreatedPost?._id?.toString(),
+      };
+
+      await notificationQueue.add(NotificationIdentifier.community_post_live_request_notification, notifications);
+    }
 
     await session.commitTransaction();
 
@@ -281,17 +310,32 @@ export const getCommunityGroupPostsByCommunityId = async (
   communityId: string,
   communityGroupId: string,
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
+  isAdminOfCommunityGroup: boolean,
+  userId: string,
+  filterPostBy: string
 ) => {
   try {
     const communityObjectId = convertToObjectId(communityId);
     const communityGroupObjectId = convertToObjectId(communityGroupId);
+    const userObjectId = convertToObjectId(userId);
 
     const finalPost = await CommunityPostModel.aggregate([
       {
         $match: {
           communityId: communityObjectId,
           communityGroupId: communityGroupObjectId,
+
+          ...(filterPostBy === communityPostFilterType.PENDING_POSTS
+            ? { isPostLive: false }
+            : filterPostBy === communityPostFilterType.MY_POSTS
+            ? { isPostLive: true, user_id: userObjectId }
+            : filterPostBy === ''
+            ? { isPostLive: true }
+            : {}),
+          ...(isAdminOfCommunityGroup && filterPostBy == communityPostFilterType.PENDING_POSTS
+            ? { postStatus: { $in: [communityPostStatus.PENDING] } }
+            : {}),
         },
       },
       {
@@ -388,6 +432,8 @@ export const getCommunityGroupPostsByCommunityId = async (
           isPostVerified: 1,
           communityName: 1,
           communityGroupName: 1,
+          isPostLive: 1,
+          postStatus: 1,
           user: {
             _id: 1,
             firstName: 1,
@@ -413,12 +459,19 @@ export const getCommunityGroupPostsByCommunityId = async (
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
     });
+    const pendingTotal = await CommunityPostModel.countDocuments({
+      communityId: communityObjectId,
+      communityGroupId: communityGroupObjectId,
+      isPostLive: false,
+      postStatus: communityPostStatus.PENDING,
+    });
 
     return {
       finalPost,
       total,
       page,
       totalPages: Math.ceil(total / limit),
+      pendingTotal,
     };
   } catch (error: any) {
     throw new Error(`Failed to get community posts: ${error.message}`);
@@ -782,4 +835,53 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
     console.error('Error fetching user posts:', error);
     throw new Error(error as string);
   }
+};
+
+export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId, userId: string, status: string) => {
+  const communityToUpdate = await communityPostsModel.findById(id).populate<{
+    communityGroupId: { adminUserId: string; _id: string };
+  }>({
+    path: 'communityGroupId',
+    select: 'adminUserId _id',
+  });
+
+  if (!communityToUpdate) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found!');
+  }
+
+  if (communityToUpdate.communityGroupId.adminUserId.toString() !== userId.toString()) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to update this post');
+  }
+
+  if (status === communityPostUpdateStatus.LIVE) {
+    communityToUpdate.isPostLive = true;
+    communityToUpdate.postStatus = communityPostStatus.SUCCESS;
+    const notifications = {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
+      type: NotificationIdentifier.community_post_live_request_notification,
+      communityPostId: communityToUpdate?._id?.toString(),
+      message: 'Your post is approved',
+    };
+
+    await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
+  } else {
+    communityToUpdate.isPostLive = false;
+    communityToUpdate.postStatus = communityPostStatus.REJECTED;
+    const notifications = {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      communityPostId: communityToUpdate?._id?.toString(),
+      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
+      type: NotificationIdentifier.community_post_live_request_notification,
+      message: 'Your post is rejected',
+    };
+
+    await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
+  }
+
+  await communityToUpdate.save();
+
+  return communityToUpdate;
 };

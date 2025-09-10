@@ -8,7 +8,12 @@ const universityVerificationEmailSchema = new Schema<universityVerificationEmail
     type: Boolean,
     default: false,
   },
-  otpValidTill: { type: Date, required: true },
+  otpValidTill: { type: Date, required: true, expires: 300 },
+  expireAt: {
+    type: Date,
+    default: () => new Date(Date.now() + 5 * 60 * 1000),
+    expires: 0,
+  },
 });
 
 const universityVerificationEmailModal = model<universityVerificationEmailinterface>(

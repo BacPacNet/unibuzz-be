@@ -23,3 +23,20 @@ export enum userPostType {
   MUTUAL = 'MUTUAL',
   ONLY_ME = 'ONLY_ME',
 }
+
+export enum communityPostStatus {
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  REJECTED = 'REJECTED',
+  DEFAULT = 'DEFAULT',
+}
+export enum communityPostFilterType {
+  MY_POSTS = 'myPosts',
+
+  PENDING_POSTS = 'pendingPosts',
+}
+export enum communityPostUpdateStatus {
+  LIVE = 'live',
+
+  REJECTED = 'rejected',
+}

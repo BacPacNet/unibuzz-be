@@ -9,6 +9,11 @@ const loginEmailVerificationSchema = new Schema<loginEmailVerificationInterface>
     default: false,
   },
   otpValidTill: { type: Date, required: true },
+  expireAt: {
+    type: Date,
+    default: () => new Date(Date.now() + 5 * 60 * 1000),
+    expires: 0,
+  },
 });
 
 const loginEmailVerificationModal = model<loginEmailVerificationInterface>(

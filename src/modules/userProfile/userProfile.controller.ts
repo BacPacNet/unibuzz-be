@@ -16,6 +16,8 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
   const { userProfileId } = req.params;
   const updateData = req.body as EditProfileRequest;
 
+  console.log(updateData, 'updateData');
+
   try {
     // Validate userProfileId
     if (!userProfileId || !mongoose.Types.ObjectId.isValid(userProfileId)) {
