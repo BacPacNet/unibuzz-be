@@ -512,7 +512,12 @@ export const updateUserNotification = async (id: string, status: string = 'defau
 };
 
 export const CreateNotification = async (notification: any) => {
-  return await notificationModel.create(notification);
+  try {
+    return await notificationModel.create(notification);
+  } catch (error: any) {
+    console.error(error);
+    throw new Error(error.message);
+  }
 };
 
 export const changeNotificationStatus = async (status: notificationStatus, notificationId: string) => {

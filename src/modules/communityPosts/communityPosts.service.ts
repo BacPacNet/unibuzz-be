@@ -894,28 +894,53 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
     communityToUpdate.isPostLive = true;
     communityToUpdate.postStatus = communityPostStatus.SUCCESS;
     const notifications = {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
-      receiverId: communityToUpdate.user_id?.toString(),
+      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
+      receiverId: convertToObjectId(communityToUpdate.user_id?.toString()),
       communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      type: NotificationIdentifier.community_post_live_request_notification,
-      communityPostId: communityToUpdate?._id?.toString(),
+      type: NotificationIdentifier.community_post_accepted_notification,
+      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
       message: 'Your post is approved',
     };
 
-    await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
+    await notificationService.CreateNotification(notifications);
+
+    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
+      type: notificationRoleAccess.community_post_accepted_notification,
+    });
+
+    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      type: notificationRoleAccess.community_post_accepted_notification,
+    });
+
+    // await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
   } else {
     communityToUpdate.isPostLive = false;
     communityToUpdate.postStatus = communityPostStatus.REJECTED;
+
     const notifications = {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
       receiverId: communityToUpdate.user_id?.toString(),
-      communityPostId: communityToUpdate?._id?.toString(),
-      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      type: NotificationIdentifier.community_post_live_request_notification,
+      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
+      communityGroupId: convertToObjectId(communityToUpdate?.communityGroupId?._id?.toString()),
+      type: notificationRoleAccess.community_post_rejected_notification,
       message: 'Your post is rejected',
     };
 
-    await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
+    await notificationService.CreateNotification(notifications);
+
+    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
+      type: notificationRoleAccess.community_post_rejected_notification,
+    });
+
+    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      type: notificationRoleAccess.community_post_rejected_notification,
+    });
+
+    // await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
   }
 
   await communityToUpdate.save();
