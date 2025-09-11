@@ -1665,7 +1665,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
       : [],
     communityPostIds.length
       ? CommunityPostModel.aggregate([
-          { $match: { _id: { $in: communityPostIds } } },
+          { $match: { _id: { $in: communityPostIds }, isPostLive: true } },
           { $sort: { createdAt: -1 } },
           {
             $lookup: {

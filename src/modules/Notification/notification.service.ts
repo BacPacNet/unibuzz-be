@@ -158,13 +158,31 @@ export const getUserNotificationCount = async (userID: string) => {
       },
     },
     {
+      $group: {
+        _id: {
+          type: '$type',
+          status: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$status', '$_id'],
+          },
+          senderId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$sender_id', '$_id'],
+          },
+          receiverId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$receiverId', '$_id'],
+          },
+          communityGroupId: {
+            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$communityGroupId', '$_id'],
+          },
+        },
+      },
+    },
+    {
       $count: 'unreadCount',
     },
   ];
 
   const result = await notificationModel.aggregate(pipeline);
 
-  // If no results, return 0
   return result[0]?.unreadCount || 0;
 };
 
@@ -494,7 +512,12 @@ export const updateUserNotification = async (id: string, status: string = 'defau
 };
 
 export const CreateNotification = async (notification: any) => {
-  return await notificationModel.create(notification);
+  try {
+    return await notificationModel.create(notification);
+  } catch (error: any) {
+    console.error(error);
+    throw new Error(error.message);
+  }
 };
 
 export const changeNotificationStatus = async (status: notificationStatus, notificationId: string) => {

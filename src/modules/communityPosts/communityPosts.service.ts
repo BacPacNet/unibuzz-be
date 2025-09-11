@@ -18,6 +18,9 @@ import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEn
 import communityModel from '../community/community.model';
 import { convertToObjectId } from '../../utils/common';
 import PostRelationship from '../userPost/postRelationship.model';
+import { notificationService } from '../Notification';
+import { io } from '../../index';
+import { sendPushNotification } from '../pushNotification/pushNotification.service';
 
 export const createCommunityPost = async (
   post: communityPostsInterface,
@@ -83,15 +86,43 @@ export const createCommunityPost = async (
 
     if (!isPostLive) {
       const notifications = {
-        sender_id: userId?.toString(),
+        sender_id: convertToObjectId(userId?.toString()),
         receiverId: communityGroup?.adminUserId?.toString(),
-        communityGroupId: communityGroupId?.toString(),
-        type: NotificationIdentifier.community_post_live_request_notification,
+        communityGroupId: convertToObjectId(communityGroupId?.toString()),
+        type: notificationRoleAccess.community_post_live_request_notification,
         message: 'Your post is pending for approval',
-        communityPostId: finalCreatedPost?._id?.toString(),
+        communityPostId: convertToObjectId(finalCreatedPost?._id?.toString()),
       };
 
-      await notificationQueue.add(NotificationIdentifier.community_post_live_request_notification, notifications);
+      // const notifications = {
+      //   sender_id: senderObjectId,
+      //   receiverId: receiverObjectId,
+      //   communityGroupId: groupObjectId,
+      //   type: notificationRoleAccess.community_post_live_request_notification,
+      //   message: message,
+      //   communityPostId: postObjectId,
+      // };
+
+      const notification = await notificationService.CreateNotification(notifications);
+
+      const res: any = await notification.populate('communityGroupId');
+
+      io.emit(`notification_${communityGroup?.adminUserId?.toString()}`, {
+        type: notificationRoleAccess.community_post_live_request_notification,
+      });
+
+      sendPushNotification(
+        communityGroup?.adminUserId?.toString(),
+        'Unibuzz',
+        res?.communityGroupId?.title + ' has requested an live status for his post',
+        {
+          sender_id: userId.toString(),
+          receiverId: communityGroup?.adminUserId?.toString(),
+          type: notificationRoleAccess.community_post_live_request_notification,
+        }
+      );
+
+      // await notificationQueue.add(NotificationIdentifier.community_post_live_request_notification, notifications);
     }
 
     await session.commitTransaction();
@@ -327,13 +358,17 @@ export const getCommunityGroupPostsByCommunityId = async (
           communityGroupId: communityGroupObjectId,
 
           ...(filterPostBy === communityPostFilterType.PENDING_POSTS
-            ? { isPostLive: false }
+            ? {
+                isPostLive: false,
+                ...(isAdminOfCommunityGroup ? {} : { user_id: userObjectId }),
+              }
             : filterPostBy === communityPostFilterType.MY_POSTS
             ? { isPostLive: true, user_id: userObjectId }
             : filterPostBy === ''
             ? { isPostLive: true }
             : {}),
-          ...(isAdminOfCommunityGroup && filterPostBy == communityPostFilterType.PENDING_POSTS
+
+          ...(isAdminOfCommunityGroup && filterPostBy === communityPostFilterType.PENDING_POSTS
             ? { postStatus: { $in: [communityPostStatus.PENDING] } }
             : {}),
         },
@@ -459,11 +494,13 @@ export const getCommunityGroupPostsByCommunityId = async (
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
     });
+
     const pendingTotal = await CommunityPostModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
       isPostLive: false,
       postStatus: communityPostStatus.PENDING,
+      ...(isAdminOfCommunityGroup ? {} : { user_id: userObjectId }),
     });
 
     return {
@@ -857,28 +894,53 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
     communityToUpdate.isPostLive = true;
     communityToUpdate.postStatus = communityPostStatus.SUCCESS;
     const notifications = {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
-      receiverId: communityToUpdate.user_id?.toString(),
+      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
+      receiverId: convertToObjectId(communityToUpdate.user_id?.toString()),
       communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      type: NotificationIdentifier.community_post_live_request_notification,
-      communityPostId: communityToUpdate?._id?.toString(),
+      type: NotificationIdentifier.community_post_accepted_notification,
+      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
       message: 'Your post is approved',
     };
 
-    await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
+    await notificationService.CreateNotification(notifications);
+
+    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
+      type: notificationRoleAccess.community_post_accepted_notification,
+    });
+
+    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      type: notificationRoleAccess.community_post_accepted_notification,
+    });
+
+    // await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
   } else {
     communityToUpdate.isPostLive = false;
     communityToUpdate.postStatus = communityPostStatus.REJECTED;
+
     const notifications = {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
       receiverId: communityToUpdate.user_id?.toString(),
-      communityPostId: communityToUpdate?._id?.toString(),
-      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      type: NotificationIdentifier.community_post_live_request_notification,
+      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
+      communityGroupId: convertToObjectId(communityToUpdate?.communityGroupId?._id?.toString()),
+      type: notificationRoleAccess.community_post_rejected_notification,
       message: 'Your post is rejected',
     };
 
-    await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
+    await notificationService.CreateNotification(notifications);
+
+    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
+      type: notificationRoleAccess.community_post_rejected_notification,
+    });
+
+    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
+      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
+      receiverId: communityToUpdate.user_id?.toString(),
+      type: notificationRoleAccess.community_post_rejected_notification,
+    });
+
+    // await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
   }
 
   await communityToUpdate.save();

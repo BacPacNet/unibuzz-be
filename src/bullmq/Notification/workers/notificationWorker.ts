@@ -679,6 +679,7 @@ const CreatePostAcceptRequestNotification = async (job: any) => {
     type: notificationRoleAccess.community_post_accepted_notification,
   });
 };
+
 const CreatePostRejectRequestNotification = async (job: any) => {
   const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
 
@@ -696,11 +697,11 @@ const CreatePostRejectRequestNotification = async (job: any) => {
   };
 
   await notificationService.CreateNotification(notifications);
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_accepted_notification });
+  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_rejected_notification });
   sendPushNotification(receiverId, 'Unibuzz', ' Your post is Rejected', {
     sender_id: sender_id.toString(),
     receiverId: receiverId.toString(),
-    type: notificationRoleAccess.community_post_accepted_notification,
+    type: notificationRoleAccess.community_post_rejected_notification,
   });
 };
 
