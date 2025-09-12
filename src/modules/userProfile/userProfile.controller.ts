@@ -133,6 +133,19 @@ export const getUserProfile = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const getUserProfileVerifiedUniversityEmails = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+
+  try {
+    if (userID) {
+      let profile = await userProfileService.getUserProfileVerifiedUniversityEmails(userID);
+      return res.status(200).json(profile);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   try {
@@ -170,7 +183,9 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     }
 
     const { _id: communityId } = community;
-
+    if (community.users.find((user: any) => user._id.toString() === userID.toString())) {
+      return res.status(400).json({ message: 'User is already a member of this community' });
+    }
     await userProfileService.addUniversityEmail(
       userID,
       universityEmail,
