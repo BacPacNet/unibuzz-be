@@ -572,6 +572,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
   let isAlreadyJoined = userProfile.communities.some(
     (community) => community.communityId.toString() === communityId.toString()
   );
+
   if (!isAlreadyJoined) {
     userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerfied, communityGroups: [] });
     await userProfile.save();
@@ -579,7 +580,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
 
   const userResult = await communityModel.findOne({
     _id: communityId,
-    users: { $elemMatch: { id: userId } },
+    users: { $elemMatch: { _id: userId } },
   });
 
   if (!userResult) {
@@ -601,6 +602,15 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
             role: userProfile.role,
             isVerified: isVerfied || isCommunityVerified,
           },
+        },
+      }
+    );
+  } else {
+    await communityModel.updateOne(
+      { _id: communityId, 'users._id': user._id },
+      {
+        $set: {
+          'users.$.isVerified': isVerfied || isCommunityVerified,
         },
       }
     );

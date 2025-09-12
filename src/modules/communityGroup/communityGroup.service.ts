@@ -332,6 +332,15 @@ export const getCommunityGroup = async (groupId: string): Promise<CommunityGroup
   return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
+export const getCommunityGroupByObjectId = async (groupId: string): Promise<CommunityGroupDocument | null> => {
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community group ID');
+  }
+
+  const objectId = new mongoose.Types.ObjectId(groupId);
+  return (await communityGroupModel.findById(objectId)) as CommunityGroupDocument | null;
+};
+
 export const createCommunityGroup = async (
   body: any,
   communityId: string,

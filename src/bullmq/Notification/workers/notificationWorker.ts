@@ -9,7 +9,7 @@ import { QueuesEnum } from '../../queueEnums';
 import { logger } from '../../../modules/logger';
 import { getUserById } from '../../../modules/user/user.service';
 import { userProfileService } from '../../../modules/userProfile';
-import { getCommunityGroup } from '../../../modules/communityGroup/communityGroup.service';
+// import { getCommunityGroup } from '../../../modules/communityGroup/communityGroup.service';
 import { ApiError } from '../../../modules/errors';
 import httpStatus from 'http-status';
 import { status } from '../../../modules/communityGroup/communityGroup.interface';
@@ -64,7 +64,7 @@ const handleSendNotification = async (job: any) => {
   const usersData = await Promise.all(userPromises);
 
   // 4️⃣ Fetch the community group once
-  const communityGroup = await getCommunityGroup(communityGroupId);
+  const communityGroup = await communityGroupService.getCommunityGroupByObjectId(communityGroupId);
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
   }
@@ -92,6 +92,36 @@ const handleSendNotification = async (job: any) => {
   });
 
   await communityGroup.save();
+};
+const handleSendDeleteCommunityGroupNotification = async (job: any) => {
+  const { adminId, communityGroupId, receiverIds, type, message } = job.data;
+
+  // 1️⃣ Create notification documents
+  const notifications = receiverIds.map((receiverId: string) => ({
+    sender_id: new mongoose.Types.ObjectId(adminId),
+    receiverId: new mongoose.Types.ObjectId(receiverId),
+    communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
+    type,
+    message,
+  }));
+
+  await notificationModel.insertMany(notifications);
+
+  // 2️⃣ Send real-time notifications in batches (avoid blocking the event loop)
+  const chunkSize = 100;
+  for (let i = 0; i < receiverIds.length; i += chunkSize) {
+    const chunk = receiverIds.slice(i, i + chunkSize);
+    chunk.forEach((userId: string) => {
+      io.emit(`notification_${userId}`, { type });
+
+      sendPushNotification(userId, 'Unibuzz', message, {
+        sender_id: adminId.toString(),
+        receiverId: userId.toString(),
+        type: type,
+      });
+    });
+    await wait(10);
+  }
 };
 
 //const handleSendNotification = async (job: any) => {
@@ -750,7 +780,7 @@ export const notificationWorker = new Worker(
         await handleSendNotification(job);
         break;
       case NotificationIdentifier.delete_community_group:
-        await handleSendNotification(job);
+        await handleSendDeleteCommunityGroupNotification(job);
         break;
       case NotificationIdentifier.community_post_live_request_notification:
         await CreatePostLiveRequestNotification(job);
