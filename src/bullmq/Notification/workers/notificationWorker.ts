@@ -227,10 +227,8 @@ const handleLikeNotification = async (job: any) => {
       await notificationService.CreateNotification(newNotification);
     }
 
-    //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-    //   if (isUserOnline) {
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-    //   } else {
+
     const pushMessage =
       Number(existingNotification?.likedBy?.totalCount) > 1
         ? `${userData?.firstName} and ${Number(existingNotification?.likedBy?.totalCount) - 1} others liked your post`
@@ -241,7 +239,7 @@ const handleLikeNotification = async (job: any) => {
       type: notificationRoleAccess.REACTED_TO_POST,
       postId: userPostId.toString(),
     });
-    //   }
+
     logger.info('Like notification processed successfully');
   } catch (error) {
     logger.error('Error in handleLikeNotification:', error);
@@ -249,496 +247,599 @@ const handleLikeNotification = async (job: any) => {
   }
 };
 const handleCommunityPostLikeNotification = async (job: any) => {
-  const { sender_id, receiverId, communityPostId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
-  const userData = await getUserById(senderObjectId);
+    const { sender_id, receiverId, communityPostId } = job.data;
+    logger.info(`Processing like notification for Community post: ${communityPostId}`);
 
-  let existingNotification = await notificationModel.findOne({
-    receiverId: receiverObjectId,
-    communityPostId: postObjectId,
-    type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
-  });
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+    const userData = await getUserById(senderObjectId);
 
-  if (existingNotification) {
-    let updatedUsers = existingNotification.likedBy?.newFiveUsers || [];
-
-    const index = updatedUsers.findIndex(
-      (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
-    );
-
-    if (index !== -1) {
-      updatedUsers.splice(index, 1);
-    } else {
-      if (updatedUsers.length >= 5) {
-        updatedUsers.pop();
-      }
-
-      updatedUsers.unshift(senderObjectId);
-    }
-
-    existingNotification.likedBy.newFiveUsers = updatedUsers;
-
-    existingNotification.likedBy.totalCount = updatedUsers.length;
-
-    await existingNotification.save();
-  } else {
-    const newNotification = {
+    let existingNotification = await notificationModel.findOne({
       receiverId: receiverObjectId,
       communityPostId: postObjectId,
       type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
-      message: 'Reacted to your post.',
-      likedBy: {
-        totalCount: 1,
-        newFiveUsers: [senderObjectId],
-      },
-    };
-
-    await notificationService.CreateNotification(newNotification);
-  }
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-  //   } else {
-  const pushMessage =
-    Number(existingNotification?.likedBy?.totalCount) > 1
-      ? `${userData?.firstName} and ${Number(existingNotification?.likedBy?.totalCount) - 1} others liked your post`
-      : `${userData?.firstName} liked your post`;
-  sendPushNotification(receiverId, 'Notification', pushMessage, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
-    communityPostId: communityPostId.toString(),
-  });
-  //   }
-};
-const handleCommentNotification = async (job: any) => {
-  const { sender_id, receiverId, userPostId, postCommentId } = job.data;
-
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const postObjectId = new mongoose.Types.ObjectId(userPostId);
-  const commentObjectId = new mongoose.Types.ObjectId(postCommentId);
-  const userData = await getUserById(senderObjectId);
-
-  let existingNotification = await notificationModel.findOne({
-    receiverId: receiverObjectId,
-    userPostId: postObjectId,
-    type: notificationRoleAccess.COMMENT,
-  });
-
-  const newUserEntry = {
-    _id: senderObjectId,
-    postCommentId: commentObjectId,
-  };
-
-  if (existingNotification) {
-    let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
-
-    const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
-
-    if (index !== -1) {
-      updatedUsers.splice(index, 1);
-    } else {
-      if (updatedUsers.length >= 5) {
-        updatedUsers.pop();
-      }
-    }
-    updatedUsers.unshift(newUserEntry);
+    });
 
     if (existingNotification) {
-      if (!existingNotification.commentedBy) {
-        existingNotification.commentedBy = {
-          totalCount: 0,
-          newFiveUsers: [],
-        };
+      let updatedUsers = existingNotification.likedBy?.newFiveUsers || [];
+
+      const index = updatedUsers.findIndex(
+        (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
+      );
+
+      if (index !== -1) {
+        updatedUsers.splice(index, 1);
+      } else {
+        if (updatedUsers.length >= 5) {
+          updatedUsers.pop();
+        }
+
+        updatedUsers.unshift(senderObjectId);
       }
+
+      existingNotification.likedBy.newFiveUsers = updatedUsers;
+
+      existingNotification.likedBy.totalCount = updatedUsers.length;
+
+      await existingNotification.save();
+    } else {
+      const newNotification = {
+        receiverId: receiverObjectId,
+        communityPostId: postObjectId,
+        type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
+        message: 'Reacted to your post.',
+        likedBy: {
+          totalCount: 1,
+          newFiveUsers: [senderObjectId],
+        },
+      };
+
+      await notificationService.CreateNotification(newNotification);
     }
 
-    await existingNotification.save();
-  } else {
-    const newNotification = {
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+
+    const pushMessage =
+      Number(existingNotification?.likedBy?.totalCount) > 1
+        ? `${userData?.firstName} and ${Number(existingNotification?.likedBy?.totalCount) - 1} others liked your post`
+        : `${userData?.firstName} liked your post`;
+    sendPushNotification(receiverId, 'Notification', pushMessage, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
+      communityPostId: communityPostId.toString(),
+    });
+  } catch (error) {
+    logger.error('Error in handleCommunityPostLikeNotification:', error);
+    throw error;
+  }
+};
+const handleCommentNotification = async (job: any) => {
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
+
+    const { sender_id, receiverId, userPostId, postCommentId } = job.data;
+    logger.info(`Processing comment notification for post: ${userPostId}`);
+
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const postObjectId = new mongoose.Types.ObjectId(userPostId);
+    const commentObjectId = new mongoose.Types.ObjectId(postCommentId);
+    const userData = await getUserById(senderObjectId);
+
+    let existingNotification = await notificationModel.findOne({
       receiverId: receiverObjectId,
       userPostId: postObjectId,
       type: notificationRoleAccess.COMMENT,
-      message: 'Commented on your post.',
-      commentedBy: {
-        totalCount: 1,
-        newFiveUsers: [newUserEntry],
-      },
+    });
+
+    const newUserEntry = {
+      _id: senderObjectId,
+      postCommentId: commentObjectId,
     };
 
-    await notificationService.CreateNotification(newNotification);
+    if (existingNotification) {
+      let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
+
+      const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
+
+      if (index !== -1) {
+        updatedUsers.splice(index, 1);
+      } else {
+        if (updatedUsers.length >= 5) {
+          updatedUsers.pop();
+        }
+      }
+      updatedUsers.unshift(newUserEntry);
+
+      if (existingNotification) {
+        if (!existingNotification.commentedBy) {
+          existingNotification.commentedBy = {
+            totalCount: 0,
+            newFiveUsers: [],
+          };
+        }
+      }
+
+      await existingNotification.save();
+    } else {
+      const newNotification = {
+        receiverId: receiverObjectId,
+        userPostId: postObjectId,
+        type: notificationRoleAccess.COMMENT,
+        message: 'Commented on your post.',
+        commentedBy: {
+          totalCount: 1,
+          newFiveUsers: [newUserEntry],
+        },
+      };
+
+      await notificationService.CreateNotification(newNotification);
+    }
+
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+
+    const pushMessage =
+      Number(existingNotification?.commentedBy?.totalCount) > 1
+        ? `${userData?.firstName} and ${
+            Number(existingNotification?.commentedBy?.totalCount) - 1
+          } others commented on your post`
+        : `${userData?.firstName} commented on your post`;
+
+    sendPushNotification(receiverId, 'Unibuzz', pushMessage, {
+      type: notificationRoleAccess.COMMENT,
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      commentId: postCommentId.toString(),
+      postId: userPostId.toString(),
+    });
+    //   }
+  } catch (error) {
+    logger.error('Error in handleCommentNotification:', error);
+    throw error;
   }
-
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-  //   } else {
-
-  const pushMessage =
-    Number(existingNotification?.commentedBy?.totalCount) > 1
-      ? `${userData?.firstName} and ${
-          Number(existingNotification?.commentedBy?.totalCount) - 1
-        } others commented on your post`
-      : `${userData?.firstName} commented on your post`;
-
-  sendPushNotification(receiverId, 'Unibuzz', pushMessage, {
-    type: notificationRoleAccess.COMMENT,
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    commentId: postCommentId.toString(),
-    postId: userPostId.toString(),
-  });
-  //   }
 };
 
 const handleCommunityPostCommentNotification = async (job: any) => {
-  const { sender_id, receiverId, communityPostId, communityPostCommentId, message } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
-  const commentObjectId = new mongoose.Types.ObjectId(communityPostCommentId);
-  const userData = await getUserById(senderObjectId);
+    const { sender_id, receiverId, communityPostId, communityPostCommentId, message } = job.data;
+    logger.info(`Processing comment notification for Community post: ${communityPostId}`);
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+    const commentObjectId = new mongoose.Types.ObjectId(communityPostCommentId);
+    const userData = await getUserById(senderObjectId);
 
-  let existingNotification = await notificationModel.findOne({
-    receiverId: receiverObjectId,
-    communityPostId: postObjectId,
-    type: notificationRoleAccess.COMMUNITY_COMMENT,
-  });
-
-  const newUserEntry = {
-    _id: senderObjectId,
-    communityPostCommentId: commentObjectId,
-  };
-
-  if (existingNotification) {
-    let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
-
-    const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
-
-    if (index !== -1) {
-      updatedUsers.splice(index, 1);
-    } else if (updatedUsers.length >= 5) {
-      updatedUsers.pop();
-    }
-
-    updatedUsers.unshift(newUserEntry);
-
-    if (existingNotification) {
-      if (!existingNotification.commentedBy) {
-        existingNotification.commentedBy = {
-          totalCount: 0,
-          newFiveUsers: [],
-        };
-      }
-    }
-
-    await existingNotification.save();
-  } else {
-    const newNotification = {
+    let existingNotification = await notificationModel.findOne({
       receiverId: receiverObjectId,
       communityPostId: postObjectId,
       type: notificationRoleAccess.COMMUNITY_COMMENT,
+    });
+
+    const newUserEntry = {
+      _id: senderObjectId,
       communityPostCommentId: commentObjectId,
-      message: message,
-      commentedBy: {
-        totalCount: 1,
-        newFiveUsers: [newUserEntry],
-      },
     };
 
-    await notificationService.CreateNotification(newNotification);
+    if (existingNotification) {
+      let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
+
+      const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
+
+      if (index !== -1) {
+        updatedUsers.splice(index, 1);
+      } else if (updatedUsers.length >= 5) {
+        updatedUsers.pop();
+      }
+
+      updatedUsers.unshift(newUserEntry);
+
+      if (existingNotification) {
+        if (!existingNotification.commentedBy) {
+          existingNotification.commentedBy = {
+            totalCount: 0,
+            newFiveUsers: [],
+          };
+        }
+      }
+
+      await existingNotification.save();
+    } else {
+      const newNotification = {
+        receiverId: receiverObjectId,
+        communityPostId: postObjectId,
+        type: notificationRoleAccess.COMMUNITY_COMMENT,
+        communityPostCommentId: commentObjectId,
+        message: message,
+        commentedBy: {
+          totalCount: 1,
+          newFiveUsers: [newUserEntry],
+        },
+      };
+
+      await notificationService.CreateNotification(newNotification);
+    }
+
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+
+    const pushMessage =
+      Number(existingNotification?.commentedBy?.totalCount) > 1
+        ? `${userData?.firstName} and ${
+            Number(existingNotification?.commentedBy?.totalCount) - 1
+          } others commented on your post`
+        : `${userData?.firstName} commented on your post`;
+
+    sendPushNotification(receiverId, 'Unibuzz', pushMessage, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.COMMUNITY_COMMENT,
+      commentId: communityPostCommentId.toString(),
+      postId: communityPostId.toString(),
+    });
+    //   }
+  } catch (error) {
+    logger.error('Error in handleCommunityPostCommentNotification:', error);
+    throw error;
   }
-
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-  //   } else {
-
-  const pushMessage =
-    Number(existingNotification?.commentedBy?.totalCount) > 1
-      ? `${userData?.firstName} and ${
-          Number(existingNotification?.commentedBy?.totalCount) - 1
-        } others commented on your post`
-      : `${userData?.firstName} commented on your post`;
-
-  sendPushNotification(receiverId, 'Unibuzz', pushMessage, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.COMMUNITY_COMMENT,
-    commentId: communityPostCommentId.toString(),
-    postId: communityPostId.toString(),
-  });
-  //   }
 };
 
 const CreateFollowNotification = async (job: any) => {
-  const { sender_id, receiverId } = job.data;
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const newNotification = {
-    sender_id: senderObjectId,
+    const { sender_id, receiverId } = job.data;
+    logger.info(`Processing follow notification for user: ${receiverId}`);
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
 
-    receiverId: receiverObjectId,
-    type: notificationRoleAccess.FOLLOW,
-    message: 'Started following you',
-  };
-  const notification = await notificationService.CreateNotification(newNotification);
-  const res: any = await notification.populate('sender_id');
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
-  //   } else {
-  sendPushNotification(receiverId, 'Unibuzz', ` ${res?.sender_id?.firstName} started following you`, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.FOLLOW,
-  });
-  //   }
+    const newNotification = {
+      sender_id: senderObjectId,
+
+      receiverId: receiverObjectId,
+      type: notificationRoleAccess.FOLLOW,
+      message: 'Started following you',
+    };
+    const notification = await notificationService.CreateNotification(newNotification);
+    const res: any = await notification.populate('sender_id');
+
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+
+    sendPushNotification(receiverId, 'Unibuzz', ` ${res?.sender_id?.firstName} started following you`, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.FOLLOW,
+    });
+  } catch (error) {
+    logger.error('Error in CreateFollowNotification:', error);
+    throw error;
+  }
 };
 
 const DeleteFollowNotification = async (job: any) => {
-  const { sender_id, receiverId } = job.data;
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  await notificationService.DeleteNotification({
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    type: notificationRoleAccess.FOLLOW,
-  });
+    const { sender_id, receiverId } = job.data;
+    logger.info(`Processing Deletefollow notification for user: ${receiverId}`);
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
-  //   }
+    await notificationService.DeleteNotification({
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      type: notificationRoleAccess.FOLLOW,
+    });
+
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.un_follow_user });
+  } catch (error) {
+    logger.error('Error in DeleteFollowNotification:', error);
+    throw error;
+  }
 };
 
 const CreateOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const { sender_id, receiverId, communityGroupId, message } = job.data;
+    logger.info(`Processing Official group request notification for communityGroup: ${communityGroupId}`);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-    message: message,
-  };
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
 
-  await notificationService.CreateNotification(notifications);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
+      message: message,
+    };
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+    await notificationService.CreateNotification(notifications);
 
-  sendPushNotification(receiverId, 'Unibuzz', message, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-  });
-  //   }
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
+
+    sendPushNotification(receiverId, 'Unibuzz', message, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
+    });
+    //   }
+  } catch (error) {
+    logger.error('Error in CreateOfficialGroupRequestNotification:', error);
+    throw error;
+  }
 };
 const CreateRejectPrivateJoinRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const { sender_id, receiverId, communityGroupId } = job.data;
+    logger.info(`Processing Reject private join request notification for communityGroup: ${communityGroupId}`);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
-    message: 'Your Request has been Rejected',
-  };
-  const notification = await notificationService.CreateNotification(notifications);
-  const res: any = await notification.populate('communityGroupId');
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
-  //   } else {
-  sendPushNotification(
-    receiverId,
-    'Unibuzz',
-    'Your Request to join ' + res?.communityGroupId?.title + ' has been Rejected',
-    {
-      sender_id: sender_id.toString(),
-      receiverId: receiverId.toString(),
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
       type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
-    }
-  );
-  //   }
+      message: 'Your Request has been Rejected',
+    };
+    const notification = await notificationService.CreateNotification(notifications);
+    const res: any = await notification.populate('communityGroupId');
+
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });
+
+    sendPushNotification(
+      receiverId,
+      'Unibuzz',
+      'Your Request to join ' + res?.communityGroupId?.title + ' has been Rejected',
+      {
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
+      }
+    );
+    //   }
+  } catch (error) {
+    logger.error('Error in CreateRejectPrivateJoinRequestNotification:', error);
+    throw error;
+  }
 };
 const CreateAcceptedPrivateJoinRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const { sender_id, receiverId, communityGroupId } = job.data;
+    logger.info(`Processing Accepted private join request notification for communityGroup: ${communityGroupId}`);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
-    message: 'Your Request has been Accepted',
-  };
-  const notification = await notificationService.CreateNotification(notifications);
-  const res: any = await notification.populate('communityGroupId');
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
 
-  //   const isUserOnline = onlineUsers.isUserOnline(receiverId);
-  //   if (isUserOnline) {
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
-  //   } else {
-  sendPushNotification(
-    receiverId,
-    'Unibuzz',
-    'Your Request to join ' + res?.communityGroupId?.title + ' has been Accepted',
-    {
-      sender_id: sender_id.toString(),
-      receiverId: receiverId.toString(),
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
       type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
-    }
-  );
-  //   }
+      message: 'Your Request has been Accepted',
+    };
+    const notification = await notificationService.CreateNotification(notifications);
+    const res: any = await notification.populate('communityGroupId');
+
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST });
+
+    sendPushNotification(
+      receiverId,
+      'Unibuzz',
+      'Your Request to join ' + res?.communityGroupId?.title + ' has been Accepted',
+      {
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
+      }
+    );
+    //   }
+  } catch (error) {
+    logger.error('Error in CreateAcceptedPrivateJoinRequestNotification:', error);
+    throw error;
+  }
 };
 const CreateAcceptedOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
+    const { sender_id, receiverId, communityGroupId, message } = job.data;
+    logger.info(`Processing Accepted official group request notification for community group: ${communityGroupId}`);
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
-    message: message,
-  };
-  await notificationService.CreateNotification(notifications);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
+      message: message,
+    };
+    await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
-  sendPushNotification(receiverId, 'Unibuzz', message, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
-  });
-  //   }
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST });
+    sendPushNotification(receiverId, 'Unibuzz', message, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
+    });
+    //   }
+  } catch (error) {
+    logger.error('Error in CreateAcceptedOfficialGroupRequestNotification:', error);
+    throw error;
+  }
 };
 const CreateRejectedOfficialGroupRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const { sender_id, receiverId, communityGroupId, message } = job.data;
+    logger.info(`Processing Rejected official group request notification for community group: ${communityGroupId}`);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
-    message: message,
-  };
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
 
-  await notificationService.CreateNotification(notifications);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
+      message: message,
+    };
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
-  sendPushNotification(receiverId, 'Unibuzz', message, {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
-  });
+    await notificationService.CreateNotification(notifications);
 
-  await communityGroupService.RejectCommunityGroupApproval(groupObjectId);
-  //   }
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST });
+    sendPushNotification(receiverId, 'Unibuzz', message, {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
+    });
+
+    await communityGroupService.RejectCommunityGroupApproval(groupObjectId);
+    //   }
+  } catch (error) {
+    logger.error('Error in CreateRejectedOfficialGroupRequestNotification:', error);
+    throw error;
+  }
 };
 
 const CreatePostLiveRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
-  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+    const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+    logger.info(`Processing Post live request notification for communityPost: ${communityPostId}`);
 
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.community_post_live_request_notification,
-    message: message,
-    communityPostId: postObjectId,
-  };
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const postObjectId = new mongoose.Types.ObjectId(communityPostId);
 
-  const notification = await notificationService.CreateNotification(notifications);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.community_post_live_request_notification,
+      message: message,
+      communityPostId: postObjectId,
+    };
 
-  const res: any = await notification.populate('communityGroupId');
+    const notification = await notificationService.CreateNotification(notifications);
 
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_live_request_notification });
-  sendPushNotification(receiverId, 'Unibuzz', res?.communityGroupId?.title + ' has requested an live status for his post', {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.community_post_live_request_notification,
-  });
+    const res: any = await notification.populate('communityGroupId');
+
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_live_request_notification });
+    sendPushNotification(
+      receiverId,
+      'Unibuzz',
+      res?.communityGroupId?.title + ' has requested an live status for his post',
+      {
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.community_post_live_request_notification,
+      }
+    );
+  } catch (error) {
+    logger.error('Error in CreatePostLiveRequestNotification:', error);
+    throw error;
+  }
 };
 const CreatePostAcceptRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
-  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.community_post_accepted_notification,
-    message: message,
-    communityPostId: postObjectId,
-  };
+    const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+    logger.info(`Processing Post accept request notification for communityPost: ${communityPostId}`);
 
-  await notificationService.CreateNotification(notifications);
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_accepted_notification });
-  sendPushNotification(receiverId, 'Unibuzz', ' Your post is approved', {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.community_post_accepted_notification,
-  });
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.community_post_accepted_notification,
+      message: message,
+      communityPostId: postObjectId,
+    };
+
+    await notificationService.CreateNotification(notifications);
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_accepted_notification });
+    sendPushNotification(receiverId, 'Unibuzz', ' Your post is approved', {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.community_post_accepted_notification,
+    });
+  } catch (error) {
+    logger.error('Error in CreatePostAcceptRequestNotification:', error);
+    throw error;
+  }
 };
 
 const CreatePostRejectRequestNotification = async (job: any) => {
-  const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+  try {
+    // Ensure database connection before processing
+    await ensureDatabaseConnection();
 
-  const senderObjectId = new mongoose.Types.ObjectId(sender_id);
-  const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
-  const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
-  const postObjectId = new mongoose.Types.ObjectId(communityPostId);
-  const notifications = {
-    sender_id: senderObjectId,
-    receiverId: receiverObjectId,
-    communityGroupId: groupObjectId,
-    type: notificationRoleAccess.community_post_rejected_notification,
-    message: message,
-    communityPostId: postObjectId,
-  };
+    const { sender_id, receiverId, communityGroupId, message, communityPostId } = job.data;
+    logger.info(`Processing Post reject request notification for communityPost: ${communityPostId}`);
 
-  await notificationService.CreateNotification(notifications);
-  io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_rejected_notification });
-  sendPushNotification(receiverId, 'Unibuzz', ' Your post is Rejected', {
-    sender_id: sender_id.toString(),
-    receiverId: receiverId.toString(),
-    type: notificationRoleAccess.community_post_rejected_notification,
-  });
+    const senderObjectId = new mongoose.Types.ObjectId(sender_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
+    const groupObjectId = new mongoose.Types.ObjectId(communityGroupId);
+    const postObjectId = new mongoose.Types.ObjectId(communityPostId);
+    const notifications = {
+      sender_id: senderObjectId,
+      receiverId: receiverObjectId,
+      communityGroupId: groupObjectId,
+      type: notificationRoleAccess.community_post_rejected_notification,
+      message: message,
+      communityPostId: postObjectId,
+    };
+
+    await notificationService.CreateNotification(notifications);
+    io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.community_post_rejected_notification });
+    sendPushNotification(receiverId, 'Unibuzz', ' Your post is Rejected', {
+      sender_id: sender_id.toString(),
+      receiverId: receiverId.toString(),
+      type: notificationRoleAccess.community_post_rejected_notification,
+    });
+  } catch (error) {
+    logger.error('Error in CreatePostRejectRequestNotification:', error);
+    throw error;
+  }
 };
 
 export const notificationWorker = new Worker(
