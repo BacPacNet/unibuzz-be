@@ -5,9 +5,8 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import he from 'he';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { Sortby } from './userPostComments.interface';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -41,14 +40,16 @@ export const CreateUserPostComment = async (req: extendedRequest, res: Response)
 
     // Avoid notifying self
     if (userID.toString() !== receiverId.toString()) {
-      await notificationQueue.add(NotificationIdentifier.comment_notification, {
+      const notification = {
         sender_id: userID,
         receiverId,
         userPostId: comment.userPostId._id,
         postCommentId: comment._id,
         type: notificationRoleAccess.COMMENT,
         message: 'Commented on your post.',
-      });
+      };
+
+      await queueSQSNotification(notification);
     }
 
     return res.status(httpStatus.CREATED).json({ comment });
