@@ -15,7 +15,8 @@ import routes from './routes/v1';
 import OpenAI from 'openai';
 import { bullBoardRouter } from './bullmq/bullBoard';
 import mongoose from 'mongoose';
-import { createNotification } from './modules/sqsNotification/sqsNotification.Controller';
+import { createSQSNotification } from './modules/sqsNotification/sqsNotification.Controller';
+
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
 
@@ -142,7 +143,7 @@ app.get('/health', async (_req, res) => {
 app.use('/v1', routes);
 
 app.post('/enqueue', async (req, res) => {
-  createNotification(req, res);
+  createSQSNotification(req, res);
 });
 
 // Bull Board (only in development)

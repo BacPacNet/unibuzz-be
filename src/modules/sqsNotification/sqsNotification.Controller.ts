@@ -4,7 +4,7 @@ import config from '../../config/config';
 
 const sqs = new SQSClient({ region: config.aws.region });
 
-export const createNotification = async (req: Request, res: Response) => {
+export const createSQSNotification = async (req: Request, res: Response) => {
   const { sender_id, receiverId, type } = req.body;
   const message = {
     sender_id,

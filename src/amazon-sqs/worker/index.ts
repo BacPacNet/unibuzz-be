@@ -3,6 +3,11 @@ import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, GetQueueAttribu
 import config from '../../config/config';
 import { handleFollowNotification, handleLikeNotification, handleCommentNotification } from '../handlers';
 import logger from '../../modules/logger/logger';
+import { NotificationIdentifier } from '../NotificationIdentifierEnums';
+import { handleUserPostLikeNotification } from '../handlers/handleUserPostLikeNotification';
+import { handleUserCommunityPostLikeNotification } from '../handlers/handleUserCommunityPostLikeNotification';
+import { handleUserPostCommentNotification } from '../handlers/handleUserPostCommentNotification';
+import { handleUserCommunityPostCommentNotification } from '../handlers/handleUserCommunityPostCommentNotification';
 
 const sqs = new SQSClient({ region: config.aws.region });
 
@@ -34,7 +39,6 @@ async function testSQSConnection() {
 }
 
 async function dispatchNotification(data: any) {
-  logger.info('dispatchNotification', data);
   switch (data.type) {
     case 'follow_notification':
       return handleFollowNotification(data);
@@ -42,6 +46,18 @@ async function dispatchNotification(data: any) {
       return handleLikeNotification(data);
     case 'comment_notification':
       return handleCommentNotification(data);
+    case NotificationIdentifier.REACTED_TO_POST:
+      await handleUserPostLikeNotification(data);
+      break;
+    case NotificationIdentifier.REACTED_TO_COMMUNITY_POST:
+      await handleUserCommunityPostLikeNotification(data);
+      break;
+    case NotificationIdentifier.COMMENT:
+      await handleUserPostCommentNotification(data);
+      break;
+    case NotificationIdentifier.COMMUNITY_COMMENT:
+      await handleUserCommunityPostCommentNotification(data);
+      break;
     default:
       logger.warn('⚠️ Unknown notification type:', data.type);
   }
