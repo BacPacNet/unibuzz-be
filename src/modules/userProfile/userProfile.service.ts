@@ -145,43 +145,6 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   return userProfileToUpdate;
 };
 
-// export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow: mongoose.Types.ObjectId) => {
-//   const userProfile = await UserProfile.findOne({ users_id: userId });
-//   const userToFollowProfile = await UserProfile.findOne({ users_id: userToFollow });
-//   let updatedUseProfile;
-//   const notifications = {
-//     sender_id: userId,
-//     receiverId: userToFollow,
-//     type: notificationRoleAccess.FOLLOW,
-//     message: 'Started following you',
-//   };
-//   await userFollowService.follow_unfollow_User(userId.toString(), userToFollow.toString());
-
-//   if (!userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString())) {
-//     await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
-
-//     await queueSQSNotification(notifications);
-
-//     updatedUseProfile = await UserProfile.findOneAndUpdate(
-//       { users_id: userId },
-//       { $push: { following: { userId: userToFollow } } },
-//       { new: true }
-//     );
-//     return updatedUseProfile;
-//   } else {
-//     await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
-//     updatedUseProfile = await UserProfile.findOneAndUpdate(
-//       { users_id: userId },
-//       { $pull: { following: { userId: userToFollow } } },
-//       { new: true }
-//     );
-//     // await notificationQueue.add(NotificationIdentifier.un_follow_user, notifications);
-//     notifications.type = NotificationIdentifier.un_follow_user;
-//     await queueSQSNotification(notifications);
-//     return updatedUseProfile;
-//   }
-// };
-
 export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow: mongoose.Types.ObjectId) => {
   const userProfile = await UserProfile.findOne({ users_id: userId });
   const userToFollowProfile = await UserProfile.findOne({ users_id: userToFollow });
@@ -254,50 +217,6 @@ export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow
 
   return updatedUseProfile;
 };
-
-// export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow: mongoose.Types.ObjectId) => {
-//   const userProfile = await UserProfile.findOne({ users_id: userId });
-//   const userToFollowProfile = await UserProfile.findOne({ users_id: userToFollow });
-
-//   // decide current state BEFORE any updates
-//   const isAlreadyFollowing = userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString());
-
-//   let updatedUseProfile;
-
-//   if (!isAlreadyFollowing) {
-//     // FOLLOW
-//     await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
-//     updatedUseProfile = await UserProfile.findOneAndUpdate(
-//       { users_id: userId },
-//       { $push: { following: { userId: userToFollow } } },
-//       { new: true }
-//     );
-
-//     await queueSQSNotification({
-//       sender_id: userId,
-//       receiverId: userToFollow,
-//       type: NotificationIdentifier.follow_user,
-//       message: 'Started following you',
-//     });
-//   } else {
-//     // UNFOLLOW
-//     await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
-//     updatedUseProfile = await UserProfile.findOneAndUpdate(
-//       { users_id: userId },
-//       { $pull: { following: { userId: userToFollow } } },
-//       { new: true }
-//     );
-
-//     await queueSQSNotification({
-//       sender_id: userId,
-//       receiverId: userToFollow,
-//       type: NotificationIdentifier.un_follow_user,
-//       message: 'Stopped following you',
-//     });
-//   }
-
-//   return updatedUseProfile;
-// };
 
 export const getFollowingUsers = async (userId: string) => {
   const user = await UserProfile.findById(userId).populate('following.userId', 'email profile_dp').exec();
