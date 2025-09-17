@@ -73,6 +73,7 @@ export const handleUserCommunityPostLikeNotification = async (job: any) => {
       type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
       communityPostId: communityPostId.toString(),
     });
+    return existingNotification;
   } catch (error) {
     logger.error('Error in handleCommunityPostLikeNotification:', error);
     throw error;

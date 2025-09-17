@@ -8,6 +8,7 @@ export async function handleFollowNotification(data: any) {
     message: 'Started following you',
   });
   console.log('📌 Follow notification created:', doc._id);
+  return doc;
 }
 
 export async function handleLikeNotification(data: any) {
@@ -18,6 +19,7 @@ export async function handleLikeNotification(data: any) {
     message: 'Liked your post',
   });
   console.log('👍 Like notification created:', doc._id);
+  return doc;
 }
 
 export async function handleCommentNotification(data: any) {
@@ -28,4 +30,5 @@ export async function handleCommentNotification(data: any) {
     message: 'Commented on your post',
   });
   console.log('💬 Comment notification created:', doc._id);
+  return doc;
 }

@@ -73,7 +73,7 @@ export const handleUserPostLikeNotification = async (job: any) => {
       type: notificationRoleAccess.REACTED_TO_POST,
       postId: userPostId.toString(),
     });
-
+    return existingNotification;
     logger.info('Like notification processed successfully');
   } catch (error) {
     logger.error('Error in handleLikeNotification:', error);

@@ -85,7 +85,8 @@ export const handleUserPostCommentNotification = async (job: any) => {
       commentId: postCommentId.toString(),
       postId: userPostId.toString(),
     });
-    //   }
+
+    return existingNotification;
   } catch (error) {
     logger.error('Error in handleCommentNotification:', error);
     throw error;
