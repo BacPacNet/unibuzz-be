@@ -3,8 +3,9 @@ import notificationModel from './notification.modal';
 import { notificationRoleAccess, notificationStatus } from './notification.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+// import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+// import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
@@ -22,8 +23,16 @@ export const createManyNotification = async (
     type,
     message,
   };
+  //   await notificationQueue.add(NotificationIdentifier.group_invite_notifications, jobData);
 
-  await notificationQueue.add(NotificationIdentifier.group_invite_notifications, jobData);
+  try {
+    console.log('🚀 Attempting to enqueue follow notification...');
+    await queueSQSNotification(jobData);
+  } catch (err) {
+    console.error('❌ Failed to enqueue notification', {
+      error: err,
+    });
+  }
 };
 
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
@@ -534,7 +543,7 @@ export const changeNotificationStatus = async (status: notificationStatus, notif
 };
 
 export const DeleteNotification = async (filter: any) => {
-  await notificationModel.findOneAndDelete(filter);
+  return await notificationModel.findOneAndDelete(filter);
 };
 
 export const markNotificationsAsRead = async (userID: string) => {

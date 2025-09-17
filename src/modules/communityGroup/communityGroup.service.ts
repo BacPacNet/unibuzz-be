@@ -14,8 +14,7 @@ import { communityService } from '../community';
 import { io } from '../../index';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { convertToObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
 
@@ -277,8 +276,8 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
       type: notificationRoleAccess.DELETED_COMMUNITY_GROUP,
       message: `${groupToDelete.title} group has been deleted by admin`,
     };
-
-    await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
+    await queueSQSNotification(jobData);
+    // await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
 
     await session.commitTransaction();
     session.endSession();
