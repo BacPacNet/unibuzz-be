@@ -155,7 +155,23 @@ export const UserPostCommentReply = async (req: extendedRequest, res: Response) 
 
   try {
     if (commentId && req.userId) {
-      let commentReply = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));
+      let commentReply: any = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));
+
+      //   const receiverId = commentReply.userPostId.user_id;
+
+      //   // Avoid notifying self
+      //   if (req.userId.toString() !== receiverId.toString()) {
+      //     const notification = {
+      //       sender_id: req.userId,
+      //       receiverId,
+      //       userPostId: commentReply.userPostId._id,
+      //       postCommentId: commentReply._id,
+      //       type: notificationRoleAccess.COMMENT,
+      //       message: 'Replied to you comment.',
+      //     };
+
+      //     // await queueSQSNotification(notification);
+      //   }
       return res.status(200).json({ commentReply });
     }
   } catch (error: any) {

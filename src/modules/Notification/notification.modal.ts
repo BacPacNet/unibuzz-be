@@ -58,11 +58,27 @@ const notificationSchema = new Schema<notificationInterface>(
         },
       ],
     },
+    repliedBy: {
+      newFiveUsers: [
+        {
+          _id: { type: Schema.Types.ObjectId, ref: 'User' },
+          communityPostCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'communityPostComments',
+          },
+          postCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'userPostComments',
+          },
+        },
+      ],
+    },
     status: {
       type: String,
       enum: ['pending', 'rejected', 'accepted', 'default'],
       default: notificationStatus.default,
     },
+    createdAt: { type: Date, immutable: false },
   },
   { timestamps: true }
 );

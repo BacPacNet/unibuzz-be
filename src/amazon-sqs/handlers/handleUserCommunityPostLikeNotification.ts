@@ -26,7 +26,7 @@ export const handleUserCommunityPostLikeNotification = async (job: any) => {
 
     if (existingNotification) {
       let updatedUsers = existingNotification.likedBy?.newFiveUsers || [];
-
+      const now = new Date();
       const index = updatedUsers.findIndex(
         (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
       );
@@ -39,12 +39,16 @@ export const handleUserCommunityPostLikeNotification = async (job: any) => {
         }
 
         updatedUsers.unshift(senderObjectId);
+        if (existingNotification.likedBy) {
+          existingNotification.likedBy.totalCount += 1;
+        }
       }
 
       existingNotification.likedBy.newFiveUsers = updatedUsers;
 
       existingNotification.likedBy.totalCount = updatedUsers.length;
 
+      existingNotification.createdAt = now;
       await existingNotification.save();
     } else {
       const newNotification = {
@@ -73,7 +77,7 @@ export const handleUserCommunityPostLikeNotification = async (job: any) => {
       type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
       communityPostId: communityPostId.toString(),
     });
-    return existingNotification;
+    return existingNotification || { _id: 'new' };
   } catch (error) {
     logger.error('Error in handleCommunityPostLikeNotification:', error);
     throw error;

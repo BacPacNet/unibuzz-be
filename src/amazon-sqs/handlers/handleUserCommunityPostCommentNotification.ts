@@ -31,13 +31,16 @@ export const handleUserCommunityPostCommentNotification = async (job: any) => {
 
     if (existingNotification) {
       let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
-
+      const now = new Date();
       const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
 
       if (index !== -1) {
         updatedUsers.splice(index, 1);
       } else if (updatedUsers.length >= 5) {
         updatedUsers.pop();
+        if (existingNotification.commentedBy) {
+          existingNotification.commentedBy.totalCount += 1;
+        }
       }
 
       updatedUsers.unshift(newUserEntry);
@@ -50,6 +53,8 @@ export const handleUserCommunityPostCommentNotification = async (job: any) => {
           };
         }
       }
+
+      existingNotification.createdAt = now;
 
       await existingNotification.save();
     } else {
@@ -84,7 +89,7 @@ export const handleUserCommunityPostCommentNotification = async (job: any) => {
       commentId: communityPostCommentId.toString(),
       postId: communityPostId.toString(),
     });
-    return existingNotification;
+    return existingNotification || { _id: 'new' };
   } catch (error) {
     logger.error('Error in handleCommunityPostCommentNotification:', error);
     throw error;

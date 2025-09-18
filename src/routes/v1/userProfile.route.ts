@@ -14,7 +14,7 @@ router.route('/mutuals').get(userIdAuth, userProfileController.getAllMututalUser
 router.route('/following_and_followers').get(userIdAuth, userProfileController.getAllUserFollowersAndFollowing);
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
 router.route('/addUniversityEmail').put(userIdAuth, userProfileController.addUniversityEmail);
-
+router.route('/verifiedUniversityEmails').get(userIdAuth, userProfileController.getUserProfileVerifiedUniversityEmails);
 router.route('/:userProfileId').put(userProfileController.updateUserProfile);
 
 export default router;

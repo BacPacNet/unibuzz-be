@@ -177,7 +177,8 @@ export const likeUnlike = async (id: string, userId: string) => {
   const isOwnPost = userId === post.user_id.toString();
 
   // Prepare notification if needed
-  if (!isOwnPost && !hasLiked) {
+  //   if (!isOwnPost && !hasLiked) {
+  if (!isOwnPost) {
     const notification = {
       sender_id: userId,
       receiverId: post.user_id,

@@ -133,6 +133,19 @@ export const getUserProfile = async (req: userIdExtend, res: Response) => {
   }
 };
 
+export const getUserProfileVerifiedUniversityEmails = async (req: userIdExtend, res: Response) => {
+  const userID = req.userId;
+
+  try {
+    if (userID) {
+      let profile = await userProfileService.getUserProfileVerifiedUniversityEmails(userID);
+      return res.status(200).json(profile);
+    }
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
   const userID = req.userId;
   try {

@@ -73,6 +73,10 @@ export const getUserProfileById = async (id: string) => {
 
   return userProfile;
 };
+export const getUserProfileVerifiedUniversityEmails = async (id: string) => {
+  const userProfile = await UserProfile.findOne({ users_id: id });
+  return userProfile?.email;
+};
 
 export const getUserProfiles = async (userIds: any) => {
   return await UserProfile.find({ users_id: { $in: userIds } });

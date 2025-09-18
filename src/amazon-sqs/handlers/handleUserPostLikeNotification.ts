@@ -9,6 +9,7 @@ import { NotificationIdentifier } from '../NotificationIdentifierEnums';
 import { sendPushNotification } from '../../modules/pushNotification/pushNotification.service';
 
 export const handleUserPostLikeNotification = async (job: any) => {
+  logger.info(`Processing like notification for post: `);
   try {
     const { sender_id, receiverId, userPostId } = job;
     logger.info(`Processing like notification for post: ${userPostId}`);
@@ -26,7 +27,7 @@ export const handleUserPostLikeNotification = async (job: any) => {
 
     if (existingNotification) {
       let updatedUsers = existingNotification.likedBy?.newFiveUsers || [];
-
+      const now = new Date();
       const index = updatedUsers.findIndex(
         (userId: mongoose.Types.ObjectId) => userId.toString() === senderObjectId.toString()
       );
@@ -37,14 +38,13 @@ export const handleUserPostLikeNotification = async (job: any) => {
         if (updatedUsers.length >= 5) {
           updatedUsers.pop();
         }
-
+        existingNotification.likedBy.totalCount += 1;
         updatedUsers.unshift(senderObjectId);
       }
 
       existingNotification.likedBy.newFiveUsers = updatedUsers;
 
-      existingNotification.likedBy.totalCount = updatedUsers.length;
-
+      existingNotification.createdAt = now;
       await existingNotification.save();
     } else {
       const newNotification = {
@@ -73,7 +73,7 @@ export const handleUserPostLikeNotification = async (job: any) => {
       type: notificationRoleAccess.REACTED_TO_POST,
       postId: userPostId.toString(),
     });
-    return existingNotification;
+    return existingNotification || { _id: 'new' };
     logger.info('Like notification processed successfully');
   } catch (error) {
     logger.error('Error in handleLikeNotification:', error);

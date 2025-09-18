@@ -91,6 +91,7 @@ async function testSQSConnection() {
 }
 
 async function dispatchNotification(data: any) {
+  logger.info('🔍 Dispatching notification:', data.type);
   try {
     switch (data.type) {
       case 'follow_notification':

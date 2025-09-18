@@ -7,6 +7,8 @@ export const notificationRoleAccess = {
   COMMUNITY_COMMENT: 'COMMUNITY_COMMENT',
   REACTED_TO_POST: 'REACTED_TO_POST',
   REACTED_TO_COMMUNITY_POST: 'REACTED_TO_COMMUNITY_POST',
+  REPLIED_TO_COMMENT: 'REPLIED_TO_COMMENT',
+  REPLIED_TO_COMMUNITY_COMMENT: 'REPLIED_TO_COMMUNITY_COMMENT',
   OFFICIAL_GROUP_REQUEST: 'OFFICIAL_GROUP_REQUEST',
   REJECTED_OFFICIAL_GROUP_REQUEST: 'REJECTED_OFFICIAL_GROUP_REQUEST',
   ACCEPTED_OFFICIAL_GROUP_REQUEST: 'ACCEPTED_OFFICIAL_GROUP_REQUEST',
@@ -60,6 +62,9 @@ interface notificationInterface {
   likedBy: likedBy;
   //   commentedBy: likedBy;
   commentedBy?: CommentedBy;
+  repliedBy?: CommentedBy;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export { notificationInterface };

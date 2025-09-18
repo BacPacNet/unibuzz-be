@@ -331,6 +331,52 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       },
     },
     {
+      $lookup: {
+        from: 'userposts',
+        localField: 'userPostId',
+        foreignField: '_id',
+        as: 'userPostDetails',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'userPostId',
+        foreignField: 'userPostId',
+        as: 'userPostComments',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'communityposts',
+        localField: 'communityPostId',
+        foreignField: '_id',
+        as: 'communityPostDetails',
+      },
+    },
+    {
+      $lookup: {
+        from: 'communitypostcomments',
+        localField: 'communityPostId',
+        foreignField: 'postId',
+        as: 'communityPostComments',
+      },
+    },
+
+    {
+      $unwind: {
+        path: '$userPostDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $unwind: {
+        path: '$communityPostDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
       $match: {
         $expr: {
           $not: {
@@ -370,6 +416,24 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         'communityGroupId.communityId': '$communityGroupDetails.communityId',
         'communityDetails.name': '$communityDetails.name',
 
+        'userPost.likeCount': {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$userPostDetails.likeCount', []] },
+              as: 'like',
+              cond: { $ne: ['$$like.userId', { $toString: '$userPostDetails.user_id' }] },
+            },
+          },
+        },
+        'communityPost.likeCount': {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$communityPostDetails.likeCount', []] },
+              as: 'like',
+              cond: { $ne: ['$$like.userId', { $toString: '$communityPostDetails.user_id' }] },
+            },
+          },
+        },
         'likedBy.totalCount': 1,
         'likedBy.newFiveUsers': {
           $map: {
@@ -421,6 +485,35 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
           },
         },
         'commentedBy.totalCount': 1,
+
+        'userPost.totalComments': {
+          $size: {
+            $setUnion: [
+              {
+                $filter: {
+                  input: { $ifNull: ['$userPostComments.commenterId', []] },
+                  as: 'commenter',
+                  cond: { $ne: ['$$commenter', '$userPostDetails.user_id'] },
+                },
+              },
+              [],
+            ],
+          },
+        },
+        'communityPost.totalComments': {
+          $size: {
+            $setUnion: [
+              {
+                $filter: {
+                  input: { $ifNull: ['$communityPostComments.commenterId', []] },
+                  as: 'commenter',
+                  cond: { $ne: ['$$commenter', '$communityPostDetails.user_id'] },
+                },
+              },
+              [],
+            ],
+          },
+        },
 
         'commentedBy.newFiveUsers': {
           $map: {

@@ -9,6 +9,7 @@ import { NotificationIdentifier } from '../NotificationIdentifierEnums';
 import { sendPushNotification } from '../../modules/pushNotification/pushNotification.service';
 
 export const handleUserPostCommentNotification = async (job: any) => {
+  logger.info(`Processing comment notification for post: `);
   try {
     const { sender_id, receiverId, userPostId, postCommentId } = job;
     logger.info(`Processing comment notification for post: ${userPostId}`);
@@ -32,7 +33,7 @@ export const handleUserPostCommentNotification = async (job: any) => {
 
     if (existingNotification) {
       let updatedUsers = existingNotification.commentedBy?.newFiveUsers || [];
-
+      const now = new Date();
       const index = updatedUsers.findIndex((user: any) => user._id.toString() === senderObjectId.toString());
 
       if (index !== -1) {
@@ -40,6 +41,9 @@ export const handleUserPostCommentNotification = async (job: any) => {
       } else {
         if (updatedUsers.length >= 5) {
           updatedUsers.pop();
+        }
+        if (existingNotification.commentedBy) {
+          existingNotification.commentedBy.totalCount += 1;
         }
       }
       updatedUsers.unshift(newUserEntry);
@@ -52,6 +56,8 @@ export const handleUserPostCommentNotification = async (job: any) => {
           };
         }
       }
+
+      existingNotification.createdAt = now;
 
       await existingNotification.save();
     } else {
@@ -69,7 +75,7 @@ export const handleUserPostCommentNotification = async (job: any) => {
       await notificationService.CreateNotification(newNotification);
     }
 
-    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });
+    io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.comment_notification });
 
     const pushMessage =
       Number(existingNotification?.commentedBy?.totalCount) > 1
@@ -86,7 +92,7 @@ export const handleUserPostCommentNotification = async (job: any) => {
       postId: userPostId.toString(),
     });
 
-    return existingNotification;
+    return existingNotification || { _id: 'new' };
   } catch (error) {
     logger.error('Error in handleCommentNotification:', error);
     throw error;
