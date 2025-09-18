@@ -58,54 +58,6 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
   await communityGroupToUpdate.save();
 };
 
-// export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
-//   //  ccc
-//   try {
-//     if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
-//       throw new Error('Invalid communityGroupId or userId');
-//     }
-//     const updatedGroup = await communityGroupModel.findOneAndUpdate(
-//       { _id: communityGroupId, 'users._id': convertToObjectId(userId) },
-//       {
-//         $set: {
-//           'users.$.isRequestAccepted': true,
-//           'users.$.status': status.accepted,
-//         },
-//       },
-//       { new: true }
-//     );
-
-//     if (!updatedGroup) {
-//       throw new Error('Community group or user not found');
-//     }
-
-//     const communityId = updatedGroup.communityId;
-
-//     const userProfile = await getUserProfileById(userId);
-
-//     await UserProfile.updateOne(
-//       {
-//         _id: userProfile?._id,
-//         'communities.communityId': communityId,
-//         'communities.communityGroups.id': communityGroupId,
-//       },
-//       {
-//         $set: {
-//           'communities.$[community].communityGroups.$[group].status': status.accepted,
-//         },
-//       },
-//       {
-//         arrayFilters: [{ 'community.communityId': communityId }, { 'group.id': communityGroupId }],
-//       }
-//     );
-
-//     return updatedGroup;
-//   } catch (error: any) {
-//     console.error(error);
-//     throw new Error(error.message);
-//   }
-// };
-
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
   try {
     if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
