@@ -65,6 +65,8 @@ interface notificationInterface {
   repliedBy?: CommentedBy;
   createdAt?: Date;
   updatedAt?: Date;
+  parentCommentId: mongoose.Types.ObjectId;
+  parentCommunityCommentId: mongoose.Types.ObjectId;
 }
 
 export { notificationInterface };

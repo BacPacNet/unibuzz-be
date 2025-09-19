@@ -174,6 +174,7 @@ export const UserPostCommentReply = async (req: extendedRequest, res: Response) 
           userPostId: commentReply.userPostId._id,
           postCommentId: commentReply._id,
           type: notificationRoleAccess.REPLIED_TO_COMMENT,
+          parentCommentId: commentId,
           message: 'Replied to you comment.',
         };
 

@@ -385,7 +385,7 @@ export const commentReply = async (commentId: string, userID: string, body: any,
     const notification = {
       sender_id: userID,
       receiverId: adminDetails?.commenterId.toString(),
-
+      parentCommentId: commentId,
       communityPostId,
       communityPostCommentId: commentId,
       type: notificationRoleAccess.REPLIED_TO_COMMUNITY_COMMENT,

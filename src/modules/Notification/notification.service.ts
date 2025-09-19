@@ -219,6 +219,8 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
           sender_id: '$sender_id',
           receiverId: '$receiverId',
           userPostId: '$userPostId',
+          parentCommentId: '$parentCommentId',
+          parentCommunityCommentId: '$parentCommunityCommentId',
           communityPostId: '$communityPostId',
           communityGroupId: '$communityGroupId',
         },

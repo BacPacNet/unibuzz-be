@@ -11,18 +11,20 @@ import { sendPushNotification } from '../../modules/pushNotification/pushNotific
 export const handleUserPostReplyCommentNotification = async (job: any): Promise<any> => {
   logger.info(`Processing reply comment notification for post: `);
   try {
-    const { sender_id, receiverId, userPostId, postCommentId } = job;
+    const { sender_id, receiverId, userPostId, postCommentId, parentCommentId } = job;
     logger.info(`Processing reply comment notification for post: ${userPostId}`);
 
     const senderObjectId = new mongoose.Types.ObjectId(sender_id);
     const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
     const postObjectId = new mongoose.Types.ObjectId(userPostId);
     const commentObjectId = new mongoose.Types.ObjectId(postCommentId);
+    const parentCommentObjectId = new mongoose.Types.ObjectId(parentCommentId);
     const userData = await getUserById(senderObjectId);
 
     let existingNotification = await notificationModel.findOne({
       receiverId: receiverObjectId,
       userPostId: postObjectId,
+      parentCommentId: parentCommentObjectId,
       type: notificationRoleAccess.REPLIED_TO_COMMENT,
     });
 
@@ -65,6 +67,7 @@ export const handleUserPostReplyCommentNotification = async (job: any): Promise<
         receiverId: receiverObjectId,
         userPostId: postObjectId,
         type: notificationRoleAccess.REPLIED_TO_COMMENT,
+        parentCommentId: parentCommentObjectId,
         message: 'Replied to your comment.',
         repliedBy: {
           newFiveUsers: [newUserEntry],

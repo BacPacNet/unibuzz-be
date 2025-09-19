@@ -10,17 +10,19 @@ import { sendPushNotification } from '../../modules/pushNotification/pushNotific
 
 export const handleUserCommunityPostReplyCommentNotification = async (job: any) => {
   try {
-    const { sender_id, receiverId, communityPostId, communityPostCommentId, message } = job;
+    const { sender_id, receiverId, communityPostId, communityPostCommentId, message, parentCommentId } = job;
     logger.info(`Processing Reply comment notification for Community post: ${communityPostId}`);
     const senderObjectId = new mongoose.Types.ObjectId(sender_id);
     const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
     const postObjectId = new mongoose.Types.ObjectId(communityPostId);
     const commentObjectId = new mongoose.Types.ObjectId(communityPostCommentId);
+    const parentCommentObjectId = new mongoose.Types.ObjectId(parentCommentId);
     const userData = await getUserById(senderObjectId);
 
     let existingNotification = await notificationModel.findOne({
       receiverId: receiverObjectId,
       communityPostId: postObjectId,
+      parentCommunityCommentId: parentCommentObjectId,
       type: notificationRoleAccess.REPLIED_TO_COMMUNITY_COMMENT,
     });
 
@@ -59,7 +61,7 @@ export const handleUserCommunityPostReplyCommentNotification = async (job: any) 
         receiverId: receiverObjectId,
         communityPostId: postObjectId,
         type: notificationRoleAccess.REPLIED_TO_COMMUNITY_COMMENT,
-        // communityPostCommentId: commentObjectId,
+        parentCommunityCommentId: parentCommentObjectId,
         message: message,
         repliedBy: {
           totalCount: 1,

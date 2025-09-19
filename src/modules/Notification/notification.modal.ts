@@ -25,6 +25,14 @@ const notificationSchema = new Schema<notificationInterface>(
       type: Schema.Types.ObjectId,
       ref: 'userPost',
     },
+    parentCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'userPostComments',
+    },
+    parentCommunityCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'communityPostComments',
+    },
 
     type: { type: String, enum: notificationRole, required: true },
 
