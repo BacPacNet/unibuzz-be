@@ -62,11 +62,11 @@ const notificationSchema = new Schema<notificationInterface>(
       newFiveUsers: [
         {
           _id: { type: Schema.Types.ObjectId, ref: 'User' },
-          communityPostCommentId: {
+          communityPostParentCommentId: {
             type: Schema.Types.ObjectId,
             ref: 'communityPostComments',
           },
-          postCommentId: {
+          parentCommentId: {
             type: Schema.Types.ObjectId,
             ref: 'userPostComments',
           },

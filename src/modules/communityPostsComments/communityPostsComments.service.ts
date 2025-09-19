@@ -159,7 +159,7 @@ export const getCommunityPostComments = async (
   // Fetch the main comments on the post
   const comments =
     (await communityPostCommentModel
-      .find({ postId: postId })
+      .find({ postId: postId, level: 0 })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
         {
@@ -349,11 +349,12 @@ export const commentReply = async (commentId: string, userID: string, body: any,
         communityId: 1,
         communityName: { $arrayElemAt: ['$community.name', 0] },
         communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] },
+        communityGroupID: { $arrayElemAt: ['$communityGroup._id', 0] },
       },
     },
   ]);
 
-  const { communityId } = communityDetail[0];
+  const { communityId, communityGroupTitle, communityName, communityGroupID } = communityDetail[0];
 
   const getUserProfile = await UserProfile.findOne({ users_id: userID }).select('email');
 
@@ -365,14 +366,34 @@ export const commentReply = async (commentId: string, userID: string, body: any,
   }
 
   const newReply = {
-    communityId: null,
+    communityId: communityGroupID,
     commenterId: userID,
+    postId: convertToObjectId(communityPostId),
     isCommentVerified,
     level: level + 1,
     ...body,
   };
 
   const savedReply = await communityPostCommentModel.create(newReply);
+
+  const adminDetails = await communityPostCommentModel.findOne({ _id: commentId });
+  if (userID.toString() !== adminDetails?.commenterId.toString()) {
+    const message = communityGroupTitle
+      ? `commented on your community post in ${communityName} at ${communityGroupTitle}`
+      : `commented on your community post in ${communityName}`;
+
+    const notification = {
+      sender_id: userID,
+      receiverId: adminDetails?.commenterId.toString(),
+
+      communityPostId,
+      communityPostCommentId: commentId,
+      type: notificationRoleAccess.REPLIED_TO_COMMUNITY_COMMENT,
+      message,
+    };
+
+    await queueSQSNotification(notification);
+  }
 
   const parentComment = await communityPostCommentModel
     .findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true })

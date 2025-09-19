@@ -131,6 +131,7 @@ export const LikeCommunityPostComments = async (req: extendedRequest, res: Respo
 
 export const CommunityPostCommentReply = async (req: extendedRequest, res: Response) => {
   const { commentId } = req.params;
+  //   const { communityPostId } = req.query as { communityPostId: string };
   const { level, ...body } = req.body;
   body.content = he.decode(body.content);
   try {

@@ -151,27 +151,34 @@ export const getCommentById = async (req: extendedRequest, res: Response) => {
 export const UserPostCommentReply = async (req: extendedRequest, res: Response) => {
   const { commentId } = req.params;
   const { level, ...body } = req.body;
+  const { userPostId } = req.query as { userPostId: string };
   body.content = he.decode(body.content);
 
   try {
     if (commentId && req.userId) {
-      let commentReply: any = await userPostCommentsService.commentReply(commentId, req.userId, body, Number(level));
+      let commentReply: any = await userPostCommentsService.commentReply(
+        commentId,
+        req.userId,
+        userPostId || '',
+        body,
+        Number(level)
+      );
 
-      //   const receiverId = commentReply.userPostId.user_id;
+      const receiverId = commentReply.userPostId.user_id;
 
-      //   // Avoid notifying self
-      //   if (req.userId.toString() !== receiverId.toString()) {
-      //     const notification = {
-      //       sender_id: req.userId,
-      //       receiverId,
-      //       userPostId: commentReply.userPostId._id,
-      //       postCommentId: commentReply._id,
-      //       type: notificationRoleAccess.COMMENT,
-      //       message: 'Replied to you comment.',
-      //     };
+      // Avoid notifying self
+      if (req?.userId?.toString() !== receiverId?.toString()) {
+        const notification = {
+          sender_id: req.userId,
+          receiverId,
+          userPostId: commentReply.userPostId._id,
+          postCommentId: commentReply._id,
+          type: notificationRoleAccess.REPLIED_TO_COMMENT,
+          message: 'Replied to you comment.',
+        };
 
-      //     // await queueSQSNotification(notification);
-      //   }
+        await queueSQSNotification(notification);
+      }
       return res.status(200).json({ commentReply });
     }
   } catch (error: any) {

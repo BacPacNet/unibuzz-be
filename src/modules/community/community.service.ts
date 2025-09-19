@@ -13,10 +13,11 @@ import { convertToObjectId } from '../../utils/common';
 import { GetCommunityUsersOptions } from './community.interface';
 import { CommunityGroupType } from '../../config/community.type';
 import { status } from '../communityGroup/communityGroup.interface';
+import config from '../../config/config';
 
 export const createCommunity = async (
   name: string,
-  adminId: string,
+
   university_id: string,
   numberOfStudent: string,
   numberOfFaculty: string,
@@ -26,7 +27,7 @@ export const createCommunity = async (
 ) => {
   const data = {
     name,
-    adminId,
+    adminId: config.DEFAULT_COMMUNITY_ADMIN_ID,
     university_id,
     numberOfStudent: numberOfStudent || 0,
     numberOfFaculty: numberOfFaculty || 0,

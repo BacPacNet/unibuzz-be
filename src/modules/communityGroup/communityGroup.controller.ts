@@ -34,7 +34,11 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
     if (!community) {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
-    const isAdminOfCommunity = community.adminId.toString() === userId;
+
+    let isAdminOfCommunity: boolean = false;
+    if (community?.adminId) {
+      isAdminOfCommunity = community?.adminId?.toString() === userId;
+    }
 
     const getCommunityByName = await communityGroupModel.findOne({ title: body.title });
     if (getCommunityByName?.title) {
