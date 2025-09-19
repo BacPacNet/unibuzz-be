@@ -183,7 +183,9 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     }
 
     const { _id: communityId } = community;
-
+    if (community.users.find((user: any) => user._id.toString() === userID.toString())) {
+      return res.status(400).json({ message: 'User is already a member of this community' });
+    }
     await userProfileService.addUniversityEmail(
       userID,
       universityEmail,
