@@ -13,7 +13,7 @@ import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
 import OpenAI from 'openai';
-import { bullBoardRouter } from './bullmq/bullBoard';
+// import { bullBoardRouter } from './bullmq/bullBoard';
 import mongoose from 'mongoose';
 import { createSQSNotification } from './modules/sqsNotification/sqsNotification.Controller';
 
@@ -147,9 +147,9 @@ app.post('/enqueue', async (req, res) => {
 });
 
 // Bull Board (only in development)
-if (config.env === 'development') {
-  app.use('/admin/queues', bullBoardRouter);
-}
+// if (config.env === 'development') {
+//   app.use('/admin/queues', bullBoardRouter);
+// }
 
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {

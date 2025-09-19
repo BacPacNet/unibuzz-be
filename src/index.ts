@@ -6,7 +6,7 @@ import { Server as SocketIoServer, Socket } from 'socket.io';
 import { handleNewMessage } from './sockets/messageHandlers';
 import { OnlineUsers } from './sockets/onlineUsers';
 import { handleConnection } from './sockets/connectionHandler3';
-import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
+// import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
 import { startSQSWorker, stopSQSWorker } from './amazon-sqs/worker';
 
 let server: any;
@@ -45,10 +45,10 @@ const exitHandler = async () => {
     // Stop SQS Worker
     stopSQSWorker();
 
-    if (notificationWorker) {
-      await notificationWorker.close();
-      logger.info('Notification Worker closed');
-    }
+    // if (notificationWorker) {
+    //   await notificationWorker.close();
+    //   logger.info('Notification Worker closed');
+    // }
     process.exit(1);
   } else {
     process.exit(1);
