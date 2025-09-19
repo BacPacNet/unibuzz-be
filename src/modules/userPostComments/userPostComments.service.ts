@@ -213,12 +213,18 @@ export const getPostCommentById = async (commentId: string) => {
     .findById(commentId)
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+      },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+          },
         ],
       },
     ])
@@ -291,14 +297,21 @@ export const getSingleCommentByCommentId = async (commentId: string) => {
     .findById(commentId)
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+      },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+          },
         ],
       },
+      { path: 'userPostId', select: 'user_id' },
     ])
     .lean();
 

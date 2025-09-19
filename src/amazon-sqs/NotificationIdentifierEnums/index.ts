@@ -1,0 +1,30 @@
+export enum NotificationIdentifier {
+  REACTED_TO_POST = 'REACTED_TO_POST',
+  REACTED_TO_COMMUNITY_POST = 'REACTED_TO_COMMUNITY_POST',
+  comment_notification = 'comment-notification',
+  COMMUNITY_COMMENT = 'COMMUNITY_COMMENT',
+  COMMENT = 'COMMENT',
+  FOLLOW = 'FOLLOW',
+  un_follow_user = 'un-follow-user',
+  follow_user = 'follow-user',
+  GROUP_INVITE = 'GROUP_INVITE',
+  group_invite_notifications = 'group-invite-notifications',
+  ACCEPTED_PRIVATE_GROUP_REQUEST = 'ACCEPTED_PRIVATE_GROUP_REQUEST',
+  REJECTED_PRIVATE_GROUP_REQUEST = 'REJECTED_PRIVATE_GROUP_REQUEST',
+  DELETED_COMMUNITY_GROUP = 'DELETED_COMMUNITY_GROUP',
+
+  send_notification = 'send-notification',
+  like_notification = 'like-notification',
+  community_post_like_notification = 'community-post-like-notification',
+  community_post_comment_notification = 'community-post-comment-notification',
+
+  official_group_request = 'official-group-request',
+  reject_official_group_request = 'reject-official-group-request',
+  accept_official_group_request = 'accept-official-group-request',
+  reject_private_join_group_request = 'reject-private-join-group-request-group-request',
+  accept_private_join_group_request = 'accept-private-join-group-request-group-request',
+
+  community_post_live_request_notification = 'community_post_live_request_notification',
+  community_post_rejected_notification = 'community_post_rejected_notification',
+  community_post_accepted_notification = 'community_post_accepted_notification',
+}

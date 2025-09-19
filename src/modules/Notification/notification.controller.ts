@@ -84,6 +84,7 @@ export const JoinGroup = async (req: extendedRequest, res: Response) => {
       if (!checkIfNotificationExist) {
         throw new Error('Notification does not exist');
       }
+
       //  const status = await communityGroupService.joinCommunityGroup(userID, groupId);
       const acceptRequest = await communityGroupService.acceptCommunityGroupJoinApproval(convertToObjectId(groupId), userID);
       await notificationService.updateUserNotification(id, notificationStatus.accepted);

@@ -13,8 +13,10 @@ import { authLimiter } from './modules/utils';
 import { ApiError, errorConverter, errorHandler } from './modules/errors';
 import routes from './routes/v1';
 import OpenAI from 'openai';
-import { bullBoardRouter } from './bullmq/bullBoard';
+// import { bullBoardRouter } from './bullmq/bullBoard';
 import mongoose from 'mongoose';
+import { createSQSNotification } from './modules/sqsNotification/sqsNotification.Controller';
+
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
 
@@ -140,10 +142,14 @@ app.get('/health', async (_req, res) => {
 // v1 api routes
 app.use('/v1', routes);
 
+app.post('/enqueue', async (req, res) => {
+  createSQSNotification(req, res);
+});
+
 // Bull Board (only in development)
-if (config.env === 'development') {
-  app.use('/admin/queues', bullBoardRouter);
-}
+// if (config.env === 'development') {
+//   app.use('/admin/queues', bullBoardRouter);
+// }
 
 // send back a 404 error for any unknown api request
 app.use((_req, _res, next) => {

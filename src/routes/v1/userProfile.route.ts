@@ -15,7 +15,6 @@ router.route('/following_and_followers').get(userIdAuth, userProfileController.g
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
 router.route('/addUniversityEmail').put(userIdAuth, userProfileController.addUniversityEmail);
 router.route('/verifiedUniversityEmails').get(userIdAuth, userProfileController.getUserProfileVerifiedUniversityEmails);
-
 router.route('/:userProfileId').put(userProfileController.updateUserProfile);
 
 export default router;
