@@ -70,9 +70,9 @@ export const likeUnlikeComment = async (commentId: string, userId: string) => {
   }
 };
 
-export const commentReply = async (commentId: string, userID: string, body: any, level: number) => {
+export const commentReply = async (commentId: string, userID: string, userPostId: string, body: any, level: number) => {
   const newReply = {
-    userPostId: null,
+    userPostId: userPostId,
     commenterId: userID,
     level: level + 1,
     ...body,
@@ -99,6 +99,7 @@ export const commentReply = async (commentId: string, userID: string, body: any,
           },
         ],
       },
+      { path: 'userPostId', select: 'user_id' },
     ])
     .lean();
 
@@ -116,7 +117,7 @@ export const getUserPostComments = async (
   // Fetch the main comments on the post
   const comments =
     (await userPostCommentsModel
-      .find({ userPostId: postId })
+      .find({ userPostId: postId, level: 0 })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
         {
@@ -213,12 +214,18 @@ export const getPostCommentById = async (commentId: string) => {
     .findById(commentId)
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+      },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+          },
         ],
       },
     ])
@@ -291,14 +298,21 @@ export const getSingleCommentByCommentId = async (commentId: string) => {
     .findById(commentId)
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+      },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+          },
         ],
       },
+      { path: 'userPostId', select: 'user_id' },
     ])
     .lean();
 

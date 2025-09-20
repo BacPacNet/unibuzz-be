@@ -29,26 +29,42 @@ const envVarsSchema = Joi.object()
     REDIS_PASSWORD: Joi.string().optional().description('Redis password'),
     // Firebase Configuration
     // AWS Configuration
-    AWS_ACCESS_KEY_ID: Joi.string().when('NODE_ENV', {
-      is: 'production',
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }).description('AWS Access Key ID'),
-    AWS_SECRET_ACCESS_KEY: Joi.string().when('NODE_ENV', {
-      is: 'production',
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }).description('AWS Secret Access Key'),
-    AWS_REGION: Joi.string().when('NODE_ENV', {
-      is: 'production',
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }).description('AWS Region'),
-    AWS_S3_BUCKET_NAME: Joi.string().when('NODE_ENV', {
-      is: 'production',
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }).description('AWS S3 Bucket Name'),
+    AWS_ACCESS_KEY_ID: Joi.string()
+      .when('NODE_ENV', {
+        is: 'production',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      })
+      .description('AWS Access Key ID'),
+    AWS_SECRET_ACCESS_KEY: Joi.string()
+      .when('NODE_ENV', {
+        is: 'production',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      })
+      .description('AWS Secret Access Key'),
+    AWS_REGION: Joi.string()
+      .when('NODE_ENV', {
+        is: 'production',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      })
+      .description('AWS Region'),
+    AWS_S3_BUCKET_NAME: Joi.string()
+      .when('NODE_ENV', {
+        is: 'production',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      })
+      .description('AWS S3 Bucket Name'),
+    SQS_QUEUE_URL: Joi.string()
+      .when('NODE_ENV', {
+        is: 'production',
+        then: Joi.required(),
+        otherwise: Joi.optional(),
+      })
+      .description('AWS SQS Queue URL'),
+    DEFAULT_COMMUNITY_ADMIN_ID: Joi.string().required().description('Default Community Admin ID'),
   })
   .unknown();
 
@@ -107,6 +123,8 @@ const config = {
   fcm: {
     config: envVars.FIREBASE_CONFIG,
   },
+  sqsQueueUrl: envVars.SQS_QUEUE_URL,
+  DEFAULT_COMMUNITY_ADMIN_ID: envVars.DEFAULT_COMMUNITY_ADMIN_ID,
 };
 
 export default config;

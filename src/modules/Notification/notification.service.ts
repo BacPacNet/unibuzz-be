@@ -3,8 +3,9 @@ import notificationModel from './notification.modal';
 import { notificationRoleAccess, notificationStatus } from './notification.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+// import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+// import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
@@ -22,8 +23,16 @@ export const createManyNotification = async (
     type,
     message,
   };
+  //   await notificationQueue.add(NotificationIdentifier.group_invite_notifications, jobData);
 
-  await notificationQueue.add(NotificationIdentifier.group_invite_notifications, jobData);
+  try {
+    console.log('🚀 Attempting to enqueue follow notification...');
+    await queueSQSNotification(jobData);
+  } catch (err) {
+    console.error('❌ Failed to enqueue notification', {
+      error: err,
+    });
+  }
 };
 
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
@@ -210,6 +219,8 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
           sender_id: '$sender_id',
           receiverId: '$receiverId',
           userPostId: '$userPostId',
+          parentCommentId: '$parentCommentId',
+          parentCommunityCommentId: '$parentCommunityCommentId',
           communityPostId: '$communityPostId',
           communityGroupId: '$communityGroupId',
         },
@@ -322,6 +333,185 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
       },
     },
     {
+      $lookup: {
+        from: 'userposts',
+        localField: 'userPostId',
+        foreignField: '_id',
+        as: 'userPostDetails',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'userPostId',
+        foreignField: 'userPostId',
+        as: 'userPostComments',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'communityposts',
+        localField: 'communityPostId',
+        foreignField: '_id',
+        as: 'communityPostDetails',
+      },
+    },
+    {
+      $lookup: {
+        from: 'communitypostcomments',
+        localField: 'communityPostId',
+        foreignField: 'postId',
+        as: 'communityPostComments',
+      },
+    },
+
+    {
+      $unwind: {
+        path: '$userPostDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $unwind: {
+        path: '$communityPostDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // start
+
+    {
+      $lookup: {
+        from: 'communitypostcomments',
+        localField: 'repliedBy.newFiveUsers.communityPostParentCommentId',
+        foreignField: '_id',
+        as: 'communityParentComments',
+      },
+    },
+    {
+      $lookup: {
+        from: 'communitypostcomments',
+        localField: 'communityParentComments.replies',
+        foreignField: '_id',
+        as: 'communityReplyComments',
+      },
+    },
+    {
+      $addFields: {
+        communityParentCommentReplies: {
+          $map: {
+            input: '$communityParentComments',
+            as: 'parent',
+            in: {
+              parentId: '$$parent._id',
+              totalReplies: {
+                $size: {
+                  $setDifference: [
+                    {
+                      $setUnion: [
+                        {
+                          $map: {
+                            input: {
+                              $filter: {
+                                input: '$communityReplyComments',
+                                as: 'reply',
+                                cond: { $in: ['$$reply._id', '$$parent.replies'] },
+                              },
+                            },
+                            as: 'replyDoc',
+                            in: '$$replyDoc.commenterId',
+                          },
+                        },
+                        [],
+                      ],
+                    },
+                    ['$$parent.commenterId'], // exclude self
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    //   end
+
+    // for reply comment user post
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'repliedBy.newFiveUsers._id',
+        foreignField: '_id',
+        as: 'repliedUsersDetails',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'repliedBy.newFiveUsers._id',
+        foreignField: 'users_id',
+        as: 'repliedUsersProfiles',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'repliedBy.newFiveUsers.parentCommentId',
+        foreignField: '_id',
+        as: 'parentComments',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'parentComments.replies',
+        foreignField: '_id',
+        as: 'replyComments',
+      },
+    },
+
+    {
+      $addFields: {
+        parentCommentReplies: {
+          $map: {
+            input: '$parentComments',
+            as: 'parent',
+            in: {
+              parentId: '$$parent._id',
+              totalReplies: {
+                $size: {
+                  $setDifference: [
+                    {
+                      $setUnion: [
+                        {
+                          $map: {
+                            input: {
+                              $filter: {
+                                input: '$replyComments',
+                                as: 'reply',
+                                cond: { $in: ['$$reply._id', '$$parent.replies'] },
+                              },
+                            },
+                            as: 'replyDoc',
+                            in: '$$replyDoc.commenterId',
+                          },
+                        },
+                        [],
+                      ],
+                    },
+                    ['$$parent.commenterId'],
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    {
       $match: {
         $expr: {
           $not: {
@@ -360,7 +550,26 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         'communityGroupId.communityGroupLogoUrl': '$communityGroupDetails.communityGroupLogoUrl.imageUrl',
         'communityGroupId.communityId': '$communityGroupDetails.communityId',
         'communityDetails.name': '$communityDetails.name',
-
+        parentCommentReplies: 1,
+        communityParentCommentReplies: 1,
+        'userPost.likeCount': {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$userPostDetails.likeCount', []] },
+              as: 'like',
+              cond: { $ne: ['$$like.userId', { $toString: '$userPostDetails.user_id' }] },
+            },
+          },
+        },
+        'communityPost.likeCount': {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$communityPostDetails.likeCount', []] },
+              as: 'like',
+              cond: { $ne: ['$$like.userId', { $toString: '$communityPostDetails.user_id' }] },
+            },
+          },
+        },
         'likedBy.totalCount': 1,
         'likedBy.newFiveUsers': {
           $map: {
@@ -413,6 +622,35 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         },
         'commentedBy.totalCount': 1,
 
+        'userPost.totalComments': {
+          $size: {
+            $setUnion: [
+              {
+                $filter: {
+                  input: { $ifNull: ['$userPostComments.commenterId', []] },
+                  as: 'commenter',
+                  cond: { $ne: ['$$commenter', '$userPostDetails.user_id'] },
+                },
+              },
+              [],
+            ],
+          },
+        },
+        'communityPost.totalComments': {
+          $size: {
+            $setUnion: [
+              {
+                $filter: {
+                  input: { $ifNull: ['$communityPostComments.commenterId', []] },
+                  as: 'commenter',
+                  cond: { $ne: ['$$commenter', '$communityPostDetails.user_id'] },
+                },
+              },
+              [],
+            ],
+          },
+        },
+
         'commentedBy.newFiveUsers': {
           $map: {
             input: '$commentedBy.newFiveUsers',
@@ -462,6 +700,58 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
             },
           },
         },
+
+        'repliedBy.newFiveUsers': {
+          $map: {
+            input: '$repliedBy.newFiveUsers',
+            as: 'userEntry',
+            in: {
+              _id: '$$userEntry._id',
+              communityPostCommentId: '$$userEntry.communityPostCommentId',
+              postCommentId: '$$userEntry.postCommentId',
+              name: {
+                $let: {
+                  vars: {
+                    user: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$repliedUsersDetails',
+                            as: 'u',
+                            cond: { $eq: ['$$u._id', '$$userEntry._id'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: { $concat: ['$$user.firstName', ' ', '$$user.lastName'] },
+                },
+              },
+              profileDp: {
+                $let: {
+                  vars: {
+                    profile: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$repliedUsersProfiles',
+                            as: 'p',
+                            cond: { $eq: ['$$p.users_id', '$$userEntry._id'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: '$$profile.profile_dp.imageUrl',
+                },
+              },
+            },
+          },
+        },
+
+        // replyend
       },
     },
   ];
@@ -534,7 +824,7 @@ export const changeNotificationStatus = async (status: notificationStatus, notif
 };
 
 export const DeleteNotification = async (filter: any) => {
-  await notificationModel.findOneAndDelete(filter);
+  return await notificationModel.findOneAndDelete(filter);
 };
 
 export const markNotificationsAsRead = async (userID: string) => {

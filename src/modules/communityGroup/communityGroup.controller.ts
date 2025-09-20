@@ -9,12 +9,12 @@ import { CommunityGroupAccess } from '../../config/community.type';
 import { status } from './communityGroup.interface';
 import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+
 import { communityService } from '../community';
 import { io } from '../../index';
 import { convertToObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -34,7 +34,11 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
     if (!community) {
       return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not found' });
     }
-    const isAdminOfCommunity = community.adminId.toString() === userId;
+
+    let isAdminOfCommunity: boolean = false;
+    if (community?.adminId) {
+      isAdminOfCommunity = community?.adminId?.toString() === userId;
+    }
 
     const getCommunityByName = await communityGroupModel.findOne({ title: body.title });
     if (getCommunityByName?.title) {
@@ -116,7 +120,9 @@ export const updateCommunityGroupJoinRequest = async (req: extendedRequest, res:
         message: 'Your Request has been Rejected',
       };
 
-      await notificationQueue.add(NotificationIdentifier.reject_private_join_group_request, notifications);
+      //   await notificationQueue.add(NotificationIdentifier.reject_private_join_group_request, notifications);
+
+      await queueSQSNotification(notifications);
     }
     if (reqStatus == status.accepted) {
       await communityGroupService.acceptCommunityGroupJoinApproval(new mongoose.Types.ObjectId(groupId), userId);
@@ -129,7 +135,8 @@ export const updateCommunityGroupJoinRequest = async (req: extendedRequest, res:
         message: 'Your Request has been Accepted',
       };
 
-      await notificationQueue.add(NotificationIdentifier.accept_private_join_group_request, notifications);
+      //   await notificationQueue.add(NotificationIdentifier.accept_private_join_group_request, notifications);
+      await queueSQSNotification(notifications);
     }
     return res.status(200).json({ message: 'Status Updated Successfully' });
   } catch (error: any) {

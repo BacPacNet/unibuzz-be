@@ -25,6 +25,14 @@ const notificationSchema = new Schema<notificationInterface>(
       type: Schema.Types.ObjectId,
       ref: 'userPost',
     },
+    parentCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'userPostComments',
+    },
+    parentCommunityCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'communityPostComments',
+    },
 
     type: { type: String, enum: notificationRole, required: true },
 
@@ -58,11 +66,27 @@ const notificationSchema = new Schema<notificationInterface>(
         },
       ],
     },
+    repliedBy: {
+      newFiveUsers: [
+        {
+          _id: { type: Schema.Types.ObjectId, ref: 'User' },
+          communityPostParentCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'communityPostComments',
+          },
+          parentCommentId: {
+            type: Schema.Types.ObjectId,
+            ref: 'userPostComments',
+          },
+        },
+      ],
+    },
     status: {
       type: String,
       enum: ['pending', 'rejected', 'accepted', 'default'],
       default: notificationStatus.default,
     },
+    createdAt: { type: Date, immutable: false },
   },
   { timestamps: true }
 );

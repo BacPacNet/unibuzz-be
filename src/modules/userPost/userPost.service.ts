@@ -7,10 +7,9 @@ import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
 import { CommunityType, userPostType } from '../../config/community.type';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { convertToObjectId } from '../../utils/common';
 import PostRelationship from './postRelationship.model';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
@@ -178,7 +177,8 @@ export const likeUnlike = async (id: string, userId: string) => {
   const isOwnPost = userId === post.user_id.toString();
 
   // Prepare notification if needed
-  if (!isOwnPost && !hasLiked) {
+  //   if (!isOwnPost && !hasLiked) {
+  if (!isOwnPost) {
     const notification = {
       sender_id: userId,
       receiverId: post.user_id,
@@ -186,7 +186,9 @@ export const likeUnlike = async (id: string, userId: string) => {
       type: notificationRoleAccess.REACTED_TO_POST,
       message: 'Reacted to your Post.',
     };
-    await notificationQueue.add(NotificationIdentifier.like_notification, notification);
+    // await notificationQueue.add(NotificationIdentifier.like_notification, notification);
+
+    await queueSQSNotification(notification);
   }
 
   const updatedPost = await UserPostModel.findOneAndUpdate(

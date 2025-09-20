@@ -3,56 +3,54 @@ import communityPostCommentModel from './communityPostsComments.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { convertToObjectId } from '../../utils/common';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile } from '../userProfile';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const createCommunityComment = async (userID: string, communityPostId: string, body: any) => {
   const { commenterProfileId, adminId } = body;
 
   const communityDetail = await CommunityPostModel.aggregate([
     {
-      $match: { _id: new mongoose.Types.ObjectId(communityPostId) }
+      $match: { _id: new mongoose.Types.ObjectId(communityPostId) },
     },
     {
       $lookup: {
         from: 'communities',
         localField: 'communityId',
         foreignField: '_id',
-        as: 'community'
-      }
+        as: 'community',
+      },
     },
     {
       $lookup: {
         from: 'communitygroups',
         localField: 'communityGroupId',
         foreignField: '_id',
-        as: 'communityGroup'
-      }
+        as: 'communityGroup',
+      },
     },
     {
       $project: {
         _id: 0,
         communityId: 1,
         communityName: { $arrayElemAt: ['$community.name', 0] },
-        communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] }
-      }
-    }
+        communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] },
+      },
+    },
   ]);
 
-  const { communityName, communityGroupTitle, communityId } = communityDetail[0]
+  const { communityName, communityGroupTitle, communityId } = communityDetail[0];
 
-  const getUserProfile = await UserProfile.findOne({ users_id: userID }).select('email')
+  const getUserProfile = await UserProfile.findOne({ users_id: userID }).select('email');
 
-  let isCommentVerified: boolean = false
+  let isCommentVerified: boolean = false;
 
   if (getUserProfile) {
-    const email = getUserProfile.email
-    isCommentVerified = email.some(community => community.communityId.toString() === communityId.toString())
+    const email = getUserProfile.email;
+    isCommentVerified = email.some((community) => community.communityId.toString() === communityId.toString());
   }
-
 
   const comment = await communityPostCommentModel.create({
     ...body,
@@ -67,14 +65,25 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     const message = communityGroupTitle
       ? `commented on your community post in ${communityName} at ${communityGroupTitle}`
       : `commented on your community post in ${communityName}`;
-    await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, {
+    // await notificationQueue.add(NotificationIdentifier.community_post_comment_notification, {
+    //   sender_id: userID,
+    //   receiverId: adminId,
+    //   communityPostId,
+    //   communityPostCommentId: comment._id,
+    //   type: notificationRoleAccess.COMMUNITY_COMMENT,
+    //   message
+    // });
+
+    const notification = {
       sender_id: userID,
       receiverId: adminId,
       communityPostId,
       communityPostCommentId: comment._id,
       type: notificationRoleAccess.COMMUNITY_COMMENT,
-      message
-    });
+      message,
+    };
+
+    await queueSQSNotification(notification);
   }
 
   await comment.populate([
@@ -150,10 +159,13 @@ export const getCommunityPostComments = async (
   // Fetch the main comments on the post
   const comments =
     (await communityPostCommentModel
-      .find({ postId: postId })
+      .find({ postId: postId, level: 0 })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
-        { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree major affiliation occupation isCommunityAdmin' },
+        {
+          path: 'commenterProfileId',
+          select: 'profile_dp university_name study_year degree major affiliation occupation isCommunityAdmin',
+        },
         {
           path: 'replies',
           options: { sort: { createdAt: -1 } },
@@ -310,60 +322,78 @@ export const getPostCommentById = async (commentId: string) => {
 };
 
 export const commentReply = async (commentId: string, userID: string, body: any, level: number) => {
-  const { postID: communityPostId } = body
+  const { postID: communityPostId } = body;
   const communityDetail = await CommunityPostModel.aggregate([
     {
-      $match: { _id: new mongoose.Types.ObjectId(communityPostId) }
+      $match: { _id: new mongoose.Types.ObjectId(communityPostId) },
     },
     {
       $lookup: {
         from: 'communities',
         localField: 'communityId',
         foreignField: '_id',
-        as: 'community'
-      }
+        as: 'community',
+      },
     },
     {
       $lookup: {
         from: 'communitygroups',
         localField: 'communityGroupId',
         foreignField: '_id',
-        as: 'communityGroup'
-      }
+        as: 'communityGroup',
+      },
     },
     {
       $project: {
         _id: 0,
         communityId: 1,
         communityName: { $arrayElemAt: ['$community.name', 0] },
-        communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] }
-      }
-    }
+        communityGroupTitle: { $arrayElemAt: ['$communityGroup.title', 0] },
+        communityGroupID: { $arrayElemAt: ['$communityGroup._id', 0] },
+      },
+    },
   ]);
 
-  const { communityId } = communityDetail[0]
+  const { communityId, communityGroupTitle, communityName, communityGroupID } = communityDetail[0];
 
+  const getUserProfile = await UserProfile.findOne({ users_id: userID }).select('email');
 
-
-  const getUserProfile = await UserProfile.findOne({ users_id: userID }).select('email')
-
-  let isCommentVerified: boolean = false
+  let isCommentVerified: boolean = false;
 
   if (getUserProfile) {
-    const email = getUserProfile.email
-    isCommentVerified = email.some(community => community.communityId.toString() === communityId.toString())
+    const email = getUserProfile.email;
+    isCommentVerified = email.some((community) => community.communityId.toString() === communityId.toString());
   }
 
-
   const newReply = {
-    communityId: null,
+    communityId: communityGroupID,
     commenterId: userID,
+    postId: convertToObjectId(communityPostId),
     isCommentVerified,
     level: level + 1,
     ...body,
   };
 
   const savedReply = await communityPostCommentModel.create(newReply);
+
+  const adminDetails = await communityPostCommentModel.findOne({ _id: commentId });
+  if (userID.toString() !== adminDetails?.commenterId.toString()) {
+    const message = communityGroupTitle
+      ? `commented on your community post in ${communityName} at ${communityGroupTitle}`
+      : `commented on your community post in ${communityName}`;
+
+    const notification = {
+      sender_id: userID,
+      receiverId: adminDetails?.commenterId.toString(),
+      parentCommentId: commentId,
+      communityPostId,
+      communityPostCommentId: commentId,
+      type: notificationRoleAccess.REPLIED_TO_COMMUNITY_COMMENT,
+      message,
+    };
+
+    await queueSQSNotification(notification);
+  }
 
   const parentComment = await communityPostCommentModel
     .findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true })
@@ -395,12 +425,18 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string) =>
     .findById(new mongoose.Types.ObjectId(commentId))
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+      {
+        path: 'commenterProfileId',
+        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+      },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin' },
+          {
+            path: 'commenterProfileId',
+            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+          },
         ],
       },
     ])

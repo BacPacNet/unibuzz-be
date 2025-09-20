@@ -13,7 +13,6 @@ import {
 import { UserProfile } from '../userProfile';
 import { communityGroupModel } from '../communityGroup';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import communityModel from '../community/community.model';
 import { convertToObjectId } from '../../utils/common';
@@ -21,6 +20,7 @@ import PostRelationship from '../userPost/postRelationship.model';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const createCommunityPost = async (
   post: communityPostsInterface,
@@ -148,7 +148,7 @@ export const likeUnlike = async (id: string, userId: string) => {
       message: 'Reacted to your Community Post.',
     };
     if (userId !== String(post?.user_id)) {
-      await notificationQueue.add(NotificationIdentifier.community_post_like_notification, notifications);
+      await queueSQSNotification(notifications);
     }
 
     await post?.updateOne({ $push: { likeCount: { userId } } });

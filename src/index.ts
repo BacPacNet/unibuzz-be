@@ -6,7 +6,8 @@ import { Server as SocketIoServer, Socket } from 'socket.io';
 import { handleNewMessage } from './sockets/messageHandlers';
 import { OnlineUsers } from './sockets/onlineUsers';
 import { handleConnection } from './sockets/connectionHandler3';
-import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
+// import { notificationWorker } from './bullmq/Notification/workers/notificationWorker';
+import { startSQSWorker, stopSQSWorker } from './amazon-sqs/worker';
 
 let server: any;
 let io: any;
@@ -26,6 +27,11 @@ mongoose.connect(config.mongoose.url).then(() => {
       handleConnection(socket, io, onlineUsers);
       handleNewMessage(socket, io);
     });
+
+    // Start SQS Worker
+    startSQSWorker().catch((err) => {
+      logger.error('Failed to start SQS Worker:', err);
+    });
   });
 });
 
@@ -36,10 +42,13 @@ const exitHandler = async () => {
       //   process.exit(1);
     });
 
-    if (notificationWorker) {
-      await notificationWorker.close();
-      logger.info('Notification Worker closed');
-    }
+    // Stop SQS Worker
+    stopSQSWorker();
+
+    // if (notificationWorker) {
+    //   await notificationWorker.close();
+    //   logger.info('Notification Worker closed');
+    // }
     process.exit(1);
   } else {
     process.exit(1);
@@ -58,6 +67,7 @@ process.on('unhandledRejection', unexpectedErrorHandler);
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received');
+  stopSQSWorker();
   if (server) {
     server.close();
   }

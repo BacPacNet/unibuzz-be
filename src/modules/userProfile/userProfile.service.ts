@@ -3,13 +3,12 @@ import { ApiError } from '../errors';
 import { EditProfileRequest } from './userProfile.interface';
 import UserProfile from './userProfile.model';
 import mongoose from 'mongoose';
-import { notificationRoleAccess } from '../Notification/notification.interface';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
+// import { notificationRoleAccess } from '../Notification/notification.interface';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { communityModel } from '../community';
-import { userFollowService } from '../userFollow';
+// import { userFollowService } from '../userFollow';
 import User from '../user/user.model';
-// import { parse } from 'date-fns';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
 export const createUserProfile = async (userId: string, body: any) => {
   const {
@@ -69,10 +68,12 @@ export const getUserProfile = async (id: string) => {
   });
   return userProfile;
 };
+
 export const getUserProfileVerifiedUniversityEmails = async (id: string) => {
   const userProfile = await UserProfile.findOne({ users_id: id });
   return userProfile?.email;
 };
+
 export const getUserProfileById = async (id: string) => {
   const userProfile = await UserProfile.findOne({ users_id: id });
 
@@ -153,35 +154,76 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
 export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow: mongoose.Types.ObjectId) => {
   const userProfile = await UserProfile.findOne({ users_id: userId });
   const userToFollowProfile = await UserProfile.findOne({ users_id: userToFollow });
-  let updatedUseProfile;
-  const notifications = {
-    sender_id: userId,
-    receiverId: userToFollow,
-    type: notificationRoleAccess.FOLLOW,
-    message: 'Started following you',
-  };
-  await userFollowService.follow_unfollow_User(userId.toString(), userToFollow.toString());
 
-  if (!userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString())) {
+  // Determine current state BEFORE making any updates
+  const isAlreadyFollowing = userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString());
+
+  let updatedUseProfile;
+
+  if (!isAlreadyFollowing) {
+    // FOLLOW
     await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
-    await notificationQueue.add(NotificationIdentifier.follow_user, notifications);
     updatedUseProfile = await UserProfile.findOneAndUpdate(
       { users_id: userId },
       { $push: { following: { userId: userToFollow } } },
       { new: true }
     );
-    return updatedUseProfile;
+
+    const followNotification = {
+      sender_id: userId,
+      receiverId: userToFollow,
+      type: NotificationIdentifier.follow_user,
+      message: 'Started following you',
+    };
+
+    try {
+      console.log('🚀 Attempting to enqueue follow notification...');
+      const result = await queueSQSNotification(followNotification);
+      console.info('✅ Notification enqueued successfully', {
+        notification: followNotification,
+        sqsResult: result,
+      });
+    } catch (err) {
+      console.error('❌ Failed to enqueue notification', {
+        notification: followNotification,
+        error: err,
+      });
+    }
+    // await queueSQSNotification(followNotification);
   } else {
+    // UNFOLLOW
     await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
     updatedUseProfile = await UserProfile.findOneAndUpdate(
       { users_id: userId },
       { $pull: { following: { userId: userToFollow } } },
       { new: true }
     );
-    await notificationQueue.add(NotificationIdentifier.un_follow_user, notifications);
-    return updatedUseProfile;
+
+    const unfollowNotification = {
+      sender_id: userId,
+      receiverId: userToFollow,
+      type: NotificationIdentifier.un_follow_user,
+      message: 'Stopped following you',
+    };
+    // await queueSQSNotification(unfollowNotification);
+    try {
+      console.log('🚀 Attempting to enqueue unfollow notification...');
+      const result = await queueSQSNotification(unfollowNotification);
+      console.info('✅ Notification enqueued successfully', {
+        notification: unfollowNotification,
+        sqsResult: result,
+      });
+    } catch (err) {
+      console.error('❌ Failed to enqueue notification', {
+        notification: unfollowNotification,
+        error: err,
+      });
+    }
   }
+
+  return updatedUseProfile;
 };
+
 export const getFollowingUsers = async (userId: string) => {
   const user = await UserProfile.findById(userId).populate('following.userId', 'email profile_dp').exec();
 

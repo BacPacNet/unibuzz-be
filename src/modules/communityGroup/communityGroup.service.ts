@@ -14,8 +14,7 @@ import { communityService } from '../community';
 import { io } from '../../index';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
-import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { convertToObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
 
@@ -62,7 +61,7 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
   try {
     if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
-      throw new Error('Invalid communityGroupId or userId');
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityGroupId or userId');
     }
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
       { _id: communityGroupId, 'users._id': convertToObjectId(userId) },
@@ -76,33 +75,60 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
     );
 
     if (!updatedGroup) {
-      throw new Error('Community group or user not found');
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group or user not found in group');
     }
 
     const communityId = updatedGroup.communityId;
 
     const userProfile = await getUserProfileById(userId);
 
-    await UserProfile.updateOne(
-      {
-        _id: userProfile?._id,
-        'communities.communityId': communityId,
-        'communities.communityGroups.id': communityGroupId,
-      },
-      {
-        $set: {
-          'communities.$[community].communityGroups.$[group].status': status.accepted,
-        },
-      },
-      {
-        arrayFilters: [{ 'community.communityId': communityId }, { 'group.id': communityGroupId }],
-      }
+    if (!userProfile) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+    }
+
+    const hasCommunityGroup = userProfile.communities.some(
+      (c) =>
+        c.communityId.toString() === communityId.toString() &&
+        c.communityGroups?.some((g) => g.id.toString() === communityGroupId.toString())
     );
+
+    if (hasCommunityGroup) {
+      await UserProfile.updateOne(
+        {
+          _id: userProfile._id,
+          'communities.communityId': communityId,
+          'communities.communityGroups.id': communityGroupId,
+        },
+        {
+          $set: {
+            'communities.$[community].communityGroups.$[group].status': status.accepted,
+          },
+        },
+        {
+          arrayFilters: [{ 'community.communityId': communityId }, { 'group.id': communityGroupId }],
+        }
+      );
+    } else {
+      await UserProfile.updateOne(
+        {
+          _id: userProfile._id,
+          'communities.communityId': communityId,
+        },
+        {
+          $push: {
+            'communities.$.communityGroups': {
+              id: communityGroupId,
+              status: status.accepted,
+            },
+          },
+        }
+      );
+    }
 
     return updatedGroup;
   } catch (error: any) {
     console.error(error);
-    throw new Error(error.message);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Error approving request');
   }
 };
 
@@ -277,8 +303,8 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
       type: notificationRoleAccess.DELETED_COMMUNITY_GROUP,
       message: `${groupToDelete.title} group has been deleted by admin`,
     };
-
-    await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
+    await queueSQSNotification(jobData);
+    // await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
 
     await session.commitTransaction();
     session.endSession();
@@ -425,6 +451,7 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
 };
 
 export const joinCommunityGroup = async (userID: string, groupId: string, isAdmin: boolean = false) => {
+  //   asd
   try {
     const [user, userProfile] = await Promise.all([
       getUserById(new mongoose.Types.ObjectId(userID)),
