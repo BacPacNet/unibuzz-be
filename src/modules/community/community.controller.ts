@@ -80,8 +80,6 @@ export const updateCommunity = async (req: any, res: Response, next: NextFunctio
 };
 
 export const CreateCommunity = async (req: any, res: Response) => {
-  const userID = req.userId;
-
   const { university_id }: any = req.body;
 
   try {
@@ -93,7 +91,6 @@ export const CreateCommunity = async (req: any, res: Response) => {
 
     const community: any = await communityService.createCommunity(
       college.name,
-      userID,
       university_id,
       college.total_students || 0,
       college.total_faculty_staff || 0,

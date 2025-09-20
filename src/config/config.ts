@@ -64,6 +64,7 @@ const envVarsSchema = Joi.object()
         otherwise: Joi.optional(),
       })
       .description('AWS SQS Queue URL'),
+    DEFAULT_COMMUNITY_ADMIN_ID: Joi.string().required().description('Default Community Admin ID'),
   })
   .unknown();
 
@@ -123,6 +124,7 @@ const config = {
     config: envVars.FIREBASE_CONFIG,
   },
   sqsQueueUrl: envVars.SQS_QUEUE_URL,
+  DEFAULT_COMMUNITY_ADMIN_ID: envVars.DEFAULT_COMMUNITY_ADMIN_ID,
 };
 
 export default config;

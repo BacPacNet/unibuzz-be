@@ -25,6 +25,14 @@ const notificationSchema = new Schema<notificationInterface>(
       type: Schema.Types.ObjectId,
       ref: 'userPost',
     },
+    parentCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'userPostComments',
+    },
+    parentCommunityCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'communityPostComments',
+    },
 
     type: { type: String, enum: notificationRole, required: true },
 
@@ -62,11 +70,11 @@ const notificationSchema = new Schema<notificationInterface>(
       newFiveUsers: [
         {
           _id: { type: Schema.Types.ObjectId, ref: 'User' },
-          communityPostCommentId: {
+          communityPostParentCommentId: {
             type: Schema.Types.ObjectId,
             ref: 'communityPostComments',
           },
-          postCommentId: {
+          parentCommentId: {
             type: Schema.Types.ObjectId,
             ref: 'userPostComments',
           },
