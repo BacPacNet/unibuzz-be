@@ -23,6 +23,10 @@ export async function uploadToS3(file: Express.Multer.File, existingKey?: string
     Key: key,
     Body: file.buffer,
     ContentType: file.mimetype,
+    CL: 'public-read', // Make sure images are publicly readable
+    Metadata: {
+      'Access-Control-Allow-Origin': '*',
+    },
   };
 
   const data = await s3.upload(params).promise();
