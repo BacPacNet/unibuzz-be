@@ -15,7 +15,6 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
   const skip = (page - 1) * limit;
 
   const userObjectId = new mongoose.Types.ObjectId(userId);
-  console.log(myUserId, 'myUserId');
   const pipeline: any[] = [
     {
       $match: {
