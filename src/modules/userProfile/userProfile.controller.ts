@@ -168,7 +168,9 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     let community: any = await communityModel.findOne({ name: universityName });
     if (!community) {
       const fetchUniversity = await universityModel.findOne({ name: universityName });
+
       const { _id: university_id, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
+
       community = await communityModel.create({
         name: universityName,
         communityLogoUrl: { imageUrl: logo },
@@ -183,9 +185,13 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     }
 
     const { _id: communityId } = community;
-    if (community.users.find((user: any) => user._id.toString() === userID.toString())) {
-      return res.status(400).json({ message: 'User is already a member of this community' });
+
+    const user = community.users.find((user: any) => user._id.toString() === userID.toString());
+
+    if (user && user.isVerified) {
+      return res.status(400).json({ message: 'User is already verified to this community' });
     }
+
     await userProfileService.addUniversityEmail(
       userID,
       universityEmail,
