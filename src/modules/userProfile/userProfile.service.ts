@@ -604,3 +604,27 @@ export const addUniversityEmail = async (
 
   return updatedUserProfile;
 };
+
+export const toggleBlock = async (userId: mongoose.Types.ObjectId, userToBlock: mongoose.Types.ObjectId) => {
+  const userProfile = await UserProfile.findOne({ users_id: userId });
+
+  if (!userProfile) throw new Error('User not found');
+
+  const isBlocked = userProfile.blockedUsers.some((b: any) => b.userId.toString() === userToBlock.toString());
+
+  if (isBlocked) {
+    await UserProfile.findOneAndUpdate(
+      { users_id: userId },
+      { $pull: { blockedUsers: { userId: userToBlock } } },
+      { new: true }
+    );
+    return { status: 'unblocked', userId: userToBlock };
+  } else {
+    await UserProfile.findOneAndUpdate(
+      { users_id: userId },
+      { $addToSet: { blockedUsers: { userId: userToBlock } } },
+      { new: true }
+    );
+    return { status: 'blocked', userId: userToBlock };
+  }
+};

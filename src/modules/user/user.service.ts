@@ -52,42 +52,43 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
  */
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
-export const getUserProfileById = async (id: mongoose.Types.ObjectId) => {
+export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
   const userProfile = await User.aggregate([
     {
-      $match: {
-        _id: id,
-      },
+      $match: { _id: id },
     },
     {
       $lookup: {
         from: 'userprofiles',
-        localField: '_id', // The field in the User schema to match
-        foreignField: 'users_id', // The field in the UserProfile schema to match
+        localField: '_id',
+        foreignField: 'users_id',
         as: 'profile',
       },
     },
+    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+
     {
-      $unwind: {
-        path: '$profile', // Unwind the profile array to get a single object
-        preserveNullAndEmptyArrays: true, // Include users without a matching profile
+      $match: {
+        'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(myUserId) },
       },
     },
+
     {
       $lookup: {
-        from: 'communities', // Collection name for communities
-        localField: 'profile.communities', // Array of community ObjectIds in profile
-        foreignField: '_id', // Matching field in the communities collection
-        as: 'communityDetails', // Resulting array with community data
+        from: 'communities',
+        localField: 'profile.communities',
+        foreignField: '_id',
+        as: 'communityDetails',
       },
     },
     {
       $project: {
-        password: 0, // Exclude the password field
+        password: 0,
       },
     },
   ]);
-  return userProfile[0];
+
+  return userProfile[0] || null;
 };
 
 export const getUserProfileByUsername = async (userName: string) => {
@@ -150,6 +151,7 @@ export const getAllUser = async (
 
   const matchStage: any = {
     _id: { $ne: new mongoose.Types.ObjectId(userId) },
+    'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(userId) },
   };
 
   if (firstNametoPush) {
@@ -160,7 +162,6 @@ export const getAllUser = async (
     matchStage.lastName = { $regex: new RegExp(lastNametopush, 'i') };
   }
 
-  // Only apply university_name filter if provided
   if (university_name.trim() !== '') {
     matchStage['profile.university_name'] = { $regex: new RegExp(university_name, 'i') };
   }
