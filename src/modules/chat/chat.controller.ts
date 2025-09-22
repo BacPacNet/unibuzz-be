@@ -3,6 +3,7 @@ import { userIdExtend } from 'src/config/userIDType';
 import { chatService } from '.';
 import { Response } from 'express';
 import { userProfileService } from '../userProfile';
+import mongoose from 'mongoose';
 
 export const Create_Get_Chat = async (req: userIdExtend, res: Response) => {
   const YourUserID = req.userId;
@@ -210,6 +211,7 @@ export const toggleBlock = async (req: userIdExtend, res: Response) => {
   try {
     if (userID && userIdToBlock) {
       const blocked = await chatService.toggleBlock(userID, userIdToBlock, chatId);
+      await userProfileService.toggleBlock(new mongoose.Types.ObjectId(userID), new mongoose.Types.ObjectId(userIdToBlock));
       return res.status(201).json(blocked);
     }
   } catch (error: any) {

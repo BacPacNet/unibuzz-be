@@ -7,7 +7,7 @@ const router: Router = express.Router();
 router.route('/').put(userIdAuth, userProfileController.toggleFollow);
 
 router.route('/me').get(userIdAuth, userProfileController.getUserProfile);
-
+router.route('/block').put(userIdAuth, userProfileController.toggleBlock);
 router.route('/followers').get(userIdAuth, userProfileController.getAllUserFollowers);
 router.route('/following').get(userIdAuth, userProfileController.getAllUserFollowing);
 router.route('/mutuals').get(userIdAuth, userProfileController.getAllMututalUsers);

@@ -11,12 +11,12 @@ import { convertToObjectId } from '../../utils/common';
 import PostRelationship from './postRelationship.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 
-export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10) => {
+export const getAllUserPosts = async (userId: string, page: number = 1, limit: number = 10, myUserId?: string) => {
   const skip = (page - 1) * limit;
 
   const userObjectId = new mongoose.Types.ObjectId(userId);
-
-  const userPosts = await UserPostModel.aggregate([
+  console.log(myUserId, 'myUserId');
+  const pipeline: any[] = [
     {
       $match: {
         user_id: userObjectId,
@@ -36,9 +36,8 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
         as: 'user',
       },
     },
-    {
-      $unwind: '$user',
-    },
+    { $unwind: '$user' },
+
     {
       $lookup: {
         from: 'userprofiles',
@@ -47,54 +46,38 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
         as: 'userProfile',
       },
     },
-    {
-      $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-    },
-    {
-      $lookup: {
-        from: 'userpostcomments',
-        localField: '_id',
-        foreignField: 'userPostId',
-        as: 'comments',
+    { $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true } },
+  ];
+
+  if (myUserId) {
+    pipeline.push({
+      $match: {
+        'userProfile.blockedUsers.userId': {
+          $ne: new mongoose.Types.ObjectId(myUserId),
+        },
       },
-    },
+    });
+  }
+
+  pipeline.push(
     {
       $lookup: {
         from: 'userpostcomments',
-        let: { commentIds: '$comments._id' },
+        let: { postId: '$_id' },
         pipeline: [
           {
             $match: {
-              $expr: { $in: ['$_id', '$$commentIds'] },
+              $expr: { $eq: ['$userPostId', '$$postId'] },
             },
           },
-          {
-            $graphLookup: {
-              from: 'userpostcomments',
-              startWith: '$replies',
-              connectFromField: 'replies',
-              connectToField: '_id',
-              as: 'nestedReplies',
-            },
-          },
+          { $project: { _id: 1 } },
         ],
-        as: 'commentsWithReplies',
+        as: 'allComments',
       },
     },
     {
       $addFields: {
-        commentCount: {
-          $add: [
-            { $size: '$comments' },
-            {
-              $reduce: {
-                input: '$commentsWithReplies',
-                initialValue: 0,
-                in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-              },
-            },
-          ],
-        },
+        commentCount: { $size: '$allComments' },
       },
     },
     {
@@ -123,8 +106,10 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
           adminCommunityId: 1,
         },
       },
-    },
-  ]).exec();
+    }
+  );
+
+  const userPosts = await UserPostModel.aggregate(pipeline).exec();
 
   const totalPosts = await UserPostModel.countDocuments({ user_id: userId });
 
@@ -1016,54 +1001,35 @@ export const getUserPost = async (postId: string, myUserId: string = '') => {
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-
+      ...(myUserId
+        ? [
+            {
+              $match: {
+                $expr: {
+                  $not: { $in: [userId, '$profile.blockedUsers.userId'] },
+                },
+              },
+            },
+          ]
+        : []),
       {
         $lookup: {
           from: 'userpostcomments',
-          localField: '_id',
-          foreignField: 'userPostId',
-          as: 'comments',
-        },
-      },
-
-      {
-        $lookup: {
-          from: 'userpostcomments',
-          let: { commentIds: '$comments._id' },
+          let: { postId: '$_id' },
           pipeline: [
             {
               $match: {
-                $expr: { $in: ['$_id', '$$commentIds'] },
+                $expr: { $eq: ['$userPostId', '$$postId'] },
               },
             },
-            {
-              $graphLookup: {
-                from: 'userpostcomments',
-                startWith: '$replies',
-                connectFromField: 'replies',
-                connectToField: '_id',
-                as: 'nestedReplies',
-              },
-            },
+            { $project: { _id: 1 } },
           ],
-          as: 'commentsWithReplies',
+          as: 'allComments',
         },
       },
-
       {
         $addFields: {
-          commentCount: {
-            $add: [
-              { $size: '$comments' },
-              {
-                $reduce: {
-                  input: '$commentsWithReplies',
-                  initialValue: 0,
-                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                },
-              },
-            ],
-          },
+          commentCount: { $size: '$allComments' },
         },
       },
 
@@ -1510,32 +1476,26 @@ export const getFullTimelinePosts = async (userId: string, page: number = 1, lim
  * @param page - Page number (default 1)
  * @param limit - Page size (default 10)
  */
+
 export const getTimelinePostsFromRelationship = async (userId: string, page: number = 1, limit: number = 10) => {
   const userProfile: any = await UserProfile.findOne({ users_id: userId }).select('following communities').lean();
   if (!userProfile) throw new Error('User profile not found');
 
-  // 2. Extract IDs
-  const followingUserIds = userProfile.following
-    .filter((f: { userId: any; isBlock: boolean }) => !f.isBlock)
-    .map((f: { userId: any }) => {
-      if (typeof f.userId === 'string') return f.userId;
-      if (f.userId && typeof f.userId === 'object' && typeof f.userId.toString === 'function') return f.userId.toString();
-      return String(f.userId);
-    });
-  followingUserIds.push(userId); // include self
+  const followingUserIds = userProfile.following.map((f: { userId: any }) =>
+    typeof f.userId === 'string' ? f.userId : f.userId?.toString?.() || String(f.userId)
+  );
+  followingUserIds.push(userId);
 
   const joinedCommunityIds = userProfile.communities.map((c: any) =>
     typeof c.communityId === 'string' ? c.communityId : c.communityId.toString()
   );
 
-  // Get accepted group IDs (status === 'accepted')
   const joinedGroupIds = userProfile.communities.flatMap((c: any) =>
     (c.communityGroups || [])
       .filter((g: any) => g.status === 'accepted')
       .map((g: any) => (typeof g.id === 'string' ? new mongoose.Types.ObjectId(g.id) : g.id))
   );
 
-  // 1. Build $or query for all relevant relationships
   const orQuery: any[] = [];
   if (followingUserIds.length) {
     orQuery.push({ type: 'user', userId: { $in: followingUserIds } });
@@ -1547,19 +1507,24 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
     orQuery.push({ type: 'group', communityGroupId: { $in: joinedGroupIds } });
   }
   if (!orQuery.length) {
-    return { allPosts: [], currentPage: page, totalPages: 0, totalPosts: 0, hasNextPage: false, hasPreviousPage: false };
+    return {
+      allPosts: [],
+      currentPage: page,
+      totalPages: 0,
+      totalPosts: 0,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    };
   }
 
-  // 2. Find all relevant relationships
   const relationships = await PostRelationship.find({ $or: orQuery }).lean();
 
-  // 3. Collect all userPostIds and communityPostIds
   const userPostIds = relationships.filter((r) => r.type === 'user' && r.userPostId).map((r) => r.userPostId);
+
   const communityPostIds = relationships
     .filter((r) => (r.type === 'community' || r.type === 'group') && r.communityPostId)
     .map((r) => r.communityPostId);
 
-  // 4. Fetch posts using aggregation pipelines for population/projection
   const [userPosts, communityPosts] = await Promise.all([
     userPostIds.length
       ? UserPostModel.aggregate([
@@ -1583,53 +1548,37 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           {
-            $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-          },
-          {
-            $lookup: {
-              from: 'userpostcomments',
-              localField: '_id',
-              foreignField: 'userPostId',
-              as: 'comments',
+            $unwind: {
+              path: '$userProfile',
+              preserveNullAndEmptyArrays: true,
             },
           },
           {
+            $match: {
+              'userProfile.blockedUsers.userId': {
+                $ne: new mongoose.Types.ObjectId(userId),
+              },
+            },
+          },
+
+          {
             $lookup: {
               from: 'userpostcomments',
-              let: { commentIds: '$comments._id' },
+              let: { postId: '$_id' },
               pipeline: [
                 {
                   $match: {
-                    $expr: { $in: ['$_id', '$$commentIds'] },
+                    $expr: { $eq: ['$userPostId', '$$postId'] },
                   },
                 },
-                {
-                  $graphLookup: {
-                    from: 'userpostcomments',
-                    startWith: '$replies',
-                    connectFromField: 'replies',
-                    connectToField: '_id',
-                    as: 'nestedReplies',
-                  },
-                },
+                { $project: { _id: 1 } },
               ],
-              as: 'commentsWithReplies',
+              as: 'allComments',
             },
           },
           {
             $addFields: {
-              commentCount: {
-                $add: [
-                  { $size: '$comments' },
-                  {
-                    $reduce: {
-                      input: '$commentsWithReplies',
-                      initialValue: 0,
-                      in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                    },
-                  },
-                ],
-              },
+              commentCount: { $size: '$allComments' },
             },
           },
           {
@@ -1687,8 +1636,18 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           {
-            $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
+            $unwind: {
+              path: '$userProfile',
+              preserveNullAndEmptyArrays: true,
+            },
           },
+          //   {
+          //     $match: {
+          //       'userProfile.blockedUsers.userId': {
+          //         $ne: new mongoose.Types.ObjectId(userId),
+          //       },
+          //     },
+          //   },
           {
             $lookup: {
               from: 'communities',
@@ -1698,51 +1657,25 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           { $unwind: '$community' },
+
           {
             $lookup: {
               from: 'communitypostcomments',
-              localField: '_id',
-              foreignField: 'postId',
-              as: 'comments',
-            },
-          },
-          {
-            $lookup: {
-              from: 'communitypostcomments',
-              let: { commentIds: '$comments._id' },
+              let: { postId: '$_id' },
               pipeline: [
                 {
                   $match: {
-                    $expr: { $in: ['$_id', '$$commentIds'] },
+                    $expr: { $eq: ['$postId', '$$postId'] },
                   },
                 },
-                {
-                  $graphLookup: {
-                    from: 'communitypostcomments',
-                    startWith: '$replies',
-                    connectFromField: 'replies',
-                    connectToField: '_id',
-                    as: 'nestedReplies',
-                  },
-                },
+                { $project: { _id: 1 } },
               ],
-              as: 'commentsWithReplies',
+              as: 'allComments',
             },
           },
           {
             $addFields: {
-              commentCount: {
-                $add: [
-                  { $size: '$comments' },
-                  {
-                    $reduce: {
-                      input: '$commentsWithReplies',
-                      initialValue: 0,
-                      in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                    },
-                  },
-                ],
-              },
+              commentCount: { $size: '$allComments' },
             },
           },
           {
@@ -1790,12 +1723,12 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
       : [],
   ]);
 
-  // 5. Merge, sort, paginate
   const allPosts = [...userPosts, ...communityPosts].sort((a, b) => {
     const dateA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
     const dateB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
     return dateB - dateA;
   });
+
   const totalPosts = allPosts.length;
   const totalPages = Math.ceil(totalPosts / limit);
   const paginatedPosts = allPosts.slice((page - 1) * limit, page * limit);

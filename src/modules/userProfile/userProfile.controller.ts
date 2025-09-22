@@ -200,3 +200,25 @@ export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const toggleBlock = async (req: userIdExtend, res: Response) => {
+  const { userToBlock } = req.query as { userToBlock?: string };
+  const userId = req.userId;
+  try {
+    if (userToBlock === userId) {
+      return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: 'You cannot block yourself' });
+    }
+
+    if (userId && userToBlock) {
+      const result = await userProfileService.toggleBlock(
+        new mongoose.Types.ObjectId(userId),
+        new mongoose.Types.ObjectId(userToBlock)
+      );
+      return res.status(httpStatus.OK).json(result);
+    }
+
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Missing userId or userToBlock' });
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
