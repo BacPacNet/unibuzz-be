@@ -63,6 +63,10 @@ interface UserProfileDocument {
       statusChangeHistory: any;
     };
   }[];
+  blockedUsers: {
+    userId: Schema.Types.ObjectId;
+    blockedAt: Date;
+  }[];
 }
 
 interface EditProfileRequest {

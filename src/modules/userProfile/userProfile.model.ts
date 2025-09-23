@@ -84,6 +84,20 @@ const userProfileSchema = new Schema<UserProfileDocument>({
       ],
     },
   ],
+
+  blockedUsers: [
+    {
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      blockedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
 });
 
 const UserProfile = model<UserProfileDocument>('UserProfile', userProfileSchema);

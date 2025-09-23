@@ -238,54 +238,27 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
       {
         $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
       },
-
       {
         $lookup: {
           from: 'communitypostcomments',
-          localField: '_id',
-          foreignField: 'postId',
-          as: 'comments',
-        },
-      },
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          let: { commentIds: '$comments._id' },
+          let: { postId: '$_id' },
           pipeline: [
             {
               $match: {
-                $expr: { $in: ['$_id', '$$commentIds'] },
+                $expr: { $eq: ['$postId', '$$postId'] },
               },
             },
-            {
-              $graphLookup: {
-                from: 'communitypostcomments',
-                startWith: '$replies',
-                connectFromField: 'replies',
-                connectToField: '_id',
-                as: 'nestedReplies',
-              },
-            },
+            { $project: { _id: 1 } },
           ],
-          as: 'commentsWithReplies',
+          as: 'allComments',
         },
       },
       {
         $addFields: {
-          commentCount: {
-            $add: [
-              { $size: '$comments' },
-              {
-                $reduce: {
-                  input: '$commentsWithReplies',
-                  initialValue: 0,
-                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                },
-              },
-            ],
-          },
+          commentCount: { $size: '$allComments' },
         },
       },
+
       {
         $project: {
           _id: 1,
@@ -373,17 +346,9 @@ export const getCommunityGroupPostsByCommunityId = async (
             : {}),
         },
       },
-      {
-        $sort: {
-          createdAt: -1, // latest first
-        },
-      },
-      {
-        $skip: (page - 1) * limit,
-      },
-      {
-        $limit: limit,
-      },
+      { $sort: { createdAt: -1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
       {
         $lookup: {
           from: 'users',
@@ -392,9 +357,7 @@ export const getCommunityGroupPostsByCommunityId = async (
           as: 'user',
         },
       },
-      {
-        $unwind: '$user',
-      },
+      { $unwind: '$user' },
       {
         $lookup: {
           from: 'userprofiles',
@@ -403,54 +366,26 @@ export const getCommunityGroupPostsByCommunityId = async (
           as: 'userProfile',
         },
       },
-      {
-        $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-      },
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          localField: '_id',
-          foreignField: 'postId',
-          as: 'comments',
-        },
-      },
+      { $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true } },
+
       {
         $lookup: {
           from: 'communitypostcomments',
-          let: { commentIds: '$comments._id' },
+          let: { postId: '$_id' },
           pipeline: [
             {
               $match: {
-                $expr: { $in: ['$_id', '$$commentIds'] },
+                $expr: { $eq: ['$postId', '$$postId'] },
               },
             },
-            {
-              $graphLookup: {
-                from: 'communitypostcomments',
-                startWith: '$replies',
-                connectFromField: 'replies',
-                connectToField: '_id',
-                as: 'nestedReplies',
-              },
-            },
+            { $project: { _id: 1 } },
           ],
-          as: 'commentsWithReplies',
+          as: 'allComments',
         },
       },
       {
         $addFields: {
-          commentCount: {
-            $add: [
-              { $size: '$comments' },
-              {
-                $reduce: {
-                  input: '$commentsWithReplies',
-                  initialValue: 0,
-                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                },
-              },
-            ],
-          },
+          commentCount: { $size: '$allComments' },
         },
       },
       {
@@ -752,48 +687,21 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
       {
         $lookup: {
           from: 'communitypostcomments',
-          localField: '_id',
-          foreignField: 'postId',
-          as: 'comments',
-        },
-      },
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          let: { commentIds: '$comments._id' },
+          let: { postId: '$_id' },
           pipeline: [
             {
               $match: {
-                $expr: { $in: ['$_id', '$$commentIds'] },
+                $expr: { $eq: ['$postId', '$$postId'] },
               },
             },
-            {
-              $graphLookup: {
-                from: 'communitypostcomments',
-                startWith: '$replies',
-                connectFromField: 'replies',
-                connectToField: '_id',
-                as: 'nestedReplies',
-              },
-            },
+            { $project: { _id: 1 } },
           ],
-          as: 'commentsWithReplies',
+          as: 'allComments',
         },
       },
       {
         $addFields: {
-          commentCount: {
-            $add: [
-              { $size: '$comments' },
-              {
-                $reduce: {
-                  input: '$commentsWithReplies',
-                  initialValue: 0,
-                  in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                },
-              },
-            ],
-          },
+          commentCount: { $size: '$allComments' },
         },
       },
 
@@ -813,22 +721,8 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
           isFollowing: {
             $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
           },
-
-          comments: { $ifNull: ['$comments', []] },
         },
       },
-
-      { $unwind: { path: '$comments', preserveNullAndEmptyArrays: true } },
-
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'comments.commenterId',
-          foreignField: '_id',
-          as: 'commenter',
-        },
-      },
-      { $unwind: { path: '$commenter', preserveNullAndEmptyArrays: true } },
 
       {
         $match: {
@@ -862,15 +756,15 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
             lastName: '$user.lastName',
           },
           profile: '$profile',
-          commentCount: 1, // Use the pre-calculated `commentCount`
+          commentCount: 1,
         },
       },
     ];
 
     return await communityPostsModel.aggregate(pipeline);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching user posts:', error);
-    throw new Error(error as string);
+    throw new Error(error.message);
   }
 };
 

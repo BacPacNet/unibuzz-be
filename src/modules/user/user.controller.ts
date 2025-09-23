@@ -14,6 +14,7 @@ import { loginEmailVerificationService } from '../loginEmailVerification';
 import { communityService } from '../community';
 import { communityGroupService } from '../communityGroup';
 import { redis } from '../../config/redis';
+import { userProfileService } from '../userProfile';
 //import { redis } from '../../config/redis';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
@@ -28,18 +29,25 @@ export const getUsers = catchAsync(async (req: Request, res: Response) => {
   res.send(result);
 });
 
-export const getUser = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.params['userId'] as string;
-
+    const myUserId = req.userId;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
     }
 
-    const user = await userService.getUserProfileById(new mongoose.Types.ObjectId(userId));
+    const myProfile = await userProfileService.getUserProfileById(myUserId as string);
+    let isBlocked = false;
+    if (myProfile?.blockedUsers.some((user: any) => user.userId.toString() === userId.toString())) {
+      isBlocked = true;
+    }
+
+    const user = await userService.getUserProfileById(new mongoose.Types.ObjectId(userId), myUserId as string);
     if (!user) {
       return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
     }
+    user.isBlocked = isBlocked;
     res.status(httpStatus.OK).json(user);
   } catch (error) {
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');
