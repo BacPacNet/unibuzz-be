@@ -961,10 +961,13 @@ export const getUserPost = async (postId: string, myUserId: string = '') => {
             isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
 
             isAuthorizedUser: {
-              $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
+              $or: [
+                { $eq: ['$user_id', userId] },
+                ...(followingObjectIds.length > 0 ? [{ $in: ['$user_id', followingObjectIds] }] : []),
+              ],
             },
             isAuthorizedUserAndMutual: {
-              $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', mutualId] }],
+              $or: [{ $eq: ['$user_id', userId] }, ...(mutualId.length > 0 ? [{ $in: ['$user_id', mutualId] }] : [])],
             },
           },
         },
@@ -1000,12 +1003,15 @@ export const getUserPost = async (postId: string, myUserId: string = '') => {
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+
       ...(myUserId
         ? [
             {
               $match: {
                 $expr: {
-                  $not: { $in: [userId, '$profile.blockedUsers.userId'] },
+                  $not: {
+                    $in: [userId, { $ifNull: ['$profile.blockedUsers.userId', []] }],
+                  },
                 },
               },
             },
