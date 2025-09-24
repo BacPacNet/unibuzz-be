@@ -164,7 +164,7 @@ export const UserPostCommentReply = async (req: extendedRequest, res: Response) 
         Number(level)
       );
 
-      const receiverId = commentReply.userPostId.user_id;
+      const receiverId = commentReply.commenterId._id;
 
       // Avoid notifying self
       if (req?.userId?.toString() !== receiverId?.toString()) {
