@@ -20,6 +20,8 @@ export const notificationRoleAccess = {
   community_post_live_request_notification: 'community_post_live_request_notification',
   community_post_rejected_notification: 'community_post_rejected_notification',
   community_post_accepted_notification: 'community_post_accepted_notification',
+
+  COMMUNITY_ADMIN_POST: 'COMMUNITY_ADMIN_POST',
 };
 
 export enum notificationStatus {
@@ -48,9 +50,11 @@ interface CommentedBy {
 }
 
 interface notificationInterface {
+  notificationQueueId: string;
   sender_id: mongoose.Types.ObjectId;
   receiverId: mongoose.Types.ObjectId;
   communityGroupId: mongoose.Types.ObjectId;
+  communityId: mongoose.Types.ObjectId;
   communityPostId: mongoose.Types.ObjectId;
   userPostId: mongoose.Types.ObjectId;
   postCommentId: mongoose.Types.ObjectId;

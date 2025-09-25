@@ -14,6 +14,7 @@ export enum NotificationIdentifier {
   DELETED_COMMUNITY_GROUP = 'DELETED_COMMUNITY_GROUP',
   REPLIED_TO_COMMENT = 'REPLIED_TO_COMMENT',
   REPLIED_TO_COMMUNITY_COMMENT = 'REPLIED_TO_COMMUNITY_COMMENT',
+  COMMUNITY_ADMIN_POST = 'COMMUNITY_ADMIN_POST',
 
   send_notification = 'send-notification',
   like_notification = 'like-notification',
