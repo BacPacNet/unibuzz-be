@@ -567,6 +567,7 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         'communityDetails.name': '$communityDetails.name',
         'directCommunityDetails._id': 1,
         'directCommunityDetails.name': 1,
+        'directCommunityDetails.communityLogoUrl': 1,
         parentCommentReplies: 1,
         communityParentCommentReplies: 1,
         'userPost.likeCount': {
