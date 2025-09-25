@@ -13,6 +13,9 @@ import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
 import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
 import { CommunityGroupType } from '../../config/community.type';
+import { notificationRoleAccess } from '../Notification/notification.interface';
+// import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import { queueSQSNotificationBatch } from '../../amazon-sqs/sqsBatchWrapperFunction';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -33,8 +36,8 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
   let isPostLive = false;
 
   try {
+    const community = await communityService.getCommunity(req.body.communityId);
     if (communityId && !communityGroupId) {
-      const community = await communityService.getCommunity(req.body.communityId);
       if (!community) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
       }
@@ -79,6 +82,28 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       isPostLive,
       isOfficialGroup
     );
+
+    const verifiedNonAdmins =
+      community?.users?.filter((user: any) => user.isVerified && community?.adminId?.toString() !== user._id.toString()) ||
+      [];
+    const verifiedAdminsUserIds = verifiedNonAdmins.map((user: any) => user._id.toString());
+
+    if (communityId && !communityGroupId && post?._id && community?.adminId?.toString() == userId.toString()) {
+      const messages = verifiedAdminsUserIds.map((receiverId) => ({
+        sender_id: userId,
+        receiverId,
+        communityId,
+        communityPostId: post?._id,
+        type: notificationRoleAccess.COMMUNITY_ADMIN_POST,
+        message: 'Community admin post',
+      }));
+
+      const chunkSize = 10;
+      for (let i = 0; i < messages.length; i += chunkSize) {
+        const chunk = messages.slice(i, i + chunkSize);
+        await queueSQSNotificationBatch(chunk);
+      }
+    }
 
     return res.status(httpStatus.CREATED).json(post);
   } catch (error: any) {

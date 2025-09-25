@@ -3,6 +3,11 @@ import { notificationInterface, notificationRole, notificationStatus } from './n
 
 const notificationSchema = new Schema<notificationInterface>(
   {
+    notificationQueueId: {
+      type: String,
+      //   required: true,
+    },
+
     sender_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -16,6 +21,10 @@ const notificationSchema = new Schema<notificationInterface>(
     communityGroupId: {
       type: Schema.Types.ObjectId,
       ref: 'communityGroup',
+    },
+    communityId: {
+      type: Schema.Types.ObjectId,
+      ref: 'community',
     },
     communityPostId: {
       type: Schema.Types.ObjectId,

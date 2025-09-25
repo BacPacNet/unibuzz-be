@@ -272,6 +272,21 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
     },
     {
       $lookup: {
+        from: 'communities',
+        localField: 'communityId',
+        foreignField: '_id',
+        as: 'directCommunityDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$directCommunityDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $lookup: {
         from: 'communitygroups',
         localField: 'communityGroupId',
         foreignField: '_id',
@@ -550,6 +565,8 @@ export const getUserNotificationMain = async (userID: string, page = 1, limit = 
         'communityGroupId.communityGroupLogoUrl': '$communityGroupDetails.communityGroupLogoUrl.imageUrl',
         'communityGroupId.communityId': '$communityGroupDetails.communityId',
         'communityDetails.name': '$communityDetails.name',
+        'directCommunityDetails._id': 1,
+        'directCommunityDetails.name': 1,
         parentCommentReplies: 1,
         communityParentCommentReplies: 1,
         'userPost.likeCount': {
