@@ -10,6 +10,7 @@ import { getCommunityGroup } from '../../modules/communityGroup/communityGroup.s
 import { ApiError } from '../../modules/errors';
 import httpStatus from 'http-status';
 import { status } from '../../modules/communityGroup/communityGroup.interface';
+import { communityGroupService } from '../../modules/communityGroup';
 
 export const handleGroupUsersInviteNotification = async (job: any) => {
   try {
@@ -28,6 +29,7 @@ export const handleGroupUsersInviteNotification = async (job: any) => {
     logger.info(`Inserting ${notifications.length} notifications into database`);
     await notificationModel.insertMany(notifications);
     logger.info('Notifications successfully inserted into database');
+    const communityGroupDetails = await communityGroupService.getCommunityGroup(communityGroupId);
 
     // 2️⃣ Send real-time notifications in batches (avoid blocking the event loop)
     const chunkSize = 100;
@@ -39,6 +41,8 @@ export const handleGroupUsersInviteNotification = async (job: any) => {
           sender_id: adminId.toString(),
           receiverId: userId.toString(),
           type: type,
+          communityGroupId: communityGroupId,
+          communityId: communityGroupDetails?.communityId._id.toString(),
         });
       });
       await wait(10); // debounce between batches

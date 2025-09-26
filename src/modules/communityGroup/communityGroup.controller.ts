@@ -68,6 +68,8 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       sendPushNotification(community?.adminId.toString(), 'Unibuzz', notifications.message, {
         sender_id: userId.toString(),
         receiverId: community?.adminId.toString(),
+        communityGroupId: createCommunityGroup?._id.toString(),
+        communityId: communityId,
         type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
       });
 
@@ -186,7 +188,10 @@ export const changeCommunityGroupStatus = async (req: extendedRequest, res: Resp
         // await notificationQueue.add(NotificationIdentifier.reject_official_group_request, notifications);
       }
       if (req.body.status == status.accepted) {
-        await communityGroupService.AcceptCommunityGroupApproval(new mongoose.Types.ObjectId(groupId), communityAdminId);
+        const communityGroup = await communityGroupService.AcceptCommunityGroupApproval(
+          new mongoose.Types.ObjectId(groupId),
+          communityAdminId
+        );
         await notificationService.changeNotificationStatus(notificationStatus.accepted, req.body.notificationId);
         // const notifications = {
         //   sender_id: adminId,
@@ -209,6 +214,8 @@ export const changeCommunityGroupStatus = async (req: extendedRequest, res: Resp
         sendPushNotification(userId, 'Unibuzz', text, {
           sender_id: adminId.toString(),
           receiverId: userId.toString(),
+          communityGroupId: communityGroup?._id.toString(),
+          communityId: communityGroup?.communityId.toString(),
           type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
         });
 
