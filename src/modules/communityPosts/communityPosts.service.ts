@@ -118,6 +118,8 @@ export const createCommunityPost = async (
         {
           sender_id: userId.toString(),
           receiverId: communityGroup?.adminUserId?.toString(),
+          communityGroupId: communityGroupId?.toString(),
+          communityId: communityId?.toString(),
           type: notificationRoleAccess.community_post_live_request_notification,
         }
       );
@@ -806,6 +808,8 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
       sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
       receiverId: communityToUpdate.user_id?.toString(),
       type: notificationRoleAccess.community_post_accepted_notification,
+      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
+      communityId: communityToUpdate?.communityId?.toString(),
     });
 
     // await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
@@ -832,6 +836,8 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
       sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
       receiverId: communityToUpdate.user_id?.toString(),
       type: notificationRoleAccess.community_post_rejected_notification,
+      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
+      communityId: communityToUpdate?.communityId?.toString(),
     });
 
     // await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);

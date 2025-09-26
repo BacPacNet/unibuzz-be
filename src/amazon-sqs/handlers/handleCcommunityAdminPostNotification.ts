@@ -35,11 +35,17 @@ export const handleCommunityAdminPostNotification = async (job: any) => {
 
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.COMMUNITY_ADMIN_POST });
 
-    sendPushNotification(receiverId, 'Unibuzz', ` ${res?.communityId?.name} admin posted a new post`, {
-      sender_id: sender_id.toString(),
-      receiverId: receiverId.toString(),
-      type: notificationRoleAccess.COMMUNITY_ADMIN_POST,
-    });
+    sendPushNotification(
+      receiverId,
+      'Unibuzz',
+      ` ${res?.communityId?.name} admin has posted a new update. Be sure to check it out.`,
+      {
+        sender_id: sender_id.toString(),
+        receiverId: receiverId.toString(),
+        type: notificationRoleAccess.COMMUNITY_ADMIN_POST,
+        communityPostId,
+      }
+    );
 
     // logger.info('✅ Follow notification processed successfully', { notificationId: res._id });
     return res;

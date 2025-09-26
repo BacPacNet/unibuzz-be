@@ -33,6 +33,8 @@ export const handleAcceptPrivateJoinRequestNotification = async (job: any) => {
       {
         sender_id: sender_id.toString(),
         receiverId: receiverId.toString(),
+        communityGroupId: communityGroupId,
+        communityId: res?.communityGroupId?.communityId._id.toString(),
         type: notificationRoleAccess.ACCEPTED_PRIVATE_GROUP_REQUEST,
       }
     );
