@@ -614,11 +614,8 @@ export const UserEmailAvailability = async (email: string) => {
 };
 
 export const changeUserName = async (userID: string, userName: string, newUserName: string, password: string) => {
-  //   const user = await User.findById(userID);
-
-  //   const  userNameAvailable = await User.findOne({ userName });
   const [user, userNameAvailable] = await Promise.all([User.findById(userID), User.findOne({ userName: newUserName })]);
-  console.log('userNameAvailable', userNameAvailable);
+
   if (!user) {
     throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
   }

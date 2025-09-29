@@ -109,7 +109,7 @@ export const getAllUniversity = async (
 
 export const searchUniversityByQuery = async (searchTerm: string, page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
-  console.log(searchTerm, page, limit);
+
   let query: any = {};
   if (searchTerm && searchTerm.trim() !== '') {
     query = {
