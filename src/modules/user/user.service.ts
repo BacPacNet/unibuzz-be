@@ -614,13 +614,23 @@ export const UserEmailAvailability = async (email: string) => {
 };
 
 export const changeUserName = async (userID: string, userName: string, newUserName: string, password: string) => {
-  const user = await User.findById(userID);
+  //   const user = await User.findById(userID);
 
+  //   const  userNameAvailable = await User.findOne({ userName });
+  const [user, userNameAvailable] = await Promise.all([User.findById(userID), User.findOne({ userName: newUserName })]);
+  console.log('userNameAvailable', userNameAvailable);
   if (!user) {
     throw new ApiError(httpStatus.CONFLICT, 'user does not exist');
   }
   if (user?.userName !== userName) {
     throw new ApiError(httpStatus.CONFLICT, 'userName does not match');
+  }
+  if (user?.userName == newUserName) {
+    throw new ApiError(httpStatus.CONFLICT, 'New username cannot be the same as the current username.');
+  }
+
+  if (userNameAvailable) {
+    throw new ApiError(httpStatus.CONFLICT, 'userName is already taken');
   }
 
   if (!(await user.isPasswordMatch(password))) {
@@ -642,6 +652,7 @@ export const changeUserPassword = async (userID: string, password: string, newPa
   if (!(await user.isPasswordMatch(password))) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Password is incorrect!');
   }
+  await user.isNewPasswordDifferent(newPassword);
 
   user.password = newPassword;
 
