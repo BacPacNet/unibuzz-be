@@ -11,9 +11,9 @@ export const createUniversityEmailVerificationOtp = async (email: string) => {
   const university = await universityModal.findOne({ domains: domain });
 
   if (!university) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE,'Email domain is not associated with this university.');
+    throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
   }
-  
+
   const data = {
     email,
     otp: Math.floor(100000 + Math.random() * 900000),
@@ -49,7 +49,7 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
   const universityVerificationEmail = await universityVerificationEmailModal.findOne({ email });
 
   if (!universityVerificationEmail) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Verification data not found');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Verification code not found, please request a new one.');
   }
 
   const otpValidTillUTC = new Date(universityVerificationEmail.otpValidTill).toISOString();
@@ -60,11 +60,11 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
   // }
 
   if (new Date(otpValidTillUTC).getTime() < new Date(currentUTC).getTime()) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'OTP has expired!');
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'verification code has expired.');
   }
 
   if (Number(universityVerificationEmail.otp) !== Number(otp)) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid OTP!');
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect verification code.');
   }
 
   await universityVerificationEmail.deleteOne();

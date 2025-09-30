@@ -16,6 +16,7 @@ import { handleAcceptPrivateJoinRequestNotification } from '../handlers/handleAc
 import { handleSendDeleteCommunityGroupNotification } from '../handlers/handleDeleteCommunityGroupNotification';
 import { handleUserPostReplyCommentNotification } from '../handlers/handleUserPostReplyCommentNotification';
 import { handleUserCommunityPostReplyCommentNotification } from '../handlers/handleUserCommunityPostReplyCommentNotification';
+import { handleCommunityAdminPostNotification } from '../handlers/handleCcommunityAdminPostNotification';
 
 const sqs = new SQSClient({ region: config.aws.region });
 
@@ -126,6 +127,8 @@ async function dispatchNotification(data: any) {
         return await handleUserPostReplyCommentNotification(data);
       case NotificationIdentifier.REPLIED_TO_COMMUNITY_COMMENT:
         return await handleUserCommunityPostReplyCommentNotification(data);
+      case NotificationIdentifier.COMMUNITY_ADMIN_POST:
+        return await handleCommunityAdminPostNotification(data);
       default:
         logger.warn('⚠️ Unknown notification type:', data.type);
         return null;
