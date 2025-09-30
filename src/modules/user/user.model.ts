@@ -136,6 +136,16 @@ userSchema.method('isPasswordMatch', async function (password: string): Promise<
   return bcrypt.compare(password, user.password);
 });
 
+userSchema.method('isNewPasswordDifferent', async function (newPassword: string): Promise<void> {
+  const user = this;
+
+  const isSame = await bcrypt.compare(newPassword, user.password);
+
+  if (isSame) {
+    throw new Error('New password cannot be the same as the current password');
+  }
+});
+
 userSchema.pre('save', async function (next) {
   const user = this;
   if (user.isModified('password')) {
