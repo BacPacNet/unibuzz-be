@@ -5,7 +5,7 @@ import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from 'src/config/userIDType';
-import { getCommunityUsersService } from './community.service';
+import { getCommunityUsersService, getCommunityUsersByFilterService } from './community.service';
 import { GetCommunityUsersOptions } from './community.interface';
 
 // get all userCommunity
@@ -162,6 +162,28 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
       limit: Number(limit),
     };
     const users = await getCommunityUsersService(communityId, options);
+    res.status(200).json({ success: true, ...users });
+  } catch (error) {
+    console.error('[getCommunityUsersController] error:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
+export const getCommunityUsersWithfilterController = async (req: userIdExtend, res: Response) => {
+  try {
+    const { communityId } = req.params;
+    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
+
+    if (!communityId) {
+      throw new Error('Invalid communityId');
+    }
+    const options: GetCommunityUsersOptions = {
+      isVerified,
+      searchQuery,
+      page: Number(page),
+      limit: Number(limit),
+    };
+    const users = await getCommunityUsersByFilterService(communityId, options);
     res.status(200).json({ success: true, ...users });
   } catch (error) {
     console.error('[getCommunityUsersController] error:', error);

@@ -73,7 +73,7 @@ export const getUserByUsername = catchAsync(async (req: Request, res: Response, 
 });
 
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { page, limit, name, universityName, studyYear, major, occupation, affiliation } = req.query as any;
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId } = req.query as any;
   try {
     let allUsers = await userService.getAllUser(
       name,
@@ -84,7 +84,8 @@ export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, ne
       studyYear ? studyYear.split(',') : [],
       major ? major.split(',') : [],
       occupation ? occupation.split(',') : [],
-      affiliation ? affiliation.split(',') : []
+      affiliation ? affiliation.split(',') : [],
+      chatId ? chatId : ''
     );
     return res.status(200).json(allUsers);
   } catch (error) {

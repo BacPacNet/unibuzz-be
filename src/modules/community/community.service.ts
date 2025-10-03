@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import communityModel from './community.model';
 import { User } from '../user';
-import { UserProfile, userProfileService } from '../userProfile';
+import { userProfileService, UserProfile } from '../userProfile';
 import mongoose, { PipelineStage } from 'mongoose';
 import { getUserById } from '../user/user.service';
 import { communityService } from '.';
@@ -702,6 +702,102 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     };
   } catch (error: any) {
     console.error('Error in leaveCommunity:', error);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+  }
+};
+
+export const getCommunityUsersByFilterService = async (communityId: string, options: GetCommunityUsersOptions) => {
+  try {
+    const { isVerified, searchQuery, page = 1, limit = 10 } = options;
+
+    const pipeline: any[] = [{ $match: { _id: convertToObjectId(communityId) } }, { $unwind: '$users' }];
+
+    if (isVerified) {
+      pipeline.push({ $match: { 'users.isVerified': true } });
+    }
+
+    pipeline.push({
+      $replaceRoot: { newRoot: { users_id: '$users._id' } },
+    });
+
+    pipeline.push({
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'users_id',
+        foreignField: 'users_id',
+        as: 'profile',
+      },
+    });
+    pipeline.push({ $unwind: '$profile' });
+
+    pipeline.push({
+      $lookup: {
+        from: 'users',
+        localField: 'users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    });
+    pipeline.push({ $unwind: '$user' });
+
+    pipeline.push({
+      $addFields: {
+        firstName: '$user.firstName',
+        lastName: '$user.lastName',
+        createdAt: '$user.createdAt',
+      },
+    });
+
+    if (searchQuery && searchQuery.trim() !== '') {
+      const regex = new RegExp(searchQuery.trim(), 'i');
+      pipeline.push({
+        $match: {
+          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
+        },
+      });
+    }
+
+    const skip = (page - 1) * limit;
+    pipeline.push({
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+
+          {
+            $replaceRoot: {
+              newRoot: {
+                $mergeObjects: [
+                  '$profile',
+                  {
+                    firstName: '$user.firstName',
+                    lastName: '$user.lastName',
+                    createdAt: '$user.createdAt',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        totalCount: [{ $count: 'total' }],
+      },
+    });
+
+    const result = await communityModel.aggregate(pipeline);
+    const data = result[0]?.data ?? [];
+    const total = result[0]?.totalCount[0]?.total ?? 0;
+
+    return {
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  } catch (error: any) {
+    console.error('Error in getCommunityUsersService:', error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
   }
 };
