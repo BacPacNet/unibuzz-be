@@ -447,6 +447,18 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
   }
 
+  if (communityGroup.users && Array.isArray(communityGroup.users)) {
+    communityGroup.users.sort((a: any, b: any) => {
+      const isAAdmin = a._id?.toString() === communityGroup.adminUserId?.toString();
+      const isBAdmin = b._id?.toString() === communityGroup.adminUserId?.toString();
+
+      if (isAAdmin && !isBAdmin) return -1;
+      if (!isAAdmin && isBAdmin) return 1;
+
+      return (a.firstName || '').toLowerCase().localeCompare((b.firstName || '').toLowerCase());
+    });
+  }
+
   return communityGroup;
 };
 
