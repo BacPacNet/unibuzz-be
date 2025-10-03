@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import { universityVerificationEmailService } from '.';
 
 export const createUniversityEmailOtp = async (req: Request, res: Response) => {
-  const { email } = req.body;
+  const { email, universityId } = req.body;
 
   try {
-    await universityVerificationEmailService.createUniversityEmailVerificationOtp(email);
+    await universityVerificationEmailService.createUniversityEmailVerificationOtp(email, universityId);
     return res.status(200).json({ message: 'created', isAvailable: true });
   } catch (error: any) {
     console.error('err', error.message);
