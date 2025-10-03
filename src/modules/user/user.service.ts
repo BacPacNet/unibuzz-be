@@ -7,6 +7,7 @@ import { NewCreatedUser, UpdateUserBody, IUserDoc, NewRegisteredUser, IUser } fr
 import { UserProfile, userProfileService } from '../userProfile';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
 import { communityModel } from '../community';
+import { chatModel } from '../chat';
 
 /**
  * Create a user
@@ -138,7 +139,8 @@ export const getAllUser = async (
   studyYear: string[],
   major: string[],
   occupation: string[],
-  affiliation: string[]
+  affiliation: string[],
+  chatId: string
 ) => {
   const Currpage = page || 1;
   const limitpage = limit || 10;
@@ -190,6 +192,18 @@ export const getAllUser = async (
 
   if (orConditions.length) {
     matchStage.$or = orConditions;
+  }
+
+  if (chatId?.length) {
+    const chat = await chatModel.findById(chatId).select('users.userId');
+    const chatUserIds = chat?.users.map((u) => u.userId.toString()) || [];
+
+    if (chatUserIds.length) {
+      matchStage._id = {
+        ...matchStage._id,
+        $nin: chatUserIds.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
   }
 
   const users = await User.aggregate([

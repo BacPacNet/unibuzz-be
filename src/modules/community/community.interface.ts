@@ -12,7 +12,7 @@ interface User {
   occupation: string;
   affiliation: string;
   role: string;
-  isVerified?: boolean
+  isVerified?: boolean;
 }
 
 interface communityInterface {
@@ -37,4 +37,4 @@ interface GetCommunityUsersOptions {
   limit?: number | undefined;
 }
 
-export { communityInterface,GetCommunityUsersOptions };
+export { communityInterface, GetCommunityUsersOptions };
