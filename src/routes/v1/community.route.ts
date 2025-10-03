@@ -8,6 +8,8 @@ const router: Router = Router();
 
 router.route('/').get(userIdAuth, communityController.getAllUserCommunity);
 
+// query-params:
+// isVerified: boolean,searchQuery: string,page: number,limit: number,
 router.route('/:communityId/users').get(userIdAuth, requireCommunityMember, getCommunityUsersController);
 
 router

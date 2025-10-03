@@ -54,7 +54,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
     inviteUsers: [
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },
-      }
+      },
     ],
     communityGroupCategory: {
       type: Map,
@@ -113,7 +113,7 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       {
         userId: { type: Schema.Types.ObjectId, ref: 'User' },
         isRequestAccepted: { type: Boolean, default: false },
-        status: { type: String, enum: ['pending', 'rejected', 'accepted', 'default'], default: status.pending },
+        status: { type: String, enum: status, default: status.pending },
         firstName: String,
         lastName: String,
         universityName: String,

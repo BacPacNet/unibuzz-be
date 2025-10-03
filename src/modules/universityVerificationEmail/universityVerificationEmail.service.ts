@@ -4,11 +4,11 @@ import universityVerificationEmailModal from './universityVerificationEmail.moda
 import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
 
-export const createUniversityEmailVerificationOtp = async (email: string) => {
+export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
   const domain = email.split('@')[1];
 
   // Step 1: Check if domain exists in any university's domain list
-  const university = await universityModal.findOne({ domains: domain });
+  const university = await universityModal.findOne({ domains: domain, _id: universityId });
 
   if (!university) {
     throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
