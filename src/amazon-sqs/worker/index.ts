@@ -29,7 +29,6 @@ let isProcessingMessages = false; // Guard to prevent concurrent processing
 // Long-polling check
 export async function checkQueueMessages() {
   try {
-    logger.info('🔍 Checking queue for messages...');
     const response = await sqs.send(
       new ReceiveMessageCommand({
         QueueUrl: config.sqsQueueUrl,
@@ -40,15 +39,6 @@ export async function checkQueueMessages() {
       })
     );
 
-    logger.info('📊 Queue check result:', {
-      messageCount: response.Messages?.length || 0,
-      messages:
-        response.Messages?.map((m) => ({
-          messageId: m.MessageId,
-          body: m.Body ? JSON.parse(m.Body) : null,
-        })) || [],
-    });
-
     return response.Messages?.length || 0;
   } catch (err) {
     logger.error('❌ Queue check failed:', err);
@@ -58,11 +48,6 @@ export async function checkQueueMessages() {
 
 async function testSQSConnection() {
   try {
-    logger.info('🔍 Testing SQS connection...', {
-      queueUrl: config.sqsQueueUrl,
-      region: config.aws.region,
-    });
-
     await sqs.send(
       new GetQueueAttributesCommand({
         QueueUrl: config.sqsQueueUrl,
@@ -80,8 +65,6 @@ async function testSQSConnection() {
       })
     );
 
-    logger.info('✅ SQS connection successful');
-
     return true;
   } catch (err) {
     logger.error('❌ SQS connection failed:', {
@@ -94,7 +77,6 @@ async function testSQSConnection() {
 }
 
 async function dispatchNotification(data: any) {
-  logger.info('🔍 Dispatching notification:', data.type);
   try {
     switch (data.type) {
       case 'follow_notification':
@@ -142,18 +124,12 @@ async function dispatchNotification(data: any) {
 // Core polling loop
 async function processMessages() {
   if (isProcessingMessages) {
-    logger.debug('⏳ Message processing already in progress, skipping this poll...');
     return;
   }
 
   isProcessingMessages = true;
 
   try {
-    logger.info('🔍 Polling SQS for messages (scheduled)...', {
-      queueUrl: config.sqsQueueUrl,
-      timestamp: new Date().toISOString(),
-    });
-
     const response = await sqs.send(
       new ReceiveMessageCommand({
         QueueUrl: config.sqsQueueUrl,
@@ -164,33 +140,20 @@ async function processMessages() {
       })
     );
 
-    logger.info('📊 SQS Response received', {
-      messageCount: response.Messages?.length || 0,
-      responseMetadata: response.$metadata,
-      timestamp: new Date().toISOString(),
-    });
-
     if (response.Messages && response.Messages.length > 0) {
       lastMessageProcessed = Date.now();
-      logger.info(`📥 Processing ${response.Messages.length} messages`, {
-        messageIds: response.Messages.map((m) => m.MessageId),
-      });
+      logger.info(`Processing ${response.Messages.length} messages`);
 
       for (const message of response.Messages) {
         const messageId = message.MessageId;
         try {
           const body = JSON.parse(message.Body!);
-          logger.info('📨 Processing message body', { messageId, body });
-
           const result = await dispatchNotification(body);
 
           if (result?._id) {
-            logger.info('✅ Notification saved', {
-              notificationId: result._id.toString(),
-              messageId,
-            });
+            // Message processed successfully
           } else {
-            logger.error('❌ Handler did not return a saved doc', { messageId });
+            logger.error('Handler did not return a saved doc', { messageId });
             continue;
           }
 
@@ -200,15 +163,11 @@ async function processMessages() {
               ReceiptHandle: message.ReceiptHandle!,
             })
           );
-
-          logger.info('🗑 Message deleted from queue', { messageId });
         } catch (err) {
-          logger.error('❌ Failed to process message', { messageId, error: err });
+          logger.error('Failed to process message', { messageId, error: err });
           // Message will reappear after visibility timeout
         }
       }
-    } else {
-      logger.debug('📭 No messages in queue');
     }
   } catch (err) {
     logger.error('❌ Polling error:', err);
@@ -233,11 +192,11 @@ export async function startSQSWorker() {
     return;
   }
 
-  logger.info('🚀 Starting SQS Worker...');
+  logger.info('Starting SQS Worker...');
 
   const connectionTest = await testSQSConnection();
   if (!connectionTest) {
-    logger.error('❌ Failed to connect to SQS. Worker will not start.');
+    logger.error('Failed to connect to SQS. Worker will not start.');
     return;
   }
 
@@ -247,7 +206,7 @@ export async function startSQSWorker() {
   workerInterval = setInterval(() => {
     if (isWorkerRunning) {
       processMessages().catch((error) => {
-        logger.error('❌ Error in scheduled poll:', error);
+        logger.error('Error in scheduled poll:', error);
       });
     }
   }, 10000); // every 10 seconds
@@ -255,21 +214,13 @@ export async function startSQSWorker() {
   // Initial poll
   setTimeout(() => {
     if (isWorkerRunning) {
-      logger.info('🚀 Starting initial poll...');
       processMessages().catch((error) => {
-        logger.error('❌ Error in initial poll:', error);
+        logger.error('Error in initial poll:', error);
       });
     }
   }, 1000);
 
-  logger.info('✅ SQS Worker started successfully');
-
-  // Heartbeat
-  setInterval(() => {
-    if (isWorkerRunning) {
-      logger.info('💓 SQS Worker heartbeat - still running');
-    }
-  }, 60000);
+  logger.info('SQS Worker started successfully');
 
   // Watchdog
   watchdogInterval = setInterval(() => {
@@ -295,7 +246,7 @@ export function stopSQSWorker() {
 
   isWorkerRunning = false;
   isProcessingMessages = false;
-  logger.info('🛑 Stopping SQS Worker...');
+  logger.info('Stopping SQS Worker...');
 
   if (workerInterval) {
     clearInterval(workerInterval);
@@ -307,11 +258,11 @@ export function stopSQSWorker() {
     watchdogInterval = null;
   }
 
-  logger.info('✅ SQS Worker stopped successfully');
+  logger.info('SQS Worker stopped successfully');
 }
 
 export async function restartSQSWorker() {
-  logger.info('🔄 Manually restarting SQS Worker...');
+  logger.info('Manually restarting SQS Worker...');
   stopSQSWorker();
   setTimeout(async () => {
     await startSQSWorker();
@@ -321,7 +272,7 @@ export async function restartSQSWorker() {
 // Run directly
 if (process.argv[1] && process.argv[1].endsWith('worker/index.js')) {
   mongoose.connect(config.mongoose.url).then(async () => {
-    logger.info('✅ MongoDB connected (Worker)');
+    logger.info('MongoDB connected (Worker)');
     await startSQSWorker();
   });
 }
