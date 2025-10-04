@@ -5,7 +5,6 @@ import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import he from 'he';
 import { userIdExtend } from 'src/config/userIDType';
-import { redis } from '../../config/redis';
 
 interface extendedRequest extends Request {
   userId?: string;
@@ -64,7 +63,6 @@ export const deleteUserPost = async (req: extendedRequest, res: Response, next: 
       if (!mongoose.Types.ObjectId.isValid(postId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID'));
       }
-      await redis.del('cache:/v1/userpost/timeline?page=1&limit=10');
       await userPostService.deleteUserPost(new mongoose.Types.ObjectId(postId));
     }
     return res.status(200).json({ message: 'deleted' });
