@@ -13,9 +13,7 @@ import { userIdExtend } from 'src/config/userIDType';
 import { loginEmailVerificationService } from '../loginEmailVerification';
 import { communityService } from '../community';
 import { communityGroupService } from '../communityGroup';
-import { redis } from '../../config/redis';
 import { userProfileService } from '../userProfile';
-//import { redis } from '../../config/redis';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -107,11 +105,6 @@ export const updateUser = catchAsync(async (req: Request, res: Response, next: N
     if (!user) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     }
-
-    // Clear cache for this user
-    const cacheKey = `cache:${req.originalUrl}`;
-    console.log(cacheKey, 'cacheKey');
-    await redis.del(cacheKey);
 
     res.status(httpStatus.OK).json({
       status: 'success',
