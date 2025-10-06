@@ -33,6 +33,7 @@ interface communityInterface {
 interface GetCommunityUsersOptions {
   isVerified: boolean;
   searchQuery?: string | undefined;
+  communityGroupId?: string | undefined;
   page?: number | undefined;
   limit?: number | undefined;
 }

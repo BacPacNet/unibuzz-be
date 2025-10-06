@@ -14,6 +14,7 @@ import { GetCommunityUsersOptions } from './community.interface';
 import { CommunityGroupType } from '../../config/community.type';
 import { status } from '../communityGroup/communityGroup.interface';
 import config from '../../config/config';
+import { communityGroupService } from '../communityGroup';
 
 export const createCommunity = async (
   name: string,
@@ -638,7 +639,9 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
     }
     if (!community) {
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
+
       community = await communityModel.create({
+        adminId: config.DEFAULT_COMMUNITY_ADMIN_ID,
         name: name,
         communityLogoUrl: { imageUrl: logo },
         communityCoverUrl: { imageUrl: campus },
@@ -708,9 +711,22 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
 
 export const getCommunityUsersByFilterService = async (communityId: string, options: GetCommunityUsersOptions) => {
   try {
-    const { isVerified, searchQuery, page = 1, limit = 10 } = options;
+    const { isVerified, searchQuery, page = 1, limit = 10, communityGroupId } = options;
+
+    const communityGroup = communityGroupId
+      ? await communityGroupService.getCommunityGroupByObjectId(communityGroupId as string)
+      : null;
+    const communityGroupUsers = communityGroup?.users.map((user) => user._id);
 
     const pipeline: any[] = [{ $match: { _id: convertToObjectId(communityId) } }, { $unwind: '$users' }];
+
+    if (communityGroupUsers?.length) {
+      pipeline.push({
+        $match: {
+          'users._id': { $nin: communityGroupUsers },
+        },
+      });
+    }
 
     if (isVerified) {
       pipeline.push({ $match: { 'users.isVerified': true } });
