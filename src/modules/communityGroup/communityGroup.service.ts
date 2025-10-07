@@ -760,12 +760,10 @@ export const getCommunityGroupMembers = async (
 
     return {
       data: users,
-      pagination: {
-        total: totalCount,
-        page,
-        limit,
-        totalPages,
-      },
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
     };
   } catch (error: any) {
     throw new Error(error.message);
