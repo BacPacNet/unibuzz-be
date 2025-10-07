@@ -3,6 +3,7 @@ import { ApiError } from '../errors';
 import loginEmailVerificationModal from './loginEmailVerification.modal';
 import 'dotenv/config';
 import { sendEmail } from '../email/email.service';
+import { universityVerificationEmailService } from '../universityVerificationEmail';
 
 export const createloginEmailVerificationOtp = async (email: string) => {
   const data = {
@@ -52,4 +53,24 @@ export const checkloginEmailVerificationOtp = async (otp: string, email: string)
   }
 
   await loginEmailVerification.deleteOne();
+};
+export const checkloginEmailVerificationOtpV2 = async (otp: string, email: string, universityId: string) => {
+  const loginEmailVerification = await loginEmailVerificationModal.findOne({ email });
+
+  if (!loginEmailVerification) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Verification data not found');
+  }
+
+  if (loginEmailVerification.otpValidTill.getTime() < Date.now()) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'OTP has expired!');
+  }
+
+  if (Number(loginEmailVerification.otp) !== Number(otp)) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid OTP!');
+  }
+
+  await loginEmailVerification.deleteOne();
+  const isDomainValid = await universityVerificationEmailService.universityEmailDomainCheck(email, universityId);
+
+  return isDomainValid;
 };

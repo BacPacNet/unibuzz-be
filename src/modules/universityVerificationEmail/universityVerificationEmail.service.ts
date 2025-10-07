@@ -69,3 +69,14 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
 
   await universityVerificationEmail.deleteOne();
 };
+
+export const universityEmailDomainCheck = async (email: string, universityId: string) => {
+  const domain = email.split('@')[1];
+  const university = await universityModal.findOne({ domains: domain, _id: universityId });
+
+  if (!university) {
+    return false;
+  }
+
+  return true;
+};
