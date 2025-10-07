@@ -172,7 +172,13 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
 export const getCommunityUsersWithfilterController = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
-    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
+    const {
+      isVerified = false,
+      searchQuery,
+      page = 1,
+      limit = 10,
+      communityGroupId,
+    } = req.query as unknown as GetCommunityUsersOptions;
 
     if (!communityId) {
       throw new Error('Invalid communityId');
@@ -180,6 +186,7 @@ export const getCommunityUsersWithfilterController = async (req: userIdExtend, r
     const options: GetCommunityUsersOptions = {
       isVerified,
       searchQuery,
+      communityGroupId,
       page: Number(page),
       limit: Number(limit),
     };

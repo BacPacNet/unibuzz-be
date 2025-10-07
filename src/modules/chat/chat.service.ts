@@ -124,15 +124,12 @@ export const getUserChats = async (userId: string) => {
 
     // For non-group chats
     const isValidChat = chat.users.every((user) => {
-      // Check if user exists and has userId
       if (!user?.userId) return false;
 
-      // Handle different userId formats
       if (typeof user.userId === 'object') {
-        return user.userId?._id !== undefined; // Safe check for _id
+        return user.userId?._id !== undefined;
       }
 
-      // Check for string or number userId
       return typeof user.userId === 'string' || typeof user.userId === 'number';
     });
 
@@ -142,9 +139,7 @@ export const getUserChats = async (userId: string) => {
   const userIds = filteredChats
     .flatMap((chat) =>
       chat.users.map((user) => {
-        if (!user?.userId) {
-          return null;
-        }
+        if (!user?.userId) return null;
 
         if (typeof user.userId === 'object' && user.userId._id) {
           return user.userId._id.toString();
@@ -159,7 +154,7 @@ export const getUserChats = async (userId: string) => {
   const uniqueUserIds = [...new Set(userIds)];
 
   const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
-    .select('profile_dp users_id university_name study_year  major affiliation occupation role')
+    .select('profile_dp users_id university_name study_year major affiliation occupation role')
     .lean();
 
   const messages = await messageModel
@@ -240,9 +235,23 @@ export const getUserChats = async (userId: string) => {
           },
         };
       }) as any;
+
+      if (chat.users && Array.isArray(chat.users)) {
+        chat.users.sort((a: any, b: any) => {
+          const isAAdmin = a.userId?._id?.toString() === chat.groupAdmin?.toString();
+          const isBAdmin = b.userId?._id?.toString() === chat.groupAdmin?.toString();
+
+          if (isAAdmin && !isBAdmin) return -1;
+          if (!isAAdmin && isBAdmin) return 1;
+
+          return (a.userId?.firstName || '').toLowerCase().localeCompare((b.userId?.firstName || '').toLowerCase());
+        });
+      }
     }
+
     const latestMessageTime =
       chat.latestMessage && 'createdAt' in chat.latestMessage ? new Date(chat.latestMessage.createdAt).getTime() : 0;
+
     return {
       ...chat,
       groupLogoImage: profileDp,
@@ -251,14 +260,13 @@ export const getUserChats = async (userId: string) => {
     };
   });
 
-  //   allChats.sort((a, b) => b.latestMessageTime - a.latestMessageTime);
   allChats.sort((a: any, b: any) => {
     const aTime = a.latestMessageTime > 0 ? a.latestMessageTime : new Date(a.createdAt || 0).getTime();
-
     const bTime = b.latestMessageTime > 0 ? b.latestMessageTime : new Date(b.createdAt || 0).getTime();
 
     return bTime - aTime;
   });
+
   return allChats;
 };
 

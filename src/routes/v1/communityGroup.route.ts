@@ -4,6 +4,10 @@ import express, { Router } from 'express';
 
 const router: Router = express.Router();
 
+// query-params:
+// communityGroupId:string, userStatus: string,page: number,limit: number,
+router.route('/members').get(userIdAuth, communityGroupController.getCommunityGroupMembers);
+
 router
   .route('/:communityId')
   .get(userIdAuth, communityGroupController.getCommunityGroupById)
