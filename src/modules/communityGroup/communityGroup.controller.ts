@@ -40,10 +40,15 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       isAdminOfCommunity = community?.adminId?.toString() === userId;
     }
 
-    const getCommunityByName = await communityGroupModel.findOne({ title: body.title });
-    if (getCommunityByName?.title) {
-      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group already exists' });
+    // check community id as we are not allowed to create group with same name in same community also find if not case sensitive
+    const getCommunityGroupByCommunityId = await communityGroupModel.findOne({
+      communityId: communityId,
+      title: { $regex: new RegExp(`^${body.title}$`, 'i') },
+    });
+    if (getCommunityGroupByCommunityId) {
+      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group with same name already exists' });
     }
+
     const createCommunityGroup = await communityGroupService.createCommunityGroup(
       body,
       communityId,
