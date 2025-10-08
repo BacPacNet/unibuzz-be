@@ -7,5 +7,5 @@ const router: Router = Router();
 router
   .route('/')
   .post(loginEmailVerificationController.createLoginEmailOtp)
-  .put(loginEmailVerificationController.checkLoginEmailOtp);
+  .put(loginEmailVerificationController.checkLoginEmailOtpV2);
 export default router;

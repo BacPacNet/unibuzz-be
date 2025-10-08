@@ -114,7 +114,7 @@ export const getUserPostComments = async (
 ) => {
   const skip = (page - 1) * limit;
   const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
-  // Fetch the main comments on the post
+
   const comments =
     (await userPostCommentsModel
       .find({ userPostId: postId, level: 0 })
@@ -141,67 +141,19 @@ export const getUserPostComments = async (
       .limit(limit)
       .lean()) || [];
 
-  // Helper function to recursively populate replies and calculate total count
-  const populateNestedReplies = async (replies: any[] = []): Promise<{ populatedReplies: any[]; totalCount: number }> => {
-    if (!replies || replies.length === 0) {
-      return { populatedReplies: [], totalCount: 0 };
-    }
+  const totalComments = await userPostCommentsModel.countDocuments({
+    userPostId: postId,
+  });
 
-    // Fetch all replies for this level
-    const replyIds = replies.map((r) => r._id); // fallback if replies are _id references
-    const fetchedReplies = await userPostCommentsModel
-      .find({ _id: { $in: replyIds } })
-      .populate([
-        { path: 'commenterId', select: 'firstName lastName _id' },
-        {
-          path: 'commenterProfileId',
-          select: 'profile_dp university_name study_year degree affiliation occupation role isCommunityAdmin',
-        },
-      ])
-      .sort({ createdAt: 1 }) // Ensure oldest to newest at DB level
-      .lean();
+  const totalTopLevelComments = await userPostCommentsModel.countDocuments({
+    userPostId: postId,
+    level: 0,
+  });
 
-    // Recursively populate nested replies
-    const populatedReplies = await Promise.all(
-      fetchedReplies.map(async (reply: any) => {
-        const { populatedReplies: nestedReplies, totalCount: nestedCount } = await populateNestedReplies(
-          reply.replies || []
-        );
-        return {
-          ...reply,
-          replies: nestedReplies,
-          totalCount: nestedCount,
-        };
-      })
-    );
-
-    // As an extra safeguard, sort by createdAt (in case MongoDB sort doesn’t apply due to array order)
-    populatedReplies.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-    return {
-      populatedReplies,
-      totalCount: populatedReplies.length,
-    };
-  };
-
-  // Populate the nested replies for each comment and calculate the total count
-  const finalComments = await Promise.all(
-    comments.map(async (comment: any) => {
-      const { populatedReplies, totalCount } = await populateNestedReplies(comment.replies);
-      return {
-        ...comment,
-        replies: populatedReplies,
-        totalCount: totalCount, // Include immediate replies
-      };
-    })
-  );
-
-  const totalComments = await userPostCommentsModel.countDocuments({ userPostId: postId });
-
-  const totalPages = Math.ceil(totalComments / limit);
+  const totalPages = Math.ceil(totalTopLevelComments / limit);
 
   return {
-    finalComments,
+    finalComments: comments,
     currentPage: page,
     totalPages,
     totalComments,

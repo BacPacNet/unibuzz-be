@@ -391,3 +391,19 @@ export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Re
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const getCommunityGroupMembers = async (req: extendedRequest, res: Response) => {
+  const { communityGroupId, userStatus, page, limit } = req.query;
+
+  try {
+    const communityGroup = await communityGroupService.getCommunityGroupMembers(
+      communityGroupId as string,
+      userStatus as string,
+      Number(page),
+      Number(limit)
+    );
+    return res.status(httpStatus.OK).json(communityGroup);
+  } catch (error: any) {
+    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};

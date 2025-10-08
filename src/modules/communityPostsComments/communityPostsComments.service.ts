@@ -156,15 +156,15 @@ export const getCommunityPostComments = async (
 ) => {
   const skip = (page - 1) * limit;
   const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
-  // Fetch the main comments on the post
+
   const comments =
     (await communityPostCommentModel
-      .find({ postId: postId, level: 0 })
+      .find({ postId, level: 0 })
       .populate([
         { path: 'commenterId', select: 'firstName lastName _id' },
         {
           path: 'commenterProfileId',
-          select: 'profile_dp university_name study_year degree major affiliation occupation isCommunityAdmin',
+          select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
         },
         {
           path: 'replies',
@@ -173,7 +173,7 @@ export const getCommunityPostComments = async (
             { path: 'commenterId', select: 'firstName lastName _id' },
             {
               path: 'commenterProfileId',
-              select: 'profile_dp university_name study_year degree major affiliation occupation isCommunityAdmin',
+              select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
             },
           ],
         },
@@ -183,62 +183,19 @@ export const getCommunityPostComments = async (
       .limit(limit)
       .lean()) || [];
 
-  // Helper function to recursively populate replies and calculate total count
-  const populateNestedReplies = async (replies: any[] = []): Promise<{ populatedReplies: any[]; totalCount: number }> => {
-    if (!replies || replies.length === 0) return { populatedReplies: [], totalCount: 0 };
+  const totalComments = await communityPostCommentModel.countDocuments({
+    postId,
+  });
 
-    // Fetch replies by IDs, sorted by createdAt ascending (oldest first)
-    const replyIds = replies.map((r) => r._id); // in case you get replies as populated subdocs, else use reply.replies
-    const fetchedReplies = await communityPostCommentModel
-      .find({ _id: { $in: replyIds } })
-      .populate([
-        { path: 'commenterId', select: 'firstName lastName _id' },
-        { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree isCommunityAdmin' },
-      ])
-      .sort({ createdAt: 1 })
-      .lean();
+  const totalTopLevelComments = await communityPostCommentModel.countDocuments({
+    postId,
+    level: 0,
+  });
 
-    // Recursively populate nested replies for each fetched reply
-    const populatedReplies = await Promise.all(
-      fetchedReplies.map(async (reply: any) => {
-        const { populatedReplies: nestedReplies, totalCount: nestedCount } = await populateNestedReplies(
-          reply.replies || []
-        );
-        return {
-          ...reply,
-          replies: nestedReplies,
-          totalCount: nestedCount,
-        };
-      })
-    );
-
-    // Finally, sort them again by createdAt (just in case)
-    populatedReplies.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-    return {
-      populatedReplies,
-      totalCount: populatedReplies.length,
-    };
-  };
-
-  // Populate the nested replies for each comment and calculate the total count
-  const finalComments = await Promise.all(
-    comments.map(async (comment: any) => {
-      const { populatedReplies, totalCount } = await populateNestedReplies(comment.replies);
-      return {
-        ...comment,
-        replies: populatedReplies,
-        totalCount: totalCount, // Include immediate replies
-      };
-    })
-  );
-
-  const totalComments = await communityPostCommentModel.countDocuments({ postId: postId });
-
-  const totalPages = Math.ceil(totalComments / limit);
+  const totalPages = Math.ceil(totalTopLevelComments / limit);
 
   return {
-    finalComments,
+    finalComments: comments,
     currentPage: page,
     totalPages,
     totalComments,
@@ -251,12 +208,12 @@ export const getPostCommentById = async (commentId: string) => {
     .findById(commentId)
     .populate([
       { path: 'commenterId', select: 'firstName lastName _id' },
-      { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree isCommunityAdmin' },
+      { path: 'commenterProfileId', select: 'profile_dp university_name major study_year role degree isCommunityAdmin' },
       {
         path: 'replies',
         populate: [
           { path: 'commenterId', select: 'firstName lastName _id' },
-          { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree isCommunityAdmin' },
+          { path: 'commenterProfileId', select: 'profile_dp university_name major study_year role degree isCommunityAdmin' },
         ],
       },
     ])
@@ -281,7 +238,10 @@ export const getPostCommentById = async (commentId: string) => {
           .find({ _id: { $in: reply.replies || [] } })
           .populate([
             { path: 'commenterId', select: 'firstName lastName _id' },
-            { path: 'commenterProfileId', select: 'profile_dp university_name study_year degree isCommunityAdmin' },
+            {
+              path: 'commenterProfileId',
+              select: 'profile_dp university_name study_year role degree major isCommunityAdmin',
+            },
           ])
           .lean();
 

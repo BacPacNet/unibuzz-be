@@ -1,7 +1,10 @@
 import { userIdAuth } from '../../modules/user';
 import { communityController } from '../../modules/community';
 import { Router } from 'express';
-import { getCommunityUsersController } from '../../modules/community/community.controller';
+import {
+  getCommunityUsersController,
+  getCommunityUsersWithfilterController,
+} from '../../modules/community/community.controller';
 import { requireCommunityMember } from '../../modules/community';
 
 const router: Router = Router();
@@ -11,6 +14,10 @@ router.route('/').get(userIdAuth, communityController.getAllUserCommunity);
 // query-params:
 // isVerified: boolean,searchQuery: string,page: number,limit: number,
 router.route('/:communityId/users').get(userIdAuth, requireCommunityMember, getCommunityUsersController);
+
+// query-params:
+// isVerified: boolean,searchQuery: string,page: number,limit: number,
+router.route('/:communityId/filteredusers').get(userIdAuth, requireCommunityMember, getCommunityUsersWithfilterController);
 
 router
   .route('/filtered/:communityId')

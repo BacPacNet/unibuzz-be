@@ -17,6 +17,7 @@ import communityPostCommentsModel from '../communityPostsComments/communityPosts
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { convertToObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
+import { PipelineStage } from 'mongoose';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -673,7 +674,6 @@ export const acceptPrivateCommunityGroupRequest = async (userId: string, communi
       throw new Error('Invalid communityGroupId or userId');
     }
 
-    console.log(communityGroupId, userId);
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
       { _id: communityGroupId, 'users._id': userId },
       {
@@ -690,6 +690,81 @@ export const acceptPrivateCommunityGroupRequest = async (userId: string, communi
     }
 
     return updatedGroup;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+export const getCommunityGroupMembers = async (
+  communityGroupId: string,
+  userStatus: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  try {
+    if (!communityGroupId) {
+      throw new Error('Invalid communityGroupId');
+    }
+
+    const groupId = new Types.ObjectId(communityGroupId);
+
+    const communityGroup = await getCommunityGroupByObjectId(communityGroupId);
+    if (!communityGroup) {
+      throw new Error('Community group not found');
+    }
+
+    const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
+    const adminId = communityGroup.adminUserId?.toString();
+
+    const pipeline: PipelineStage[] = [
+      { $match: { _id: groupId } },
+      { $unwind: '$users' },
+      { $match: { 'users.status': targetStatus } },
+      {
+        $addFields: {
+          'users.isAdmin': { $eq: ['$users._id', new Types.ObjectId(adminId)] },
+        },
+      },
+      {
+        $sort: {
+          'users.isAdmin': -1,
+          'users.firstName': 1,
+        },
+      },
+      {
+        $skip: (page - 1) * limit,
+      },
+      {
+        $limit: limit,
+      },
+      {
+        $group: {
+          _id: '$_id',
+          users: { $push: '$users' },
+        },
+      },
+    ];
+
+    const results = await communityGroupModel.aggregate(pipeline);
+    const users = results[0]?.users || [];
+
+    const total = await communityGroupModel.aggregate([
+      { $match: { _id: groupId } },
+      { $unwind: '$users' },
+      { $match: { 'users.status': targetStatus } },
+      { $count: 'total' },
+    ]);
+
+    const totalCount = total[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: users,
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+    };
   } catch (error: any) {
     throw new Error(error.message);
   }

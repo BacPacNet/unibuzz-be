@@ -9,7 +9,6 @@ import { universityVerificationEmailService } from '../universityVerificationEma
 import universityModel, { IUniversity } from '../university/university.model';
 import UniversityModel from '../university/university.model';
 import { EditProfileRequest } from './userProfile.interface';
-import { redis } from '../../config/redis';
 
 // update userProfile
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -33,10 +32,6 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
       new mongoose.Types.ObjectId(userProfileId),
       updateData
     );
-
-    // Clear cache for this user
-    const cacheKey = `cache:v1/users/${updatedUserProfile.users_id}`;
-    await redis.del(cacheKey);
 
     return res.status(httpStatus.OK).json({
       success: true,
