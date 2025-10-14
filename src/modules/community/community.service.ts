@@ -641,7 +641,7 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
 
       community = await communityModel.create({
-        adminId: config.DEFAULT_COMMUNITY_ADMIN_ID,
+        adminId: [config.DEFAULT_COMMUNITY_ADMIN_ID],
         name: name,
         communityLogoUrl: { imageUrl: logo },
         communityCoverUrl: { imageUrl: campus },

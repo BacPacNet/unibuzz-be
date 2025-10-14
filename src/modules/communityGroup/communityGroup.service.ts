@@ -185,10 +185,9 @@ export const RejectCommunityGroupApproval = async (id: mongoose.Types.ObjectId) 
   }
   await communityGroupModel.findByIdAndDelete(id);
 };
-export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, userId: string) => {
-  let communityGroupToUpdate;
 
-  communityGroupToUpdate = await communityGroupModel.findById(id);
+export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, adminIds: string[] = []) => {
+  const communityGroupToUpdate = await communityGroupModel.findById(id);
 
   if (!communityGroupToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
@@ -199,67 +198,82 @@ export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, 
   communityGroupToUpdate.isCommunityGroupLive = true;
 
   if (communityGroupToUpdate?.inviteUsers?.length > 0) {
+    const adminIdSet = new Set(adminIds.map(String));
+
     const inviteUsers = communityGroupToUpdate.inviteUsers
       .map((user) => ({
         users_id: user.userId.toString(),
       }))
-      .filter((user) => user.users_id !== userId.toString());
+      .filter((user) => !adminIdSet.has(user.users_id));
 
-    await notificationService.createManyNotification(
-      communityGroupToUpdate.adminUserId,
-      communityGroupToUpdate._id,
-      inviteUsers,
-      notificationRoleAccess.GROUP_INVITE,
-      'received an invitation to join group'
-    );
-  }
-
-  if (userId.toString() === communityGroupToUpdate.adminUserId.toString()) {
-    return;
-  }
-
-  const [adminUserDetails, adminUserProfile] = await Promise.all([
-    getUserById(new mongoose.Types.ObjectId(userId)),
-    getUserProfileById(userId),
-  ]);
-
-  const adminUser = {
-    _id: adminUserDetails?._id,
-    firstName: adminUserDetails?.firstName,
-    lastName: adminUserDetails?.lastName,
-    profileImageUrl: adminUserProfile?.profile_dp?.imageUrl || null,
-    universityName: adminUserProfile?.university_name as string,
-    year: adminUserProfile?.study_year as string,
-    degree: adminUserProfile?.degree as string,
-    major: adminUserProfile?.major as string,
-    occupation: adminUserProfile?.occupation as string,
-    affiliation: adminUserProfile?.affiliation as string,
-    role: adminUserProfile?.role,
-    isRequestAccepted: true,
-    status: status.accepted,
-  };
-  //   const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
-
-  communityGroupToUpdate.users.push(adminUser as any);
-
-  await UserProfile.findOneAndUpdate(
-    {
-      _id: adminUserProfile?._id,
-      'communities.communityId': communityGroupToUpdate.communityId,
-    },
-    {
-      $push: {
-        'communities.$.communityGroups': {
-          id: communityGroupToUpdate._id,
-          status: status.accepted,
-        },
-      },
-    },
-    {
-      new: true,
-      returnDocument: 'after',
+    if (inviteUsers.length > 0) {
+      await notificationService.createManyNotification(
+        communityGroupToUpdate.adminUserId,
+        communityGroupToUpdate._id,
+        inviteUsers,
+        notificationRoleAccess.GROUP_INVITE,
+        'received an invitation to join group'
+      );
     }
+  }
+
+  const allAdminIds = Array.from(new Set(adminIds.map(String)));
+
+  const adminUsersData = await Promise.all(
+    allAdminIds.map(async (adminId) => {
+      const [userDetails, userProfile] = await Promise.all([
+        getUserById(new mongoose.Types.ObjectId(adminId)),
+        getUserProfileById(adminId),
+      ]);
+
+      if (!userDetails || !userProfile) return null;
+
+      return {
+        _id: userDetails._id,
+        firstName: userDetails.firstName,
+        lastName: userDetails.lastName,
+        profileImageUrl: userProfile?.profile_dp?.imageUrl || null,
+        universityName: userProfile?.university_name || '',
+        year: userProfile?.study_year || '',
+        degree: userProfile?.degree || '',
+        major: userProfile?.major || '',
+        occupation: userProfile?.occupation || '',
+        affiliation: userProfile?.affiliation || '',
+        role: userProfile?.role,
+        isRequestAccepted: true,
+        status: status.accepted,
+      };
+    })
   );
+
+  const validAdminUsers = adminUsersData.filter(Boolean);
+
+  const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
+
+  for (const adminUser of validAdminUsers) {
+    if (!existingUserIds.has(adminUser?._id.toString())) {
+      communityGroupToUpdate.users.push(adminUser as any);
+
+      await UserProfile.findOneAndUpdate(
+        {
+          _id: adminUser?._id,
+          'communities.communityId': communityGroupToUpdate.communityId,
+        },
+        {
+          $push: {
+            'communities.$.communityGroups': {
+              id: communityGroupToUpdate._id,
+              status: status.accepted,
+            },
+          },
+        },
+        {
+          new: true,
+          returnDocument: 'after',
+        }
+      );
+    }
+  }
 
   const updatedCommunityGroup = await communityGroupToUpdate.save();
   return updatedCommunityGroup;
@@ -432,19 +446,15 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     })
     .lean()) as Document &
     communityGroupInterface & {
-      communityId: { communityLogoUrl: string; adminId: string; name: string };
+      communityId: { communityLogoUrl: string; adminId: string[]; name: string };
     };
 
-  const communityAdminId = communityGroup?.communityId?.adminId.toString();
+  const communityAdminId = communityGroup?.communityId?.adminId?.map(String).includes(userId?.toString() || '');
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
   }
 
-  if (
-    !communityGroup.isCommunityGroupLive &&
-    communityGroup.adminUserId.toString() !== userId &&
-    communityAdminId !== userId.toString()
-  ) {
+  if (!communityGroup.isCommunityGroupLive && communityGroup.adminUserId.toString() !== userId && !communityAdminId) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
   }
 
