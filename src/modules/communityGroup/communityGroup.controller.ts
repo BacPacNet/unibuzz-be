@@ -37,7 +37,6 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
 
     let isAdminOfCommunity: boolean = false;
     if (community?.adminId) {
-      //   isAdminOfCommunity = community?.adminId?.toString() === userId;
       isAdminOfCommunity = community?.adminId?.map(String).includes(userId?.toString());
     }
 
@@ -58,11 +57,8 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       isAdminOfCommunity
     );
 
-    // if (isOfficial && community?.adminId.toString() !== userId ) {
     if (isOfficial && !community?.adminId?.map(String).includes(userId?.toString() || '')) {
       for (const adminId of community?.adminId || []) {
-        console.log('adminId', adminId);
-
         const notifications = {
           sender_id: convertToObjectId(userId.toString()),
           receiverId: convertToObjectId(adminId.toString()),
@@ -83,27 +79,6 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
           type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
         });
       }
-      //   const notifications = {
-      //     sender_id: convertToObjectId(userId.toString()),
-      //     receiverId: convertToObjectId(community?.adminId.toString()),
-      //     communityGroupId: convertToObjectId(createCommunityGroup._id.toString()),
-      //     type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-      //     message: `${body?.title} in ${community?.name} has requested an official group status`,
-      //   };
-
-      //   await notificationService.CreateNotification(notifications);
-
-      //   io.emit(`notification_${community?.adminId}`, { type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST });
-
-      //   sendPushNotification(community?.adminId.toString(), 'Unibuzz', notifications.message, {
-      //     sender_id: userId.toString(),
-      //     receiverId: community?.adminId.toString(),
-      //     communityGroupId: createCommunityGroup?._id.toString(),
-      //     communityId: communityId,
-      //     type: notificationRoleAccess.OFFICIAL_GROUP_REQUEST,
-      //   });
-
-      // await notificationQueue.add(NotificationIdentifier.official_group_request, notifications);
     }
 
     return res.status(200).json({
@@ -124,7 +99,7 @@ export const updateCommunityGroup = async (req: Request, res: Response, next: Ne
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
         return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
       }
-      // console.log('body', body);
+
       await communityGroupService.updateCommunityGroup(new mongoose.Types.ObjectId(groupId), req.body);
       return res.status(200).json({ message: 'Updated Successfully' });
     }
@@ -231,8 +206,6 @@ export const changeCommunityGroupStatus = async (req: extendedRequest, res: Resp
         });
 
         await communityGroupService.RejectCommunityGroupApproval(convertToObjectId(communityGroupId.toString()));
-
-        // await notificationQueue.add(NotificationIdentifier.reject_official_group_request, notifications);
       }
       if (req.body.status == status.accepted) {
         const communityGroup = await communityGroupService.AcceptCommunityGroupApproval(
@@ -271,8 +244,6 @@ export const changeCommunityGroupStatus = async (req: extendedRequest, res: Resp
           communityId: communityGroup?.communityId.toString(),
           type: notificationRoleAccess.ACCEPTED_OFFICIAL_GROUP_REQUEST,
         });
-
-        // await notificationQueue.add(NotificationIdentifier.accept_official_group_request, notifications);
       }
       return res.status(200).json({ message: 'Status Updated Successfully' });
     }

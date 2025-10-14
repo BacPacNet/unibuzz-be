@@ -217,7 +217,7 @@ export const updateUserCommunityRole = async (req: userIdExtend, res: Response, 
       }
       if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
       const community = await communityService.getCommunity(communityId);
-      //   if (adminID !== String(community?.adminId)) {
+
       if (community?.adminId?.map(String).includes(adminID?.toString() || '')) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
       }
