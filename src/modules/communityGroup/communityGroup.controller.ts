@@ -46,7 +46,9 @@ export const CreateCommunityGroup = async (req: extendedRequest, res: Response) 
       title: { $regex: new RegExp(`^${body.title}$`, 'i') },
     });
     if (getCommunityGroupByCommunityId) {
-      return res.status(httpStatus.BAD_REQUEST).json({ message: 'Community group with same name already exists' });
+      return res
+        .status(httpStatus.BAD_REQUEST)
+        .json({ for: 'title', message: 'Community group with same name already exists' });
     }
 
     const createCommunityGroup = await communityGroupService.createCommunityGroup(

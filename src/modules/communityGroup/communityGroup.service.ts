@@ -10,7 +10,7 @@ import { UserProfile, userProfileService } from '../userProfile';
 import { communityGroupService } from '.';
 import { notificationModel, notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-import { communityService } from '../community';
+import { communityModel, communityService } from '../community';
 import { io } from '../../index';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
@@ -22,41 +22,76 @@ import { PipelineStage } from 'mongoose';
 type CommunityGroupDocument = Document & communityGroupInterface;
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
-  const { selectedUsers = [], communityGroupCategory, ...restBody } = body;
+  const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, ...restBody } = body;
 
-  const communityGroupToUpdate = await communityGroupModel.findById(id);
-
-  if (!communityGroupToUpdate) {
+  const communityGroup = await communityGroupModel.findById(id);
+  if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found!');
   }
 
-  // Assign all basic fields (excluding selectedUsers and category)
-  Object.assign(communityGroupToUpdate, restBody);
+  const existingGroup = await communityGroupModel.findOne({
+    communityId: communityGroup.communityId,
+    title: { $regex: new RegExp(`^${title}$`, 'i') },
+  });
 
-  // Update category map if provided
-  if (communityGroupCategory && typeof communityGroupCategory === 'object') {
-    communityGroupToUpdate.communityGroupCategory = new Map(Object.entries(communityGroupCategory));
+  if (existingGroup && communityGroup.title !== title) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      JSON.stringify({ for: 'title', message: 'Community group with same name already exists' })
+    );
   }
 
-  // Add new unique users to the group
+  if (
+    communityGroupAccess &&
+    communityGroupAccess === CommunityGroupAccess.Private &&
+    communityGroup.communityGroupAccess === CommunityGroupAccess.Public
+  ) {
+    const community = await communityModel.findById(communityGroup.communityId).select('users');
+
+    const unverifiedUserIds = community?.users?.filter((user) => !user.isVerified).map((user) => user._id.toString()) ?? [];
+
+    const hasUnverifiedUsersInGroup = communityGroup.users.some((user) => unverifiedUserIds.includes(user._id.toString()));
+
+    if (hasUnverifiedUsersInGroup) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        JSON.stringify({
+          for: 'communityGroupAccess',
+          message: 'To switch to a private group, all members must be verified.',
+        })
+      );
+    }
+  }
+
+  if (communityGroupAccess) {
+    communityGroup.communityGroupAccess = communityGroupAccess;
+  }
+
+  Object.assign(communityGroup, restBody);
+
+  if (communityGroupCategory && typeof communityGroupCategory === 'object') {
+    communityGroup.communityGroupCategory = new Map(Object.entries(communityGroupCategory));
+  }
+
   if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
     const existingUserIds = new Set(
-      communityGroupToUpdate.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
+      communityGroup.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
     );
 
     const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user?.users_id?.toString()));
 
-    // Create notifications for newly added users
-    await notificationService.createManyNotification(
-      communityGroupToUpdate.adminUserId,
-      communityGroupToUpdate._id,
-      newUsers,
-      notificationRoleAccess.GROUP_INVITE,
-      'received an invitation to join group'
-    );
+    if (newUsers.length > 0) {
+      await notificationService.createManyNotification(
+        communityGroup.adminUserId,
+        communityGroup._id,
+        newUsers,
+        notificationRoleAccess.GROUP_INVITE,
+        'received an invitation to join group'
+      );
+    }
   }
 
-  await communityGroupToUpdate.save();
+  await communityGroup.save();
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
@@ -725,28 +760,54 @@ export const getCommunityGroupMembers = async (
 
     const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
     const adminId = communityGroup.adminUserId?.toString();
+    const communityId = communityGroup.communityId;
+
+    if (!communityId) {
+      throw new Error('Community reference missing in group');
+    }
 
     const pipeline: PipelineStage[] = [
       { $match: { _id: groupId } },
       { $unwind: '$users' },
       { $match: { 'users.status': targetStatus } },
+
+      {
+        $lookup: {
+          from: 'communities',
+          let: { userId: '$users._id' },
+          pipeline: [
+            { $match: { _id: new Types.ObjectId(communityId) } },
+            { $unwind: '$users' },
+            {
+              $match: {
+                $expr: {
+                  $eq: [{ $toString: '$users._id' }, { $toString: '$$userId' }],
+                },
+              },
+            },
+            { $project: { 'users.isVerified': 1 } },
+          ],
+          as: 'communityUser',
+        },
+      },
+      { $unwind: { path: '$communityUser', preserveNullAndEmptyArrays: true } },
+
       {
         $addFields: {
           'users.isAdmin': { $eq: ['$users._id', new Types.ObjectId(adminId)] },
+          'users.isVerified': '$communityUser.users.isVerified',
         },
       },
+
       {
         $sort: {
           'users.isAdmin': -1,
           'users.firstName': 1,
         },
       },
-      {
-        $skip: (page - 1) * limit,
-      },
-      {
-        $limit: limit,
-      },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+
       {
         $group: {
           _id: '$_id',
@@ -769,7 +830,10 @@ export const getCommunityGroupMembers = async (
     const totalPages = Math.ceil(totalCount / limit);
 
     return {
-      data: users,
+      data: users.map((u: any) => ({
+        ...u,
+        isVerified: u.isVerified ?? false,
+      })),
       total: totalCount,
       page,
       limit,
