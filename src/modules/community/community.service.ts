@@ -733,7 +733,14 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
     }
 
     pipeline.push({
-      $replaceRoot: { newRoot: { users_id: '$users._id' } },
+      $addFields: {
+        users_id: '$users._id',
+        isVerified: '$users.isVerified',
+      },
+    });
+
+    pipeline.push({
+      $replaceRoot: { newRoot: { users_id: '$users_id', isVerified: '$isVerified' } },
     });
 
     pipeline.push({
@@ -774,12 +781,12 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
     }
 
     const skip = (page - 1) * limit;
+
     pipeline.push({
       $facet: {
         data: [
           { $skip: skip },
           { $limit: limit },
-
           {
             $replaceRoot: {
               newRoot: {
@@ -789,6 +796,7 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
                     firstName: '$user.firstName',
                     lastName: '$user.lastName',
                     createdAt: '$user.createdAt',
+                    isVerified: '$isVerified',
                   },
                 ],
               },
