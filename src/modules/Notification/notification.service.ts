@@ -841,6 +841,31 @@ export const changeNotificationStatus = async (status: notificationStatus, notif
   await notification.save();
 };
 
+export const changeNotificationStatusForCommunityAdmin = async (
+  status: string,
+  notificationId: string,
+  adminIds: string[]
+) => {
+  const targetNotification = await notificationModel.findById(notificationId);
+  if (!targetNotification) throw new Error('Notification not found');
+
+  await notificationModel.updateMany(
+    {
+      communityGroupId: targetNotification.communityGroupId,
+      type: targetNotification.type,
+      receiverId: { $in: adminIds },
+    },
+    {
+      $set: {
+        status,
+        isRead: true,
+      },
+    }
+  );
+
+  return true;
+};
+
 export const DeleteNotification = async (filter: any) => {
   return await notificationModel.findOneAndDelete(filter);
 };

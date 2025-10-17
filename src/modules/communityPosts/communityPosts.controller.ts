@@ -41,7 +41,8 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       if (!community) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
       }
-      const isAdmin = community.adminId.toString() === userId;
+
+      const isAdmin = community?.adminId?.map(String).includes(userId?.toString());
       if (!isAdmin) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create post');
       }
@@ -54,16 +55,11 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
       }
 
-      //   communityGroup.communityId.adminId.toString() === userId.toString() ||
       isPostLive =
         communityGroup.adminUserId.toString() === userId.toString() ||
         communityGroup.communityGroupType === CommunityGroupType.CASUAL;
 
       isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
-      // const isAdmin = communityGroup.adminUserId.toString() === userId;
-      // if (!isAdmin) {
-      //   throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create Group post');
-      // }
 
       if (!communityGroup.isCommunityGroupLive) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Community Group is not live');
@@ -83,12 +79,11 @@ export const createCommunityPost = async (req: extendedRequest, res: Response) =
       isOfficialGroup
     );
 
-    const verifiedNonAdmins =
-      community?.users?.filter((user: any) => user.isVerified && community?.adminId?.toString() !== user._id.toString()) ||
-      [];
+    const verifiedNonAdmins = community?.users?.filter((user: any) => user._id.toString() !== userId?.toString()) || [];
+
     const verifiedAdminsUserIds = verifiedNonAdmins.map((user: any) => user._id.toString());
 
-    if (communityId && !communityGroupId && post?._id && community?.adminId?.toString() == userId.toString()) {
+    if (communityId && !communityGroupId && post?._id && !verifiedAdminsUserIds.includes(userId?.toString() || '')) {
       const messages = verifiedAdminsUserIds.map((receiverId) => ({
         sender_id: userId,
         receiverId,
