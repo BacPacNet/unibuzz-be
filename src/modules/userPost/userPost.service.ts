@@ -1558,6 +1558,76 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
               preserveNullAndEmptyArrays: true,
             },
           },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'userProfile.communities.communityId',
+              foreignField: '_id',
+              as: 'userProfile.communitiesData',
+            },
+          },
+          {
+            $addFields: {
+              'userProfile.communities': {
+                $map: {
+                  input: { $ifNull: ['$userProfile.communities', []] },
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$userProfile.communitiesData', []] },
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              'userProfile.communitiesData': 0,
+            },
+          },
+          //   end
           {
             $match: {
               'userProfile.blockedUsers.userId': {
@@ -1614,6 +1684,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
                 role: 1,
                 isCommunityAdmin: 1,
                 adminCommunityId: 1,
+                communities: 1,
               },
             },
           },
@@ -1653,6 +1724,77 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
           //       },
           //     },
           //   },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'userProfile.communities.communityId',
+              foreignField: '_id',
+              as: 'userProfile.communitiesData',
+            },
+          },
+          //   start
+          {
+            $addFields: {
+              'userProfile.communities': {
+                $map: {
+                  input: '$userProfile.communities',
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$userProfile.communitiesData',
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              'userProfile.communitiesData': 0,
+            },
+          },
+          //   end
           {
             $lookup: {
               from: 'communities',
@@ -1715,6 +1857,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
                 role: 1,
                 isCommunityAdmin: 1,
                 adminCommunityId: 1,
+                communities: 1,
               },
               community: {
                 _id: 1,
