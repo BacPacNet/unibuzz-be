@@ -275,6 +275,7 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
                     _id: '$$populated._id',
                     name: '$$populated.name',
                     logo: '$$populated.communityLogoUrl.imageUrl',
+
                     isVerifiedMember: {
                       $cond: [
                         {
@@ -297,6 +298,15 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
                         false,
                       ],
                     },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
                   },
                 },
               },
@@ -304,6 +314,7 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
           },
         },
       },
+
       {
         $project: {
           'userProfile.communitiesData': 0,
@@ -492,6 +503,15 @@ export const getCommunityGroupPostsByCommunityId = async (
                             },
                             0,
                           ],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
                         },
                         true,
                         false,
@@ -878,6 +898,15 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
                             },
                             0,
                           ],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
                         },
                         true,
                         false,

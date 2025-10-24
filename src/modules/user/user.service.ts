@@ -53,7 +53,6 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
  */
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
-
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
   const [userProfile] = await User.aggregate([
     {
@@ -126,6 +125,15 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
                           },
                           0,
                         ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
                       },
                       true,
                       false,
