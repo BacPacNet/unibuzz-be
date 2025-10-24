@@ -544,6 +544,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
 
     const community = await communityService.getCommunity(String(communityGroup.communityId));
     const communityUsersID = community?.users.map((item) => item._id.toString());
+    const communityAdminIds = community?.adminId?.map(String);
 
     const userIDSet = new Set(communityUsersID);
 
@@ -577,6 +578,41 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       affiliation: userProfile.affiliation as string,
       role: userProfile.role,
     });
+
+    if (isAdmin && Array.isArray(communityAdminIds) && communityAdminIds.length > 0) {
+      const adminDetails = await Promise.all(
+        communityAdminIds.map(async (adminId) => {
+          const [adminUser, adminProfile] = await Promise.all([
+            getUserById(new mongoose.Types.ObjectId(adminId)),
+            userProfileService.getUserProfileById(String(adminId)),
+          ]);
+          return { adminUser, adminProfile };
+        })
+      );
+
+      const existingUserIds = new Set(communityGroup.users.map((u) => u._id.toString()));
+
+      for (const { adminUser, adminProfile } of adminDetails) {
+        if (adminUser && adminProfile && !existingUserIds.has(adminUser._id.toString())) {
+          communityGroup.users.push({
+            _id: adminUser._id,
+            firstName: adminUser.firstName,
+            lastName: adminUser.lastName,
+            profileImageUrl: adminProfile.profile_dp?.imageUrl || null,
+            universityName: adminProfile.university_name as string,
+            year: adminProfile.study_year as string,
+            degree: adminProfile.degree as string,
+            major: adminProfile.major as string,
+            isRequestAccepted: true,
+            status: status.accepted,
+            occupation: adminProfile.occupation as string,
+            affiliation: adminProfile.affiliation as string,
+            role: adminProfile.role || 'admin',
+          });
+        }
+      }
+    }
+
     await communityGroup.save();
 
     const updateUserProfile = await UserProfile.findOneAndUpdate(
