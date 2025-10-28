@@ -458,7 +458,12 @@ export const createCommunityGroup = async (
     inviteUsers: inviteUsers,
   });
 
-  await communityGroupService.joinCommunityGroup(userId, createdGroup._id.toString(), true);
+  await communityGroupService.joinCommunityGroup(
+    userId,
+    createdGroup._id.toString(),
+    true,
+    isOfficial && isAdminOfCommunity
+  );
 
   if (selectedUsers?.length >= 1 && createdGroup?._id && (!isOfficial || isAdminOfCommunity)) {
     await notificationService.createManyNotification(
@@ -508,7 +513,12 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
   return communityGroup;
 };
 
-export const joinCommunityGroup = async (userID: string, groupId: string, isAdmin: boolean = false) => {
+export const joinCommunityGroup = async (
+  userID: string,
+  groupId: string,
+  isAdmin: boolean = false,
+  isCreatorAdmin: boolean = false
+) => {
   //   asd
   try {
     const [user, userProfile] = await Promise.all([
@@ -579,7 +589,7 @@ export const joinCommunityGroup = async (userID: string, groupId: string, isAdmi
       role: userProfile.role,
     });
 
-    if (isAdmin && Array.isArray(communityAdminIds) && communityAdminIds.length > 0) {
+    if (isAdmin && Array.isArray(communityAdminIds) && communityAdminIds.length > 0 && isCreatorAdmin) {
       const adminDetails = await Promise.all(
         communityAdminIds.map(async (adminId) => {
           const [adminUser, adminProfile] = await Promise.all([
