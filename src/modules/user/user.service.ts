@@ -54,7 +54,7 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
-  const userProfile = await User.aggregate([
+  const [userProfile] = await User.aggregate([
     {
       $match: { _id: id },
     },
@@ -66,7 +66,92 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
         as: 'profile',
       },
     },
-    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    {
+      $unwind: {
+        path: '$profile',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    //start
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'profile.communities.communityId',
+        foreignField: '_id',
+        as: 'profile.communitiesData',
+      },
+    },
+    {
+      $addFields: {
+        'profile.communities': {
+          $map: {
+            input: { $ifNull: ['$profile.communities', []] },
+            as: 'comm',
+            in: {
+              $let: {
+                vars: {
+                  populated: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$profile.communitiesData', []] },
+                          as: 'pop',
+                          cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  _id: '$$populated._id',
+                  name: '$$populated.name',
+                  logo: '$$populated.communityLogoUrl.imageUrl',
+                  isVerifiedMember: {
+                    $cond: [
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: { $ifNull: ['$$populated.users', []] },
+                                as: 'usr',
+                                cond: {
+                                  $and: [{ $eq: ['$$usr._id', id] }, { $eq: ['$$usr.isVerified', true] }],
+                                },
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        'profile.communitiesData': 0,
+      },
+    },
+    // end
 
     {
       $match: {
@@ -77,11 +162,12 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
     {
       $lookup: {
         from: 'communities',
-        localField: 'profile.communities',
+        localField: 'profile.communities.communityId',
         foreignField: '_id',
         as: 'communityDetails',
       },
     },
+
     {
       $project: {
         password: 0,
@@ -89,7 +175,7 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
     },
   ]);
 
-  return userProfile[0] || null;
+  return userProfile || null;
 };
 
 export const getUserProfileByUsername = async (userName: string) => {
