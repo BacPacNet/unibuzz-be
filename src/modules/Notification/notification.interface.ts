@@ -16,6 +16,7 @@ export const notificationRoleAccess = {
   ACCEPTED_PRIVATE_GROUP_REQUEST: 'ACCEPTED_PRIVATE_GROUP_REQUEST',
   REJECTED_PRIVATE_GROUP_REQUEST: 'REJECTED_PRIVATE_GROUP_REQUEST',
   DELETED_COMMUNITY_GROUP: 'DELETED_COMMUNITY_GROUP',
+  REFETCHNOTIFICATIONS: 'REFETCHNOTIFICATIONS',
 
   community_post_live_request_notification: 'community_post_live_request_notification',
   community_post_rejected_notification: 'community_post_rejected_notification',

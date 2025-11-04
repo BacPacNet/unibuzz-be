@@ -20,7 +20,7 @@ interface communityInterface {
   communityCoverUrl: { imageUrl: String; publicId: String };
   communityLogoUrl: { imageUrl: String; publicId: String };
   name: string;
-  adminId: mongoose.Types.ObjectId;
+  adminId: mongoose.Types.ObjectId[];
   university_id: mongoose.Types.ObjectId;
   numberOfStudent: number;
   numberOfFaculty: number;

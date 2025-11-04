@@ -36,6 +36,7 @@
     "docker:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:test": "docker-compose -f docker-compose.yml -f docker-compose.test.yml up",
     "docker:build": "docker build -f Dockerfile.prod -t unibuzz-api:latest .",
+    "migrate:adminId": "node migrate-adminId.js",
     "prepare": "husky install",
     "release": "standard-version && git push --follow-tags origin master",
     "commit": "git add -A && cz"

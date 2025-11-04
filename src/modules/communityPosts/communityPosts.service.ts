@@ -240,6 +240,87 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
       {
         $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
       },
+      //   start
+      {
+        $lookup: {
+          from: 'communities',
+          localField: 'userProfile.communities.communityId',
+          foreignField: '_id',
+          as: 'userProfile.communitiesData',
+        },
+      },
+      {
+        $addFields: {
+          'userProfile.communities': {
+            $map: {
+              input: { $ifNull: ['$userProfile.communities', []] },
+              as: 'comm',
+              in: {
+                $let: {
+                  vars: {
+                    populated: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: { $ifNull: ['$userProfile.communitiesData', []] },
+                            as: 'pop',
+                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: {
+                    _id: '$$populated._id',
+                    name: '$$populated.name',
+                    logo: '$$populated.communityLogoUrl.imageUrl',
+
+                    isVerifiedMember: {
+                      $cond: [
+                        {
+                          $gt: [
+                            {
+                              $size: {
+                                $filter: {
+                                  input: { $ifNull: ['$$populated.users', []] },
+                                  as: 'usr',
+                                  cond: {
+                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                  },
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      {
+        $project: {
+          'userProfile.communitiesData': 0,
+        },
+      },
+      //   end
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -291,6 +372,7 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
             role: 1,
             isCommunityAdmin: 1,
             adminCommunityId: 1,
+            communities: 1,
           },
         },
       },
@@ -369,7 +451,85 @@ export const getCommunityGroupPostsByCommunityId = async (
         },
       },
       { $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true } },
-
+      //   start
+      {
+        $lookup: {
+          from: 'communities',
+          localField: 'userProfile.communities.communityId',
+          foreignField: '_id',
+          as: 'userProfile.communitiesData',
+        },
+      },
+      {
+        $addFields: {
+          'userProfile.communities': {
+            $map: {
+              input: { $ifNull: ['$userProfile.communities', []] },
+              as: 'comm',
+              in: {
+                $let: {
+                  vars: {
+                    populated: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: { $ifNull: ['$userProfile.communitiesData', []] },
+                            as: 'pop',
+                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: {
+                    _id: '$$populated._id',
+                    name: '$$populated.name',
+                    logo: '$$populated.communityLogoUrl.imageUrl',
+                    isVerifiedMember: {
+                      $cond: [
+                        {
+                          $gt: [
+                            {
+                              $size: {
+                                $filter: {
+                                  input: { $ifNull: ['$$populated.users', []] },
+                                  as: 'usr',
+                                  cond: {
+                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                  },
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          'userProfile.communitiesData': 0,
+        },
+      },
+      //   end
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -422,6 +582,7 @@ export const getCommunityGroupPostsByCommunityId = async (
             role: 1,
             isCommunityAdmin: 1,
             adminCommunityId: 1,
+            communities: 1,
           },
         },
       },
@@ -685,7 +846,85 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-
+      // start
+      {
+        $lookup: {
+          from: 'communities',
+          localField: 'profile.communities.communityId',
+          foreignField: '_id',
+          as: 'profile.communitiesData',
+        },
+      },
+      {
+        $addFields: {
+          'profile.communities': {
+            $map: {
+              input: { $ifNull: ['$profile.communities', []] },
+              as: 'comm',
+              in: {
+                $let: {
+                  vars: {
+                    populated: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: { $ifNull: ['$profile.communitiesData', []] },
+                            as: 'pop',
+                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: {
+                    _id: '$$populated._id',
+                    name: '$$populated.name',
+                    logo: '$$populated.communityLogoUrl.imageUrl',
+                    isVerifiedMember: {
+                      $cond: [
+                        {
+                          $gt: [
+                            {
+                              $size: {
+                                $filter: {
+                                  input: { $ifNull: ['$$populated.users', []] },
+                                  as: 'usr',
+                                  cond: {
+                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                  },
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                    isCommunityAdmin: {
+                      $cond: [
+                        {
+                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
+                        },
+                        true,
+                        false,
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          'profile.communitiesData': 0,
+        },
+      },
+      //  end
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -757,7 +996,20 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
             firstName: '$user.firstName',
             lastName: '$user.lastName',
           },
-          profile: '$profile',
+          //   profile: '$profile',
+          profile: {
+            profile_dp: 1,
+            university_name: 1,
+            study_year: 1,
+            degree: 1,
+            major: 1,
+            affiliation: 1,
+            occupation: 1,
+            role: 1,
+            isCommunityAdmin: 1,
+            adminCommunityId: 1,
+            communities: 1,
+          },
           commentCount: 1,
         },
       },

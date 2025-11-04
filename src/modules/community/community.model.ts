@@ -5,7 +5,7 @@ const communitySchema = new Schema<communityInterface>({
   communityCoverUrl: { imageUrl: String, publicId: String },
   communityLogoUrl: { imageUrl: String, publicId: String },
   name: { type: String, required: true, unique: true },
-  adminId: { type: Schema.Types.ObjectId, ref: 'User' },
+  adminId: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   university_id: { type: Schema.Types.ObjectId, ref: 'university', required: true, unique: true },
   numberOfStudent: Number,
   numberOfFaculty: Number,
