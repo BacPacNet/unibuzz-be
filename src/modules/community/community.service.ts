@@ -212,32 +212,39 @@ export const getUserFilteredCommunities = async (
       },
     ];
 
+    const hasFilters =
+      (filters?.selectedType && filters.selectedType.length > 0) ||
+      (filters?.selectedLabel && filters.selectedLabel.length > 0) ||
+      (filters?.selectedFilters && Object.keys(filters.selectedFilters).length > 0);
+
+    const groupFilterConditions: any[] = [];
+
+    if (!hasFilters) {
+      groupFilterConditions.push({
+        $eq: ['$$group.adminUserId', new mongoose.Types.ObjectId(userID)],
+      });
+    }
+
+    groupFilterConditions.push({
+      $not: [
+        {
+          $and: [
+            { $eq: ['$$group.communityGroupType', 'casual'] },
+            {
+              $or: [{ $eq: ['$$group.status', 'pending'] }, { $eq: ['$$group.status', 'rejected'] }],
+            },
+          ],
+        },
+      ],
+    });
+
     pipeline.push({
       $addFields: {
         communityGroups: {
           $filter: {
             input: '$communityGroups',
             as: 'group',
-            cond: {
-              $or: [
-                // Always keep if user is admin of the group
-                { $eq: ['$$group.adminUserId', new mongoose.Types.ObjectId(userID)] },
-
-                // Otherwise, keep if NOT (CASUAL + pending/rejected)
-                {
-                  $not: [
-                    {
-                      $and: [
-                        { $eq: ['$$group.communityGroupType', 'casual'] }, // adjust if your enum is lowercase/uppercase
-                        {
-                          $or: [{ $eq: ['$$group.status', 'pending'] }, { $eq: ['$$group.status', 'rejected'] }],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
+            cond: { $or: groupFilterConditions },
           },
         },
       },
@@ -517,6 +524,47 @@ export const getUserFilteredCommunities = async (
         });
         break;
 
+      case 'userCountAsc':
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $map: {
+                input: '$communityGroups',
+                as: 'group',
+                in: {
+                  $mergeObjects: [
+                    '$$group',
+                    {
+                      userCount: {
+                        $size: {
+                          $filter: {
+                            input: '$$group.users',
+                            as: 'user',
+                            cond: { $eq: ['$$user.status', 'accepted'] },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+        pipeline.push({
+          $addFields: {
+            communityGroups: {
+              $sortArray: { input: '$communityGroups', sortBy: { userCount: 1 } },
+            },
+          },
+        });
+
+        pipeline.push({
+          $unset: 'communityGroups.userCount',
+        });
+        break;
+
       case 'latest':
         pipeline.push({
           $addFields: {
@@ -772,11 +820,17 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
     });
 
     if (searchQuery && searchQuery.trim() !== '') {
-      const regex = new RegExp(searchQuery.trim(), 'i');
-      pipeline.push({
-        $match: {
+      const terms = searchQuery.trim().split(/\s+/);
+
+      const searchConditions = terms.map((term) => {
+        const regex = new RegExp(term, 'i');
+        return {
           $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
-        },
+        };
+      });
+
+      pipeline.push({
+        $match: { $and: searchConditions },
       });
     }
 

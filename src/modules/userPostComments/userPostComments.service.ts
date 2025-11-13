@@ -11,26 +11,240 @@ export const createUserPostComment = async (userId: string, userPostId: string, 
     level: 0,
   };
 
-  const comment = await userPostCommentsModel.create(payload);
+  const createdComment = await userPostCommentsModel.create(payload);
 
-  await comment.populate([
-    { path: 'commenterId', select: 'firstName lastName _id' },
+  const [comment] = await userPostCommentsModel.aggregate([
     {
-      path: 'commenterProfileId',
-      select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
+      $match: { _id: new mongoose.Types.ObjectId(createdComment._id) },
+    },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenterId',
+      },
+    },
+    { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'commenterProfileId',
+        foreignField: '_id',
+        as: 'commenterProfileId',
+      },
+    },
+    { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'commenterProfileId.communities.communityId',
+        foreignField: '_id',
+        as: 'commenterProfileId.communitiesData',
+      },
     },
     {
-      path: 'replies',
-      options: { sort: { createdAt: -1 } },
-      populate: [
-        { path: 'commenterId', select: 'firstName lastName _id' },
-        {
-          path: 'commenterProfileId',
-          select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
+      $addFields: {
+        'commenterProfileId.communities': {
+          $map: {
+            input: { $ifNull: ['$commenterProfileId.communities', []] },
+            as: 'comm',
+            in: {
+              $let: {
+                vars: {
+                  populated: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                          as: 'pop',
+                          cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  _id: '$$populated._id',
+                  name: '$$populated.name',
+                  logo: '$$populated.communityLogoUrl.imageUrl',
+                  isVerifiedMember: {
+                    $cond: [
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: { $ifNull: ['$$populated.users', []] },
+                                as: 'usr',
+                                cond: {
+                                  $and: [{ $eq: ['$$usr._id', '$commenterId._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                },
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                },
+              },
+            },
+          },
         },
-      ],
+      },
     },
-    { path: 'userPostId', select: 'user_id' },
+    { $project: { 'commenterProfileId.communitiesData': 0 } },
+
+    {
+      $lookup: {
+        from: 'userposts',
+        localField: 'userPostId',
+        foreignField: '_id',
+        as: 'userPostId',
+      },
+    },
+    { $unwind: { path: '$userPostId', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        'userPostId.user_id': 1,
+        'userPostId._id': 1,
+        commenterId: 1,
+        commenterProfileId: 1,
+        replies: 1,
+        content: 1,
+        imageUrl: 1,
+        likeCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        level: 1,
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'replies',
+        foreignField: '_id',
+        as: 'replies',
+        pipeline: [
+          { $sort: { createdAt: -1 } },
+
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'commenterId',
+              foreignField: '_id',
+              as: 'commenterId',
+            },
+          },
+          { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'userprofiles',
+              localField: 'commenterProfileId',
+              foreignField: '_id',
+              as: 'commenterProfileId',
+            },
+          },
+          { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'commenterProfileId.communities.communityId',
+              foreignField: '_id',
+              as: 'commenterProfileId.communitiesData',
+            },
+          },
+          {
+            $addFields: {
+              'commenterProfileId.communities': {
+                $map: {
+                  input: { $ifNull: ['$commenterProfileId.communities', []] },
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [
+                                          { $eq: ['$$usr._id', '$commenterId._id'] },
+                                          { $eq: ['$$usr.isVerified', true] },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                        isCommunityAdmin: {
+                          $cond: [
+                            {
+                              $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          { $project: { 'commenterProfileId.communitiesData': 0 } },
+        ],
+      },
+    },
   ]);
 
   return comment;
@@ -70,38 +284,238 @@ export const likeUnlikeComment = async (commentId: string, userId: string) => {
   }
 };
 
-export const commentReply = async (commentId: string, userID: string, userPostId: string, body: any, level: number) => {
+export const commentReply = async (commentId: string, userId: string, userPostId: string, body: any, level: number) => {
   const newReply = {
-    userPostId: userPostId,
-    commenterId: userID,
+    userPostId,
+    commenterId: userId,
     level: level + 1,
     ...body,
   };
 
   const savedReply = await userPostCommentsModel.create(newReply);
 
-  const parentComment = await userPostCommentsModel
-    .findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true })
-    .populate([
-      { path: 'commenterId', select: 'firstName lastName _id' },
-      {
-        path: 'commenterProfileId',
-        select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
+  await userPostCommentsModel.findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true });
+
+  const [parentComment] = await userPostCommentsModel.aggregate([
+    {
+      $match: { _id: new mongoose.Types.ObjectId(commentId) },
+    },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenterId',
       },
-      {
-        path: 'replies',
-        options: { sort: { createdAt: -1 } },
-        populate: [
-          { path: 'commenterId', select: 'firstName lastName _id' },
-          {
-            path: 'commenterProfileId',
-            select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
+    },
+    { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'commenterProfileId',
+        foreignField: '_id',
+        as: 'commenterProfileId',
+      },
+    },
+    { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'commenterProfileId.communities.communityId',
+        foreignField: '_id',
+        as: 'commenterProfileId.communitiesData',
+      },
+    },
+    {
+      $addFields: {
+        'commenterProfileId.communities': {
+          $map: {
+            input: { $ifNull: ['$commenterProfileId.communities', []] },
+            as: 'comm',
+            in: {
+              $let: {
+                vars: {
+                  populated: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                          as: 'pop',
+                          cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  _id: '$$populated._id',
+                  name: '$$populated.name',
+                  logo: '$$populated.communityLogoUrl.imageUrl',
+
+                  isVerifiedMember: {
+                    $cond: [
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: { $ifNull: ['$$populated.users', []] },
+                                as: 'usr',
+                                cond: {
+                                  $and: [{ $eq: ['$$usr._id', '$commenterId._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                },
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                },
+              },
+            },
           },
+        },
+      },
+    },
+    { $project: { 'commenterProfileId.communitiesData': 0 } },
+
+    {
+      $lookup: {
+        from: 'userposts',
+        localField: 'userPostId',
+        foreignField: '_id',
+        as: 'userPostId',
+      },
+    },
+    { $unwind: { path: '$userPostId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'replies',
+        foreignField: '_id',
+        as: 'replies',
+        pipeline: [
+          { $sort: { createdAt: -1 } },
+
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'commenterId',
+              foreignField: '_id',
+              as: 'commenterId',
+            },
+          },
+          { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'userprofiles',
+              localField: 'commenterProfileId',
+              foreignField: '_id',
+              as: 'commenterProfileId',
+            },
+          },
+          { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'commenterProfileId.communities.communityId',
+              foreignField: '_id',
+              as: 'commenterProfileId.communitiesData',
+            },
+          },
+          {
+            $addFields: {
+              'commenterProfileId.communities': {
+                $map: {
+                  input: { $ifNull: ['$commenterProfileId.communities', []] },
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [
+                                          { $eq: ['$$usr._id', '$commenterId._id'] },
+                                          { $eq: ['$$usr.isVerified', true] },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                        isCommunityAdmin: {
+                          $cond: [
+                            {
+                              $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          { $project: { 'commenterProfileId.communitiesData': 0 } },
         ],
       },
-      { path: 'userPostId', select: 'user_id' },
-    ])
-    .lean();
+    },
+  ]);
 
   return parentComment;
 };
@@ -115,41 +529,226 @@ export const getUserPostComments = async (
   const skip = (page - 1) * limit;
   const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
 
-  const comments =
-    (await userPostCommentsModel
-      .find({ userPostId: postId, level: 0 })
-      .populate([
-        { path: 'commenterId', select: 'firstName lastName _id' },
-        {
-          path: 'commenterProfileId',
-          select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
-        },
-        {
-          path: 'replies',
-          options: { sort: { createdAt: -1 } },
-          populate: [
-            { path: 'commenterId', select: 'firstName lastName _id' },
-            {
-              path: 'commenterProfileId',
-              select: 'profile_dp university_name study_year degree major affiliation occupation role isCommunityAdmin',
+  const comments = await userPostCommentsModel.aggregate([
+    {
+      $match: {
+        userPostId: new mongoose.Types.ObjectId(postId),
+        level: 0,
+      },
+    },
+    { $sort: { createdAt: mainSortOrder } },
+    { $skip: skip },
+    { $limit: limit },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenterId',
+      },
+    },
+    { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'commenterProfileId',
+        foreignField: '_id',
+        as: 'commenterProfileId',
+      },
+    },
+    { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'commenterProfileId.communities.communityId',
+        foreignField: '_id',
+        as: 'commenterProfileId.communitiesData',
+      },
+    },
+    {
+      $addFields: {
+        'commenterProfileId.communities': {
+          $map: {
+            input: { $ifNull: ['$commenterProfileId.communities', []] },
+            as: 'comm',
+            in: {
+              $let: {
+                vars: {
+                  populated: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                          as: 'pop',
+                          cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  _id: '$$populated._id',
+                  name: '$$populated.name',
+                  logo: '$$populated.communityLogoUrl.imageUrl',
+                  isVerifiedMember: {
+                    $cond: [
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: { $ifNull: ['$$populated.users', []] },
+                                as: 'usr',
+                                cond: {
+                                  $and: [{ $eq: ['$$usr._id', '$commenterId._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                },
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                },
+              },
             },
-          ],
+          },
         },
-      ])
-      .sort({ createdAt: mainSortOrder })
-      .skip(skip)
-      .limit(limit)
-      .lean()) || [];
+      },
+    },
+    { $project: { 'commenterProfileId.communitiesData': 0 } },
 
-  const totalComments = await userPostCommentsModel.countDocuments({
-    userPostId: postId,
-  });
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'replies',
+        foreignField: '_id',
+        as: 'replies',
+        pipeline: [
+          { $sort: { createdAt: -1 } },
 
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'commenterId',
+              foreignField: '_id',
+              as: 'commenterId',
+            },
+          },
+          { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'userprofiles',
+              localField: 'commenterProfileId',
+              foreignField: '_id',
+              as: 'commenterProfileId',
+            },
+          },
+          { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'commenterProfileId.communities.communityId',
+              foreignField: '_id',
+              as: 'commenterProfileId.communitiesData',
+            },
+          },
+          {
+            $addFields: {
+              'commenterProfileId.communities': {
+                $map: {
+                  input: { $ifNull: ['$commenterProfileId.communities', []] },
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [
+                                          { $eq: ['$$usr._id', '$commenterId._id'] },
+                                          { $eq: ['$$usr.isVerified', true] },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                        isCommunityAdmin: {
+                          $cond: [
+                            {
+                              $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          { $project: { 'commenterProfileId.communitiesData': 0 } },
+        ],
+      },
+    },
+  ]);
+
+  const totalComments = await userPostCommentsModel.countDocuments({ userPostId: postId });
   const totalTopLevelComments = await userPostCommentsModel.countDocuments({
     userPostId: postId,
     level: 0,
   });
-
   const totalPages = Math.ceil(totalTopLevelComments / limit);
 
   return {
@@ -246,27 +845,239 @@ export const getPostCommentById = async (commentId: string) => {
 };
 
 export const getSingleCommentByCommentId = async (commentId: string) => {
-  const comment = await userPostCommentsModel
-    .findById(commentId)
-    .populate([
-      { path: 'commenterId', select: 'firstName lastName _id' },
-      {
-        path: 'commenterProfileId',
-        select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+  const result = await userPostCommentsModel.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(commentId),
       },
-      {
-        path: 'replies',
-        populate: [
-          { path: 'commenterId', select: 'firstName lastName _id' },
-          {
-            path: 'commenterProfileId',
-            select: 'profile_dp university_name study_year affiliation occupation degree role isCommunityAdmin',
+    },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenterId',
+      },
+    },
+    { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'commenterProfileId',
+        foreignField: '_id',
+        as: 'commenterProfileId',
+      },
+    },
+    { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'communities',
+        localField: 'commenterProfileId.communities.communityId',
+        foreignField: '_id',
+        as: 'commenterProfileId.communitiesData',
+      },
+    },
+    {
+      $addFields: {
+        'commenterProfileId.communities': {
+          $map: {
+            input: { $ifNull: ['$commenterProfileId.communities', []] },
+            as: 'comm',
+            in: {
+              $let: {
+                vars: {
+                  populated: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                          as: 'pop',
+                          cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  _id: '$$populated._id',
+                  name: '$$populated.name',
+                  logo: '$$populated.communityLogoUrl.imageUrl',
+                  isVerifiedMember: {
+                    $cond: [
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: { $ifNull: ['$$populated.users', []] },
+                                as: 'usr',
+                                cond: {
+                                  $and: [{ $eq: ['$$usr._id', '$commenterId._id'] }, { $eq: ['$$usr.isVerified', true] }],
+                                },
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                  isCommunityAdmin: {
+                    $cond: [
+                      {
+                        $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                      },
+                      true,
+                      false,
+                    ],
+                  },
+                },
+              },
+            },
           },
+        },
+      },
+    },
+    { $project: { 'commenterProfileId.communitiesData': 0 } },
+
+    {
+      $lookup: {
+        from: 'userposts',
+        localField: 'userPostId',
+        foreignField: '_id',
+        as: 'userPostId',
+      },
+    },
+    { $unwind: { path: '$userPostId', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        'userPostId.user_id': 1,
+        commenterId: 1,
+        commenterProfileId: 1,
+        replies: 1,
+        content: 1,
+        imageUrl: 1,
+        likeCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'userpostcomments',
+        localField: 'replies',
+        foreignField: '_id',
+        as: 'replies',
+        pipeline: [
+          { $sort: { createdAt: -1 } },
+
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'commenterId',
+              foreignField: '_id',
+              as: 'commenterId',
+            },
+          },
+          { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'userprofiles',
+              localField: 'commenterProfileId',
+              foreignField: '_id',
+              as: 'commenterProfileId',
+            },
+          },
+          { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+
+          {
+            $lookup: {
+              from: 'communities',
+              localField: 'commenterProfileId.communities.communityId',
+              foreignField: '_id',
+              as: 'commenterProfileId.communitiesData',
+            },
+          },
+          {
+            $addFields: {
+              'commenterProfileId.communities': {
+                $map: {
+                  input: { $ifNull: ['$commenterProfileId.communities', []] },
+                  as: 'comm',
+                  in: {
+                    $let: {
+                      vars: {
+                        populated: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: { $ifNull: ['$commenterProfileId.communitiesData', []] },
+                                as: 'pop',
+                                cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: {
+                        _id: '$$populated._id',
+                        name: '$$populated.name',
+                        logo: '$$populated.communityLogoUrl.imageUrl',
+                        isVerifiedMember: {
+                          $cond: [
+                            {
+                              $gt: [
+                                {
+                                  $size: {
+                                    $filter: {
+                                      input: { $ifNull: ['$$populated.users', []] },
+                                      as: 'usr',
+                                      cond: {
+                                        $and: [
+                                          { $eq: ['$$usr._id', '$commenterId._id'] },
+                                          { $eq: ['$$usr.isVerified', true] },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                        isCommunityAdmin: {
+                          $cond: [
+                            {
+                              $in: ['$commenterId._id', { $ifNull: ['$$populated.adminId', []] }],
+                            },
+                            true,
+                            false,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          { $project: { 'commenterProfileId.communitiesData': 0 } },
         ],
       },
-      { path: 'userPostId', select: 'user_id' },
-    ])
-    .lean();
+    },
+  ]);
 
-  return comment;
+  return result[0] || null;
 };
