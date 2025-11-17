@@ -50,7 +50,9 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
 
     const unverifiedUserIds = community?.users?.filter((user) => !user.isVerified).map((user) => user._id.toString()) ?? [];
 
-    const hasUnverifiedUsersInGroup = communityGroup.users.some((user) => unverifiedUserIds.includes(user._id.toString()));
+    const hasUnverifiedUsersInGroup = communityGroup.users.some(
+      (user) => unverifiedUserIds.includes(user._id.toString()) && user.status !== status.pending
+    );
 
     if (hasUnverifiedUsersInGroup) {
       throw new ApiError(
@@ -99,6 +101,29 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
     if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityGroupId or userId');
     }
+
+    const communityGroup = await communityGroupModel.findById(communityGroupId);
+    const userProfile = await getUserProfileById(userId);
+
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    }
+
+    if (communityGroup.communityGroupAccess === 'Private') {
+      const userProfile = await getUserProfileById(userId);
+      if (!userProfile) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+      }
+
+      const hasMatchingUniversity = userProfile.email?.some(
+        (emailObj: any) => emailObj.communityId?.toString() === communityGroup.communityId?.toString()
+      );
+
+      if (!hasMatchingUniversity) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'You need to verify your university email to join private groups');
+      }
+    }
+
     const updatedGroup = await communityGroupModel.findOneAndUpdate(
       { _id: communityGroupId, 'users._id': convertToObjectId(userId) },
       {
@@ -115,8 +140,6 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
     }
 
     const communityId = updatedGroup.communityId;
-
-    const userProfile = await getUserProfileById(userId);
 
     if (!userProfile) {
       throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
