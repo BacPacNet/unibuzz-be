@@ -25,7 +25,7 @@ mongoose.connect(config.mongoose.url).then(() => {
     // Socket.io connection handling
     io.on('connection', (socket: Socket) => {
       handleConnection(socket, io, onlineUsers);
-      handleNewMessage(socket, io);
+      handleNewMessage(socket, io, onlineUsers);
     });
 
     // Start SQS Worker
