@@ -13,4 +13,5 @@ export enum SocketConnectionEnums {
   ONLINEUSERS2 = 'onlineUsers2',
   DISCONNECT = 'disconnect',
   USER_DISCONNECT = 'user-disconnected',
+  APP_STATE = 'app_state', // 'foreground' or 'background'
 }

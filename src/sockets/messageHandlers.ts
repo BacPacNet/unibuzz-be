@@ -2,8 +2,9 @@ import { Server, Socket } from 'socket.io';
 import { Message, ReactedMessage } from './messageTypes';
 import { SocketMessageEnums } from './socketEnum';
 import { sendMessagePushNotification } from '../modules/pushNotification/pushNotification.service';
+import { OnlineUsers } from './onlineUsers';
 
-export const handleNewMessage = (socket: Socket, io: Server) => {
+export const handleNewMessage = (socket: Socket, io: Server, onlineUsers: OnlineUsers) => {
   socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
     const chat = newMessageReceived.chat;
     if (!chat.users) return console.log('chat.users not defined');
@@ -14,8 +15,9 @@ export const handleNewMessage = (socket: Socket, io: Server) => {
       }
 
       const room = io.sockets.adapter.rooms.get(user.userId.toString());
+      const isUserActive = onlineUsers.isUserActive(user.userId.toString());
 
-      if (room) {
+      if (room && isUserActive) {
         socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
         io.emit(`message_notification_${user.userId}`);
       } else {

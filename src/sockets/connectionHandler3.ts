@@ -8,14 +8,20 @@ interface releventUsersArray {
 
 export const handleConnection = (socket: Socket, io: Server, onlineUsers: OnlineUsers) => {
   let releventUsersArray: releventUsersArray[] = [];
+
   socket.on(SocketConnectionEnums.SETUP, (userID: string) => {
     socket.userID = userID;
     socket.join(userID);
 
     onlineUsers.addUser(userID, socket.id);
 
-
     // socket.emit(SocketConnectionEnums.CONNECTED, userID);
+  });
+
+  socket.on(SocketConnectionEnums.APP_STATE, (state: 'foreground' | 'background') => {
+    if (socket.userID) {
+      onlineUsers.setUserActive(socket.userID, state === 'foreground');
+    }
   });
 
   socket.on(SocketConnectionEnums.REQUESTONLINEUSERS, (relevantUserIDs: string[]) => {

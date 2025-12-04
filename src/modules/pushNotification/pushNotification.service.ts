@@ -50,6 +50,7 @@ export const sendPushNotification = async (userId: string, title: string, body: 
 
 export const sendMessagePushNotification = async (userId: string, title: string, body: string, data: any = {}) => {
   const pushNotification = await pushNotificationModal.findOne({ user_Id: userId });
+
   if (!pushNotification) return;
 
   const message = {
