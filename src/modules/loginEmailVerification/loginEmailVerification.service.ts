@@ -3,7 +3,6 @@ import { ApiError } from '../errors';
 import loginEmailVerificationModal from './loginEmailVerification.modal';
 import 'dotenv/config';
 import { sendEmail } from '../email/email.service';
-// import { universityVerificationEmailService } from '../universityVerificationEmail';
 
 export const createloginEmailVerificationOtp = async (email: string) => {
   const data = {
@@ -70,7 +69,6 @@ export const checkloginEmailVerificationOtpV2 = async (otp: string, email: strin
   }
 
   await loginEmailVerification.deleteOne();
-  //   const isDomainValid = await universityVerificationEmailService.universityEmailDomainCheck(email, universityId);
 
   return { nextCheck: true };
 };
