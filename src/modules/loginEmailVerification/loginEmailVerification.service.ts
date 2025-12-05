@@ -3,7 +3,7 @@ import { ApiError } from '../errors';
 import loginEmailVerificationModal from './loginEmailVerification.modal';
 import 'dotenv/config';
 import { sendEmail } from '../email/email.service';
-import { universityVerificationEmailService } from '../universityVerificationEmail';
+// import { universityVerificationEmailService } from '../universityVerificationEmail';
 
 export const createloginEmailVerificationOtp = async (email: string) => {
   const data = {
@@ -54,7 +54,7 @@ export const checkloginEmailVerificationOtp = async (otp: string, email: string)
 
   await loginEmailVerification.deleteOne();
 };
-export const checkloginEmailVerificationOtpV2 = async (otp: string, email: string, universityId: string) => {
+export const checkloginEmailVerificationOtpV2 = async (otp: string, email: string) => {
   const loginEmailVerification = await loginEmailVerificationModal.findOne({ email });
 
   if (!loginEmailVerification) {
@@ -70,7 +70,7 @@ export const checkloginEmailVerificationOtpV2 = async (otp: string, email: strin
   }
 
   await loginEmailVerification.deleteOne();
-  const isDomainValid = await universityVerificationEmailService.universityEmailDomainCheck(email, universityId);
+  //   const isDomainValid = await universityVerificationEmailService.universityEmailDomainCheck(email, universityId);
 
-  return isDomainValid;
+  return { nextCheck: true };
 };
