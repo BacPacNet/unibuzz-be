@@ -44,6 +44,8 @@ export interface IUser {
   profile: UserProfileDocument;
   isUserDeactive: boolean;
   isNewUser: boolean;
+  isDeleted: boolean;
+  deletedAt: Date | null;
 }
 
 export interface IUserDoc extends IUser, Document {

@@ -102,6 +102,17 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
   return ChatWithDp;
 };
 
+function maskDeletedUser(user: any) {
+  if (!user?.isDeleted) return user;
+
+  return {
+    ...user,
+    firstName: 'Deleted',
+    lastName: 'User',
+    profileDp: null,
+  };
+}
+
 export const getUserChats = async (userId: string) => {
   const chats: (chatInterface & { _id: string })[] = await chatModel
     .find({
@@ -109,20 +120,33 @@ export const getUserChats = async (userId: string) => {
     })
     .populate({
       path: 'users.userId',
-      select: 'firstName lastName',
+      select: 'firstName lastName isDeleted',
     })
+
     .populate('latestMessage')
     .lean();
 
   const filteredChats = chats.filter((chat) => {
-    if (!chat?.users) return false; // Ensure chat.users exists
+    if (!chat?.users) return false;
 
     if (chat.isGroupChat) {
-      chat.users = chat.users.filter((user) => user?.userId !== null && user?.userId !== undefined);
-      return chat.users.length > 0; // Only keep group chats with valid users
+      const adminUser = chat.users.find(
+        (u) => u?.userId && typeof u.userId === 'object' && u.userId._id?.toString() === chat.groupAdmin?.toString()
+      );
+
+      if (
+        adminUser?.userId &&
+        typeof adminUser.userId === 'object' &&
+        adminUser.userId !== null &&
+        'isDeleted' in adminUser.userId &&
+        adminUser.userId.isDeleted === true
+      ) {
+        return false;
+      }
+
+      return true;
     }
 
-    // For non-group chats
     const isValidChat = chat.users.every((user) => {
       if (!user?.userId) return false;
 
@@ -135,7 +159,6 @@ export const getUserChats = async (userId: string) => {
 
     return isValidChat;
   });
-
   const userIds = filteredChats
     .flatMap((chat) =>
       chat.users.map((user) => {
@@ -199,19 +222,26 @@ export const getUserChats = async (userId: string) => {
       chat.users = chat.users.map((user) => {
         if (user?.userId?._id?.toString() !== userId.toString()) {
           const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user?.userId?._id?.toString());
-          profileDp = userProfile?.profile_dp?.imageUrl ?? null;
+          //   profileDp = userProfile?.profile_dp?.imageUrl ?? null;
+          const isDeleted =
+            typeof user?.userId === 'object' &&
+            user?.userId !== null &&
+            'isDeleted' in user.userId &&
+            user.userId.isDeleted === true;
+          profileDp = isDeleted ? null : userProfile?.profile_dp?.imageUrl ?? null;
           return {
             ...user,
             userId: {
-              ...user.userId,
-              profileDp: userProfile?.profile_dp?.imageUrl ?? null,
-              universityName: userProfile?.university_name ?? null,
-              studyYear: userProfile?.study_year ?? null,
-              degree: userProfile?.degree ?? null,
-              major: userProfile?.major ?? null,
-              role: userProfile?.role ?? null,
-              affiliation: userProfile?.affiliation ?? null,
-              occupation: userProfile?.occupation ?? null,
+              ...maskDeletedUser(user?.userId),
+              profileDp: isDeleted ? null : userProfile?.profile_dp?.imageUrl ?? null,
+              universityName: isDeleted ? null : userProfile?.university_name ?? null,
+              studyYear: isDeleted ? null : userProfile?.study_year ?? null,
+              degree: isDeleted ? null : userProfile?.degree ?? null,
+              major: isDeleted ? null : userProfile?.major ?? null,
+              role: isDeleted ? null : userProfile?.role ?? null,
+              affiliation: isDeleted ? null : userProfile?.affiliation ?? null,
+              occupation: isDeleted ? null : userProfile?.occupation ?? null,
+              isDeleted: isDeleted,
             },
           };
         }
@@ -220,18 +250,24 @@ export const getUserChats = async (userId: string) => {
     } else {
       chat.users = chat.users.map((user) => {
         const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId._id.toString());
+        const isDeleted =
+          typeof user?.userId === 'object' &&
+          user?.userId !== null &&
+          'isDeleted' in user.userId &&
+          user.userId.isDeleted === true;
         return {
           ...user,
           userId: {
-            ...user.userId,
-            profileDp: userProfile?.profile_dp?.imageUrl ?? null,
-            universityName: userProfile?.university_name ?? null,
-            studyYear: userProfile?.study_year ?? null,
-            degree: userProfile?.degree ?? null,
-            major: userProfile?.major ?? null,
-            role: userProfile?.role ?? null,
-            affiliation: userProfile?.affiliation ?? null,
-            occupation: userProfile?.occupation ?? null,
+            ...maskDeletedUser(user.userId),
+            profileDp: isDeleted ? null : userProfile?.profile_dp?.imageUrl ?? null,
+            universityName: isDeleted ? null : userProfile?.university_name ?? null,
+            studyYear: isDeleted ? null : userProfile?.study_year ?? null,
+            degree: isDeleted ? null : userProfile?.degree ?? null,
+            major: isDeleted ? null : userProfile?.major ?? null,
+            role: isDeleted ? null : userProfile?.role ?? null,
+            affiliation: isDeleted ? null : userProfile?.affiliation ?? null,
+            occupation: isDeleted ? null : userProfile?.occupation ?? null,
+            isDeleted: isDeleted,
           },
         };
       }) as any;

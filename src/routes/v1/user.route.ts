@@ -8,7 +8,8 @@ const router: Router = express.Router();
 router
   .route('/')
   .post(validate(userValidation.createUser), userController.createUser)
-  .get(userIdAuth, userController.getUsersWithProfileData);
+  .get(userIdAuth, userController.getUsersWithProfileData)
+  .delete(userIdAuth, userController.softDeleteUser);
 
 router.route('/connections').get(userIdAuth, userController.getAllUser);
 router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
@@ -19,7 +20,6 @@ router.route('/changeUserName').put(userIdAuth, userController.changeUserName);
 router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
 router.route('/deActivateUserAccount').put(userIdAuth, userController.deActivateUserAccount);
 router.route('/new-user').put(userIdAuth, userController.IsNewUserToggle);
-
 router.route('/username/:userName').get(userIdAuth, userController.getUserByUsername);
 
 router

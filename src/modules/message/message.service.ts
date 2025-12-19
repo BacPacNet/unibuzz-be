@@ -55,10 +55,36 @@ export const getMessages = async (chatId: string) => {
   const messages = await messageModel
     .find({ chat: chatId })
     .populate([
-      { path: 'sender', select: 'firstName lastName _id' },
+      { path: 'sender', select: 'firstName lastName _id isDeleted' },
       { path: 'senderProfile', select: '  profile_dp' },
     ])
-    .sort({ createdAt: 1 });
+    .sort({ createdAt: 1 })
+    .lean();
+
+  return messages.map((message) => {
+    if (
+      message.sender &&
+      typeof message.sender === 'object' &&
+      message.sender !== null &&
+      'isDeleted' in message.sender &&
+      message.sender.isDeleted
+    ) {
+      return {
+        ...message,
+        sender: {
+          _id: message.sender._id,
+          firstName: 'Deleted',
+          lastName: 'User',
+          isDeleted: true,
+        },
+        senderProfile: {
+          profile_dp: null,
+        },
+      };
+    }
+
+    return message;
+  });
 
   return messages;
 };

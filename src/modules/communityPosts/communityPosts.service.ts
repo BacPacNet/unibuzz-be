@@ -442,6 +442,7 @@ export const getCommunityGroupPostsByCommunityId = async (
         },
       },
       { $unwind: '$user' },
+      { $match: { 'user.isDeleted': { $ne: true } } },
       {
         $lookup: {
           from: 'userprofiles',
@@ -530,6 +531,7 @@ export const getCommunityGroupPostsByCommunityId = async (
         },
       },
       //   end
+
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -538,6 +540,20 @@ export const getCommunityGroupPostsByCommunityId = async (
             {
               $match: {
                 $expr: { $eq: ['$postId', '$$postId'] },
+              },
+            },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'commenterId',
+                foreignField: '_id',
+                as: 'commenter',
+              },
+            },
+            { $unwind: '$commenter' },
+            {
+              $match: {
+                'commenter.isDeleted': { $ne: true },
               },
             },
             { $project: { _id: 1 } },
@@ -836,7 +852,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
         },
       },
       { $unwind: '$user' },
-
+      { $match: { 'user.isDeleted': { $ne: true } } },
       {
         $lookup: {
           from: 'userprofiles',

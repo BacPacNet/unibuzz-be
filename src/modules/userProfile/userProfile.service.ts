@@ -248,7 +248,7 @@ export const getFollowing = async (name: string = '', userId: string, page: numb
   };
 
   const users = await User.aggregate([
-    { $match: { _id: { $in: ids }, ...nameFilter } },
+    { $match: { _id: { $in: ids }, ...nameFilter, isDeleted: { $ne: true } } },
     {
       $lookup: {
         from: 'userprofiles',
@@ -321,6 +321,7 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
     {
       $match: {
         _id: { $in: ids },
+        isDeleted: { $ne: true },
         $or: [
           { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
           ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
@@ -498,6 +499,7 @@ export const getFollowingAndMutuals = async (name: string, userId: string, page:
     {
       $match: {
         _id: { $in: mutualIds },
+        isDeleted: { $ne: true },
         $or: [
           { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
           ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
