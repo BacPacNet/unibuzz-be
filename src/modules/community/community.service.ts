@@ -180,7 +180,6 @@ export const getUserCommunities = async (userID: string) => {
     throw error;
   }
 };
-
 export const getUserFilteredCommunities = async (
   userID: string,
   communityId: string = '',
@@ -198,16 +197,68 @@ export const getUserFilteredCommunities = async (
     const userProfile = await userProfileService.getUserProfileById(userID);
     if (!userProfile) throw new Error('User Profile not found');
 
+    const userObjectId = new mongoose.Types.ObjectId(userID);
+
     const pipeline: PipelineStage[] = [
-      {
-        $match: { _id: new mongoose.Types.ObjectId(communityId) },
-      },
+      { $match: { _id: new mongoose.Types.ObjectId(communityId) } },
+
       {
         $lookup: {
           from: 'communitygroups',
           localField: '_id',
           foreignField: 'communityId',
           as: 'communityGroups',
+        },
+      },
+
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'communityGroups.adminUserId',
+          foreignField: '_id',
+          as: 'groupAdmins',
+        },
+      },
+
+      {
+        $addFields: {
+          communityGroups: {
+            $map: {
+              input: '$communityGroups',
+              as: 'group',
+              in: {
+                $mergeObjects: [
+                  '$$group',
+                  {
+                    admin: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$groupAdmins',
+                            as: 'a',
+                            cond: { $eq: ['$$a._id', '$$group.adminUserId'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+
+      {
+        $addFields: {
+          communityGroups: {
+            $filter: {
+              input: '$communityGroups',
+              as: 'group',
+              cond: { $ne: ['$$group.admin.isDeleted', true] },
+            },
+          },
         },
       },
     ];
@@ -221,7 +272,7 @@ export const getUserFilteredCommunities = async (
 
     if (!hasFilters) {
       groupFilterConditions.push({
-        $eq: ['$$group.adminUserId', new mongoose.Types.ObjectId(userID)],
+        $eq: ['$$group.adminUserId', userObjectId],
       });
     }
 
@@ -260,10 +311,18 @@ export const getUserFilteredCommunities = async (
           const accessConditions: any[] = [];
           const typeConditions: any[] = [];
 
-          if (selectedType.includes('Private')) accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
-          if (selectedType.includes('Public')) accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
-          if (selectedType.includes('Official')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
-          if (selectedType.includes('Casual')) typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
+          if (selectedType.includes('Private')) {
+            accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
+          }
+          if (selectedType.includes('Public')) {
+            accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
+          }
+          if (selectedType.includes('Official')) {
+            typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
+          }
+          if (selectedType.includes('Casual')) {
+            typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
+          }
 
           if (accessConditions.length && typeConditions.length) {
             filterConditions.push({
@@ -278,31 +337,29 @@ export const getUserFilteredCommunities = async (
 
         if (selectedLabel?.length) {
           const labelConditions = selectedLabel.map((label) => ({
-            $regexMatch: {
-              input: '$$group.communityGroupLabel',
-              regex: label,
-              options: 'i',
-            },
+            $eq: ['$$group.communityGroupLabel', label],
           }));
           filterConditions.push({ $or: labelConditions });
         }
 
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $filter: {
-                input: '$communityGroups',
-                as: 'group',
-                cond: {
-                  $and: filterConditions,
+        if (filterConditions.length > 0) {
+          pipeline.push({
+            $addFields: {
+              communityGroups: {
+                $filter: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  cond: {
+                    $and: filterConditions,
+                  },
                 },
               },
             },
-          },
-        });
+          });
+        }
       }
 
-      if (selectedFilters && Object.keys(selectedFilters).length) {
+      if (selectedFilters && Object.keys(selectedFilters).length > 0) {
         pipeline.push({
           $addFields: {
             communityGroups: {
@@ -349,227 +406,163 @@ export const getUserFilteredCommunities = async (
           },
         });
       }
-
-      pipeline.push({
-        $match: { 'communityGroups.0': { $exists: true } },
-      });
     }
 
     pipeline.push({ $project: { communityGroups: 1 } });
 
     switch (sortBy) {
       case 'name':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
-                },
-              },
-            },
-          },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { lowerTitle: 1 } },
-            },
-          },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.lowerTitle',
-        });
-        break;
-
       case 'alphabetAsc':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
+        pipeline.push(
+          {
+            $addFields: {
+              communityGroups: {
+                $map: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  in: {
+                    $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
+                  },
                 },
               },
             },
           },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { lowerTitle: 1 } },
+          {
+            $addFields: {
+              communityGroups: {
+                $sortArray: {
+                  input: '$communityGroups',
+                  sortBy: { lowerTitle: 1 },
+                },
+              },
             },
           },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.lowerTitle',
-        });
+          { $unset: 'communityGroups.lowerTitle' }
+        );
         break;
 
       case 'alphabetDesc':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: [
-                    '$$group',
-                    {
-                      lowerTitle: {
-                        $cond: {
-                          if: { $isArray: ['$$group.title'] },
-                          then: '',
-                          else: { $toLower: '$$group.title' },
+        pipeline.push(
+          {
+            $addFields: {
+              communityGroups: {
+                $map: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  in: {
+                    $mergeObjects: [
+                      '$$group',
+                      {
+                        lowerTitle: {
+                          $cond: {
+                            if: { $isArray: ['$$group.title'] },
+                            then: '',
+                            else: { $toLower: '$$group.title' },
+                          },
                         },
                       },
-                    },
-                  ],
+                    ],
+                  },
                 },
               },
             },
           },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: {
-                input: '$communityGroups',
-                sortBy: { lowerTitle: -1 },
+          {
+            $addFields: {
+              communityGroups: {
+                $sortArray: {
+                  input: '$communityGroups',
+                  sortBy: { lowerTitle: -1 },
+                },
               },
             },
           },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.lowerTitle',
-        });
+          { $unset: 'communityGroups.lowerTitle' }
+        );
         break;
+
       case 'users':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: ['$$group', { userCount: { $size: '$$group.users' } }],
+        pipeline.push(
+          {
+            $addFields: {
+              communityGroups: {
+                $map: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  in: {
+                    $mergeObjects: ['$$group', { userCount: { $size: '$$group.users' } }],
+                  },
                 },
               },
             },
           },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { userCount: -1 } },
+          {
+            $addFields: {
+              communityGroups: {
+                $sortArray: {
+                  input: '$communityGroups',
+                  sortBy: { userCount: -1 },
+                },
+              },
             },
           },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.userCount',
-        });
+          { $unset: 'communityGroups.userCount' }
+        );
         break;
 
       case 'userCountDesc':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: [
-                    '$$group',
-                    {
-                      userCount: {
-                        $size: {
-                          $filter: {
-                            input: '$$group.users',
-                            as: 'user',
-                            cond: { $eq: ['$$user.status', 'accepted'] },
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { userCount: -1 } },
-            },
-          },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.userCount',
-        });
-        break;
-
       case 'userCountAsc':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $map: {
-                input: '$communityGroups',
-                as: 'group',
-                in: {
-                  $mergeObjects: [
-                    '$$group',
-                    {
-                      userCount: {
-                        $size: {
-                          $filter: {
-                            input: '$$group.users',
-                            as: 'user',
-                            cond: { $eq: ['$$user.status', 'accepted'] },
+        pipeline.push(
+          {
+            $addFields: {
+              communityGroups: {
+                $map: {
+                  input: '$communityGroups',
+                  as: 'group',
+                  in: {
+                    $mergeObjects: [
+                      '$$group',
+                      {
+                        userCount: {
+                          $size: {
+                            $filter: {
+                              input: '$$group.users',
+                              as: 'user',
+                              cond: { $eq: ['$$user.status', 'accepted'] },
+                            },
                           },
                         },
                       },
-                    },
-                  ],
+                    ],
+                  },
                 },
               },
             },
           },
-        });
-
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { userCount: 1 } },
+          {
+            $addFields: {
+              communityGroups: {
+                $sortArray: {
+                  input: '$communityGroups',
+                  sortBy: {
+                    userCount: sortBy === 'userCountAsc' ? 1 : -1,
+                  },
+                },
+              },
             },
           },
-        });
-
-        pipeline.push({
-          $unset: 'communityGroups.userCount',
-        });
+          { $unset: 'communityGroups.userCount' }
+        );
         break;
 
       case 'latest':
         pipeline.push({
           $addFields: {
             communityGroups: {
-              $sortArray: { input: '$communityGroups', sortBy: { createdAt: -1 } },
+              $sortArray: {
+                input: '$communityGroups',
+                sortBy: { createdAt: -1 },
+              },
             },
           },
         });
@@ -810,6 +803,7 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
       },
     });
     pipeline.push({ $unwind: '$user' });
+    pipeline.push({ $match: { 'user.isDeleted': { $ne: true } } });
 
     pipeline.push({
       $addFields: {

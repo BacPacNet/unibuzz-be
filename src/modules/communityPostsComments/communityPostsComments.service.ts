@@ -314,7 +314,7 @@ export const getCommunityPostComments = async (
       },
     },
     { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
-
+    { $match: { 'commenterId.isDeleted': { $ne: true } } },
     {
       $lookup: {
         from: 'userprofiles',
@@ -417,7 +417,7 @@ export const getCommunityPostComments = async (
             },
           },
           { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
-
+          { $match: { 'commenterId.isDeleted': { $ne: true } } },
           {
             $lookup: {
               from: 'userprofiles',
@@ -509,11 +509,60 @@ export const getCommunityPostComments = async (
     },
   ]);
 
-  const totalComments = await communityPostCommentModel.countDocuments({ postId });
-  const totalTopLevelComments = await communityPostCommentModel.countDocuments({
-    postId,
-    level: 0,
-  });
+  const totalCommentsAgg = await communityPostCommentModel.aggregate([
+    {
+      $match: {
+        postId: new mongoose.Types.ObjectId(postId),
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenter',
+      },
+    },
+    { $unwind: '$commenter' },
+    {
+      $match: {
+        'commenter.isDeleted': { $ne: true },
+      },
+    },
+    {
+      $count: 'total',
+    },
+  ]);
+  const totalComments = totalCommentsAgg[0]?.total || 0;
+
+  const totalTopLevelAgg = await communityPostCommentModel.aggregate([
+    {
+      $match: {
+        postId: new mongoose.Types.ObjectId(postId),
+        level: 0,
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'commenterId',
+        foreignField: '_id',
+        as: 'commenter',
+      },
+    },
+    { $unwind: '$commenter' },
+    {
+      $match: {
+        'commenter.isDeleted': { $ne: true },
+      },
+    },
+    {
+      $count: 'total',
+    },
+  ]);
+
+  const totalTopLevelComments = totalTopLevelAgg[0]?.total || 0;
+
   const totalPages = Math.ceil(totalTopLevelComments / limit);
 
   return {
@@ -867,7 +916,7 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string) =>
       },
     },
     { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
-
+    { $match: { 'commenterId.isDeleted': { $ne: true } } },
     {
       $lookup: {
         from: 'userprofiles',
@@ -971,7 +1020,7 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string) =>
             },
           },
           { $unwind: { path: '$commenterId', preserveNullAndEmptyArrays: true } },
-
+          { $match: { 'commenterId.isDeleted': { $ne: true } } },
           {
             $lookup: {
               from: 'userprofiles',

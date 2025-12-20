@@ -73,6 +73,77 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
       },
     },
 
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'profile.following.userId',
+        foreignField: '_id',
+        as: 'followingUsers',
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'profile.followers.userId',
+        foreignField: '_id',
+        as: 'followersUsers',
+      },
+    },
+    {
+      $addFields: {
+        'profile.following': {
+          $filter: {
+            input: '$profile.following',
+            as: 'f',
+            cond: {
+              $gt: [
+                {
+                  $size: {
+                    $filter: {
+                      input: '$followingUsers',
+                      as: 'u',
+                      cond: {
+                        $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                      },
+                    },
+                  },
+                },
+                0,
+              ],
+            },
+          },
+        },
+        'profile.followers': {
+          $filter: {
+            input: '$profile.followers',
+            as: 'f',
+            cond: {
+              $gt: [
+                {
+                  $size: {
+                    $filter: {
+                      input: '$followersUsers',
+                      as: 'u',
+                      cond: {
+                        $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                      },
+                    },
+                  },
+                },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        followingUsers: 0,
+        followersUsers: 0,
+      },
+    },
+
     //start
     {
       $lookup: {
@@ -158,6 +229,11 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
         'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(myUserId) },
       },
     },
+    {
+      $match: {
+        isDeleted: { $ne: true },
+      },
+    },
 
     {
       $lookup: {
@@ -239,6 +315,7 @@ export const getAllUser = async (
 
   const matchStage: any = {
     _id: { $ne: new mongoose.Types.ObjectId(userId) },
+    isDeleted: { $ne: true },
     'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(userId) },
   };
 
@@ -807,5 +884,24 @@ export const IsNewUserFalse = async (userID: string) => {
   user.isNewUser = false;
 
   user.save();
+  return user;
+};
+
+export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, password: string) => {
+  const [user, userProfile] = await Promise.all([User.findById(userId), UserProfile.findOne({ users_id: userId })]);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (!(await user.isPasswordMatch(password))) {
+    throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
+  }
+
+  if (userProfile?.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is admin of a community and cannot be deleted');
+  }
+  user.isDeleted = true;
+  user.deletedAt = new Date();
+  await user.save();
   return user;
 };

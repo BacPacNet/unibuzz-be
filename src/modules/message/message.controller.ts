@@ -7,6 +7,7 @@ import { chatService } from '../chat';
 import { chatInterface } from '../chat/chat.interface';
 import { ApiError } from '../errors';
 import mongoose from 'mongoose';
+import { userService } from '../user';
 
 export const sendMessge = async (req: userIdExtend, res: Response) => {
   const UserID = req.userId;
@@ -15,8 +16,21 @@ export const sendMessge = async (req: userIdExtend, res: Response) => {
   try {
     if (UserID) {
       const chat: chatInterface | null = await chatService.getChatById(chatId);
+
       const doesUserExist = chat?.users.some((user) => user.userId._id.toString() == UserID);
       const user = chat?.users.find((user) => user.userId.toString() === UserID);
+
+      if (!chat?.isGroupChat) {
+        const otherUser = chat?.users.find((user) => user.userId.toString() !== UserID);
+        const [yourUserDetails, theirUserDetails] = await Promise.all([
+          userService.getUserById(new mongoose.Types.ObjectId(UserID)),
+          userService.getUserById(new mongoose.Types.ObjectId(otherUser?.userId?.toString())),
+        ]);
+
+        if (yourUserDetails?.isDeleted || theirUserDetails?.isDeleted) {
+          throw new ApiError(httpStatus.NOT_FOUND, 'User is deleted');
+        }
+      }
 
       if (!doesUserExist || chat?.isBlock) {
         throw new ApiError(httpStatus.NOT_FOUND, 'you are not authorized');

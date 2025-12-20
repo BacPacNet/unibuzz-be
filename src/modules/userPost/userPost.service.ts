@@ -36,6 +36,7 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
       },
     },
     { $unwind: '$user' },
+    { $match: { 'user.isDeleted': { $ne: true } } },
 
     {
       $lookup: {
@@ -148,6 +149,20 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
               $expr: { $eq: ['$userPostId', '$$postId'] },
             },
           },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'commenterId',
+              foreignField: '_id',
+              as: 'commenter',
+            },
+          },
+          { $unwind: '$commenter' },
+          {
+            $match: {
+              'commenter.isDeleted': { $ne: true },
+            },
+          },
           { $project: { _id: 1 } },
         ],
         as: 'allComments',
@@ -158,6 +173,7 @@ export const getAllUserPosts = async (userId: string, page: number = 1, limit: n
         commentCount: { $size: '$allComments' },
       },
     },
+
     {
       $project: {
         _id: 1,
@@ -1074,6 +1090,7 @@ export const getUserPost = async (postId: string, myUserId: string = '') => {
         },
       },
       { $unwind: { path: '$postOwner', preserveNullAndEmptyArrays: true } },
+      { $match: { 'postOwner.isDeleted': { $ne: true } } },
       {
         $lookup: {
           from: 'userprofiles',
@@ -1705,6 +1722,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           { $unwind: '$user' },
+          { $match: { 'user.isDeleted': { $ne: true } } },
           {
             $lookup: {
               from: 'userprofiles',
@@ -1816,6 +1834,20 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
                     $expr: { $eq: ['$userPostId', '$$postId'] },
                   },
                 },
+                {
+                  $lookup: {
+                    from: 'users',
+                    localField: 'commenterId',
+                    foreignField: '_id',
+                    as: 'commenter',
+                  },
+                },
+                { $unwind: '$commenter' },
+                {
+                  $match: {
+                    'commenter.isDeleted': { $ne: true },
+                  },
+                },
                 { $project: { _id: 1 } },
               ],
               as: 'allComments',
@@ -1873,6 +1905,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
             },
           },
           { $unwind: '$user' },
+          { $match: { 'user.isDeleted': { $ne: true } } },
           {
             $lookup: {
               from: 'userprofiles',
@@ -1992,6 +2025,20 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
                 {
                   $match: {
                     $expr: { $eq: ['$postId', '$$postId'] },
+                  },
+                },
+                {
+                  $lookup: {
+                    from: 'users',
+                    localField: 'commenterId',
+                    foreignField: '_id',
+                    as: 'commenter',
+                  },
+                },
+                { $unwind: '$commenter' },
+                {
+                  $match: {
+                    'commenter.isDeleted': { $ne: true },
                   },
                 },
                 { $project: { _id: 1 } },
