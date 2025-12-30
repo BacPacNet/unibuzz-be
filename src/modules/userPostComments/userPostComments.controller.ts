@@ -120,13 +120,16 @@ export const LikeUserPostComment = async (req: extendedRequest, res: Response) =
 export const getUserPostComments = async (req: extendedRequest, res: Response) => {
   const { userPostId } = req.params;
   const { page, limit, sortBy } = req.query;
+  const myUserId = req.userId;
+
   try {
     if (userPostId) {
       let comments = await userPostCommentsService.getUserPostComments(
         userPostId,
         Number(page),
         Number(limit),
-        sortBy as Sortby
+        sortBy as Sortby,
+        myUserId || ''
       );
       return res.status(200).json(comments);
     }

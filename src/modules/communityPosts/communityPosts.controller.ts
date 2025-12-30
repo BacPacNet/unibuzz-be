@@ -177,7 +177,8 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
     const communityPosts = await communityPostsService.getCommunityPostsByCommunityId(
       communityId,
       Number(page),
-      Number(limit)
+      Number(limit),
+      userId || ''
     );
 
     return res.status(httpStatus.OK).json(communityPosts);
@@ -318,7 +319,8 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
       communityId,
       communityGroupId,
       Number(page),
-      Number(limit)
+      Number(limit),
+      userId || ''
     );
 
     return res.status(200).json(communityPosts);
@@ -363,7 +365,10 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
         }
 
         if (commentId?.toString().length) {
-          comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(commentId?.toString());
+          comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(
+            commentId?.toString(),
+            req.userId
+          );
         }
       } else if (isType == 'Timeline') {
         const postResult = await userPostService.getUserPost(postId, req.userId);
@@ -375,7 +380,7 @@ export const getPostById = async (req: extendedRequest, res: Response) => {
         }
 
         if (commentId?.toString().length) {
-          comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString());
+          comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString(), req.userId);
         }
       } else {
         throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');

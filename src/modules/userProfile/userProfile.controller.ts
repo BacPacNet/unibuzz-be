@@ -66,9 +66,10 @@ export const toggleFollow = async (req: userIdExtend, res: Response) => {
 
 export const getAllUserFollowing = async (req: userIdExtend, res: Response) => {
   const { page, limit, name, userId } = req.query as any;
+  const myUserId = req.userId;
   try {
-    if (req.userId) {
-      let profile = await userProfileService.getFollowing(name, userId, Number(page), Number(limit));
+    if (myUserId) {
+      let profile = await userProfileService.getFollowing(name, userId, Number(page), Number(limit), myUserId);
 
       return res.status(200).json(profile);
     }
@@ -79,9 +80,10 @@ export const getAllUserFollowing = async (req: userIdExtend, res: Response) => {
 
 export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
   const { page, limit, name, userId } = req.query as any;
+  const myUserId = req.userId;
   try {
-    if (req.userId) {
-      let profile = await userProfileService.getFollowers(name, userId, Number(page), Number(limit));
+    if (myUserId) {
+      let profile = await userProfileService.getFollowers(name, userId, Number(page), Number(limit), myUserId);
       return res.status(200).json(profile);
     }
   } catch (error: any) {

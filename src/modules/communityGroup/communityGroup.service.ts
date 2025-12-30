@@ -518,7 +518,11 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
 
   const communityAdminId = communityGroup?.communityId?.adminId?.map(String).includes(userId?.toString() || '');
 
-  const populatedGroup = await communityGroupModel.populate(communityGroup, [{ path: 'adminUserId', select: 'isDeleted' }]);
+  const populatedGroup = await communityGroupModel.populate(communityGroup, [
+    { path: 'adminUserId', select: 'isDeleted  blockedUsers' },
+  ]);
+
+  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
 
   const userIds = (populatedGroup.users || []).map((u: any) => u._id);
 
@@ -532,8 +536,40 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
   if (adminUserObj?.isDeleted) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group does not exist');
   }
+  if (adminUserObj && adminUserObj?.blockedUsers && adminUserObj?.blockedUsers?.length > 0) {
+    const isBlocked = adminUserObj?.blockedUsers.some((user: any) => user.userId.toString() === userId?.toString());
+    if (isBlocked) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+    }
+  }
+  if (myBlockedUsers && myBlockedUsers?.blockedUsers && myBlockedUsers?.blockedUsers?.length > 0) {
+    const isBlocked = myBlockedUsers?.blockedUsers.some((user: any) => user.userId.toString() === adminUserId?.toString());
+    if (isBlocked) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+    }
+  }
 
-  populatedGroup.users = populatedGroup.users.filter((u: any) => !deletedUserIds.has(u._id.toString()));
+  const memberProfiles = await UserProfile.find({ users_id: { $in: userIds } }, { users_id: 1, blockedUsers: 1 }).lean();
+
+  const memberBlockedMap = new Map(
+    memberProfiles.map((p: any) => [
+      p.users_id.toString(),
+      new Set((p.blockedUsers || []).map((b: any) => b.userId.toString())),
+    ])
+  );
+  const myBlockedUserIds = new Set(myBlockedUsers?.blockedUsers?.map((b: any) => b.userId.toString()) || []);
+  populatedGroup.users = populatedGroup.users.filter((u: any) => {
+    const memberId = u._id.toString();
+
+    if (deletedUserIds.has(memberId)) return false;
+
+    if (myBlockedUserIds.has(memberId)) return false;
+
+    const memberBlockedSet = memberBlockedMap.get(memberId);
+    if (memberBlockedSet?.has(userId.toString())) return false;
+
+    return true;
+  });
   if (!populatedGroup.isCommunityGroupLive && adminUserId !== userId && !communityAdminId) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
   }
@@ -830,7 +866,8 @@ export const getCommunityGroupMembers = async (
   communityGroupId: string,
   userStatus: string,
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
+  userId: string
 ) => {
   try {
     if (!communityGroupId) {
@@ -843,6 +880,13 @@ export const getCommunityGroupMembers = async (
     if (!communityGroup) {
       throw new Error('Community group not found');
     }
+
+    const currentUserProfile = await UserProfile.findOne(
+      { users_id: new Types.ObjectId(userId) },
+      { blockedUsers: 1 }
+    ).lean();
+
+    const blockedUserIds = currentUserProfile?.blockedUsers?.map((b) => b.userId) || [];
 
     const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
 
@@ -869,10 +913,45 @@ export const getCommunityGroupMembers = async (
         },
       },
       { $unwind: '$userDoc' },
+      {
+        $lookup: {
+          from: 'userprofiles',
+          let: { memberUserId: '$userDoc._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$users_id', '$$memberUserId'],
+                },
+              },
+            },
+            {
+              $project: {
+                blockedUsers: 1,
+              },
+            },
+          ],
+          as: 'memberProfile',
+        },
+      },
+      {
+        $unwind: {
+          path: '$memberProfile',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
       {
         $match: {
           'userDoc.isDeleted': { $ne: true },
+          'userDoc._id': { $nin: blockedUserIds },
+          'memberProfile.blockedUsers': {
+            $not: {
+              $elemMatch: {
+                userId: new Types.ObjectId(userId),
+              },
+            },
+          },
         },
       },
 

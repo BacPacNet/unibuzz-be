@@ -160,6 +160,7 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
       searchQuery,
       page: Number(page),
       limit: Number(limit),
+      userId: req.userId as string,
     };
     const users = await getCommunityUsersService(communityId, options);
     res.status(200).json({ success: true, ...users });
@@ -172,6 +173,7 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
 export const getCommunityUsersWithfilterController = async (req: userIdExtend, res: Response) => {
   try {
     const { communityId } = req.params;
+    const userId = req.userId;
     const {
       isVerified = false,
       searchQuery,
@@ -189,6 +191,7 @@ export const getCommunityUsersWithfilterController = async (req: userIdExtend, r
       communityGroupId,
       page: Number(page),
       limit: Number(limit),
+      userId: userId as string,
     };
     const users = await getCommunityUsersByFilterService(communityId, options);
     res.status(200).json({ success: true, ...users });
