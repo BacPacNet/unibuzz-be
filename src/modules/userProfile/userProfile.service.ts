@@ -447,23 +447,6 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
   return finalResult;
 };
 
-// export const getBlockedUsers = async (userId: string) => {
-//   const userProfileData = await UserProfile.findOne({ users_id: userId });
-
-//   const followingBlockedUsers = userProfileData?.following.filter((item) => item.isBlock == true);
-//   const followersBlockedUsers = userProfileData?.followers.filter((item) => item.isBlock == true);
-//   const followingBlockedUsersIds = followingBlockedUsers?.map((item) => item.userId.toString()) || [];
-//   const followersBlockedUsersIds = followersBlockedUsers?.map((item) => item.userId.toString()) || [];
-
-//   const allBlockedUserIds = [...followingBlockedUsersIds, ...followersBlockedUsersIds];
-//   const UniqueBlockUserId = Array.from(new Set(allBlockedUserIds));
-
-//   const allUsers = await UserProfile.find({ users_id: { $in: UniqueBlockUserId } })
-//     .populate('users_id')
-//     .select('firstName lastName _id');
-//   return allUsers;
-// };
-
 export const getBlockedUsers = async (userId: string) => {
   const result = await UserProfile.aggregate([
     // 1. Match current user
