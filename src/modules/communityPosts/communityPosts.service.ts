@@ -196,9 +196,20 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   }
 };
 
-export const getCommunityPostsByCommunityId = async (communityId: string, page: number = 1, limit: number = 10) => {
+export const getCommunityPostsByCommunityId = async (
+  communityId: string,
+  page: number = 1,
+  limit: number = 10,
+  userId: string = ''
+) => {
   try {
     const communityObjectId = new Types.ObjectId(communityId);
+
+    const userProfile: any = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+
+    if (!userProfile) throw new Error('User profile not found');
+
+    const myBlockedUserIds = (userProfile.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
 
     const finalPost = await CommunityPostModel.aggregate([
       {
@@ -321,6 +332,21 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
         },
       },
       //   end
+      //   {
+      //     $lookup: {
+      //       from: 'communitypostcomments',
+      //       let: { postId: '$_id' },
+      //       pipeline: [
+      //         {
+      //           $match: {
+      //             $expr: { $eq: ['$postId', '$$postId'] },
+      //           },
+      //         },
+      //         { $project: { _id: 1 } },
+      //       ],
+      //       as: 'allComments',
+      //     },
+      //   },
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -331,6 +357,53 @@ export const getCommunityPostsByCommunityId = async (communityId: string, page: 
                 $expr: { $eq: ['$postId', '$$postId'] },
               },
             },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'commenterId',
+                foreignField: '_id',
+                as: 'commenter',
+              },
+            },
+            { $unwind: '$commenter' },
+            {
+              $match: {
+                'commenter.isDeleted': { $ne: true },
+              },
+            },
+            {
+              $lookup: {
+                from: 'userprofiles',
+                localField: 'commenter._id',
+                foreignField: 'users_id',
+                as: 'commenterProfile',
+              },
+            },
+            {
+              $unwind: {
+                path: '$commenterProfile',
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            {
+              $match: {
+                'commenterProfile.blockedUsers': {
+                  $not: {
+                    $elemMatch: {
+                      userId: new mongoose.Types.ObjectId(userId),
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $match: {
+                'commenter._id': {
+                  $nin: myBlockedUserIds,
+                },
+              },
+            },
+
             { $project: { _id: 1 } },
           ],
           as: 'allComments',
@@ -407,6 +480,10 @@ export const getCommunityGroupPostsByCommunityId = async (
     const communityObjectId = convertToObjectId(communityId);
     const communityGroupObjectId = convertToObjectId(communityGroupId);
     const userObjectId = convertToObjectId(userId);
+
+    const myProfile = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+
+    const myBlockedUserIds = (myProfile?.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
 
     const finalPost = await CommunityPostModel.aggregate([
       {
@@ -531,7 +608,21 @@ export const getCommunityGroupPostsByCommunityId = async (
         },
       },
       //   end
-
+      {
+        $match: {
+          'userProfile.blockedUsers.userId': {
+            $ne: new mongoose.Types.ObjectId(userId),
+          },
+        },
+      },
+      {
+        $match: {
+          'user._id': {
+            $nin: myBlockedUserIds,
+          },
+        },
+      },
+      //
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -556,6 +647,39 @@ export const getCommunityGroupPostsByCommunityId = async (
                 'commenter.isDeleted': { $ne: true },
               },
             },
+            {
+              $lookup: {
+                from: 'userprofiles',
+                localField: 'commenter._id',
+                foreignField: 'users_id',
+                as: 'commenterProfile',
+              },
+            },
+            {
+              $unwind: {
+                path: '$commenterProfile',
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            {
+              $match: {
+                'commenterProfile.blockedUsers': {
+                  $not: {
+                    $elemMatch: {
+                      userId: new mongoose.Types.ObjectId(userId),
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $match: {
+                'commenter._id': {
+                  $nin: myBlockedUserIds,
+                },
+              },
+            },
+
             { $project: { _id: 1 } },
           ],
           as: 'allComments',
@@ -634,15 +758,21 @@ export const getAllCommunityPost = async (
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
+  userId: string = ''
 ) => {
   try {
-    const FollowingIds = FollowinguserIds.map((item) => new mongoose.Types.ObjectId(item as any));
+    const userProfile: any = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
 
-    const matchConditions: any = [];
+    if (!userProfile) throw new Error('User profile not found');
 
-    // Default conditions when communityGroupId is not provided
-    if (!communityGroupId || communityGroupId.length === 0) {
+    const myBlockedUserIds = (userProfile.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
+
+    const FollowingIds = FollowinguserIds.map((id) => new mongoose.Types.ObjectId(id as any));
+
+    const matchConditions: any[] = [];
+
+    if (!communityGroupId) {
       matchConditions.push(
         {
           communityId: new mongoose.Types.ObjectId(communityId),
@@ -652,12 +782,11 @@ export const getAllCommunityPost = async (
         {
           communityId: new mongoose.Types.ObjectId(communityId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          user_id: { $in: FollowingIds },
           communityGroupId: { $exists: false },
         }
       );
     } else {
-      // Conditions when communityGroupId is provided
       matchConditions.push(
         {
           communityId: new mongoose.Types.ObjectId(communityId),
@@ -668,38 +797,24 @@ export const getAllCommunityPost = async (
           communityId: new mongoose.Types.ObjectId(communityId),
           communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          user_id: { $in: FollowingIds },
         }
       );
     }
 
-    const matchStage: any = {
-      $or: matchConditions,
-    };
+    const matchStage = { $or: matchConditions };
 
     const totalPost = await CommunityPostModel.countDocuments(matchStage);
     const totalPages = Math.ceil(totalPost / limit);
-
     const skip = (page - 1) * limit;
 
     const finalPost =
       (await CommunityPostModel.aggregate([
-        {
-          $match: matchStage,
-        },
-        {
-          $sort: { createdAt: -1 },
-        },
-        {
-          $skip: skip,
-        },
-        {
-          $limit: limit,
-        },
+        { $match: matchStage },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
 
-        {
-          $unwind: { path: '$communityGroup', preserveNullAndEmptyArrays: true },
-        },
         {
           $lookup: {
             from: 'users',
@@ -708,9 +823,8 @@ export const getAllCommunityPost = async (
             as: 'user',
           },
         },
-        {
-          $unwind: '$user',
-        },
+        { $unwind: '$user' },
+
         {
           $lookup: {
             from: 'userprofiles',
@@ -720,55 +834,112 @@ export const getAllCommunityPost = async (
           },
         },
         {
-          $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $lookup: {
-            from: 'communitypostcomments',
-            localField: '_id',
-            foreignField: 'communityId',
-            as: 'comments',
+          $unwind: {
+            path: '$userProfile',
+            preserveNullAndEmptyArrays: true,
           },
         },
+
         {
-          $lookup: {
-            from: 'communitypostcomments',
-            let: { commentIds: '$comments._id' },
-            pipeline: [
+          $match: {
+            'user._id': { $nin: myBlockedUserIds },
+            $or: [
+              { userProfile: { $eq: null } },
               {
-                $match: {
-                  $expr: { $in: ['$_id', '$$commentIds'] },
-                },
-              },
-              {
-                $graphLookup: {
-                  from: 'communitypostcomments',
-                  startWith: '$replies',
-                  connectFromField: 'replies',
-                  connectToField: '_id',
-                  as: 'nestedReplies',
+                'userProfile.blockedUsers': {
+                  $not: {
+                    $elemMatch: {
+                      userId: new mongoose.Types.ObjectId(userId),
+                    },
+                  },
                 },
               },
             ],
-            as: 'commentsWithReplies',
           },
         },
+
+        {
+          $lookup: {
+            from: 'communitypostcomments',
+            let: { postId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$postId', '$$postId'] },
+                },
+              },
+
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'commenterId',
+                  foreignField: '_id',
+                  as: 'commenter',
+                },
+              },
+              {
+                $unwind: {
+                  path: '$commenter',
+                  preserveNullAndEmptyArrays: false,
+                },
+              },
+
+              {
+                $match: {
+                  'commenter.isDeleted': { $ne: true },
+                },
+              },
+
+              {
+                $lookup: {
+                  from: 'userprofiles',
+                  localField: 'commenter._id',
+                  foreignField: 'users_id',
+                  as: 'commenterProfile',
+                },
+              },
+              {
+                $unwind: {
+                  path: '$commenterProfile',
+                  preserveNullAndEmptyArrays: false,
+                },
+              },
+
+              {
+                $match: {
+                  $or: [
+                    { commenterProfile: { $eq: null } },
+                    {
+                      'commenterProfile.blockedUsers': {
+                        $not: {
+                          $elemMatch: {
+                            userId: new mongoose.Types.ObjectId(userId),
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+
+              {
+                $match: {
+                  'commenter._id': { $nin: myBlockedUserIds },
+                },
+              },
+
+              { $project: { _id: 1 } },
+            ],
+            as: 'allComments',
+          },
+        },
+
         {
           $addFields: {
-            commentCount: {
-              $add: [
-                { $size: '$comments' },
-                {
-                  $reduce: {
-                    input: '$commentsWithReplies',
-                    initialValue: 0,
-                    in: { $add: ['$$value', { $size: '$$this.nestedReplies' }] },
-                  },
-                },
-              ],
-            },
+            commentCount: { $size: '$allComments' },
           },
         },
+
         {
           $project: {
             _id: 1,
@@ -811,16 +982,23 @@ export const getAllCommunityPost = async (
       totalPost,
     };
   } catch (error) {
-    console.error('Error fetching user posts:', error);
-    throw new Error('Failed to Get User Posts');
+    throw new Error('Failed to get community posts');
   }
 };
 
 export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
-    const userProfile = await UserProfile.findOne({ users_id: myUserId });
-    const followingIds = userProfile?.following.map((user) => user.userId.toString()) || [];
-    const followingObjectIds = followingIds.map((id) => new mongoose.Types.ObjectId(id));
+    const userProfile: any = await UserProfile.findOne({ users_id: myUserId })
+      .select('following communities blockedUsers')
+      .lean();
+    if (!userProfile) throw new Error('User profile not found');
+
+    const myBlockedUserIds = (userProfile?.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
+
+    const followingIds =
+      userProfile?.following.map((user: { userId: mongoose.Types.ObjectId; isBlock: boolean }) => user.userId.toString()) ||
+      [];
+    const followingObjectIds = followingIds.map((id: string) => new mongoose.Types.ObjectId(id));
     const userId = new mongoose.Types.ObjectId(myUserId);
     const postIdToGet = new mongoose.Types.ObjectId(postId);
 
@@ -842,7 +1020,30 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
 
     const pipeline = [
       { $match: { _id: postIdToGet } },
-
+      {
+        $lookup: {
+          from: 'communitygroups',
+          localField: 'communityGroupId',
+          foreignField: '_id',
+          as: 'group',
+        },
+      },
+      { $unwind: { path: '$group', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'group.adminUserId',
+          foreignField: '_id',
+          as: 'groupAdmin',
+        },
+      },
+      { $unwind: { path: '$groupAdmin', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [{ communityGroupId: { $exists: false } }, { 'groupAdmin.isDeleted': { $ne: true } }],
+        },
+      },
+      //   //   end
       {
         $lookup: {
           from: 'users',
@@ -862,6 +1063,24 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
         },
       },
       { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          'profile.blockedUsers': {
+            $not: {
+              $elemMatch: {
+                userId: new mongoose.Types.ObjectId(myUserId),
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          'user._id': {
+            $nin: myBlockedUserIds,
+          },
+        },
+      },
       // start
       {
         $lookup: {
@@ -940,7 +1159,7 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
           'profile.communitiesData': 0,
         },
       },
-      //  end
+
       {
         $lookup: {
           from: 'communitypostcomments',
@@ -951,6 +1170,60 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
                 $expr: { $eq: ['$postId', '$$postId'] },
               },
             },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'commenterId',
+                foreignField: '_id',
+                as: 'commenter',
+              },
+            },
+            { $unwind: '$commenter' },
+            {
+              $match: {
+                'commenter.isDeleted': { $ne: true },
+              },
+            },
+            {
+              $lookup: {
+                from: 'userprofiles',
+                localField: 'commenter._id',
+                foreignField: 'users_id',
+                as: 'commenterProfile',
+              },
+            },
+            {
+              $unwind: {
+                path: '$commenterProfile',
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+
+            ...(myUserId
+              ? [
+                  {
+                    $match: {
+                      'commenterProfile.blockedUsers': {
+                        $not: {
+                          $elemMatch: {
+                            userId: new mongoose.Types.ObjectId(myUserId),
+                          },
+                        },
+                      },
+                    },
+                  },
+                ]
+              : []),
+
+            ...(myBlockedUserIds.length
+              ? [
+                  {
+                    $match: {
+                      'commenter._id': { $nin: myBlockedUserIds },
+                    },
+                  },
+                ]
+              : []),
             { $project: { _id: 1 } },
           ],
           as: 'allComments',

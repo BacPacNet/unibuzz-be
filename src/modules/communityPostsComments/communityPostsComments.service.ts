@@ -289,10 +289,15 @@ export const getCommunityPostComments = async (
   postId: string,
   page: number = 1,
   limit: number = 2,
-  sortOrder: 'asc' | 'desc' = 'desc'
+  sortOrder: 'asc' | 'desc' = 'desc',
+  myUserId: string
 ) => {
   const skip = (page - 1) * limit;
   const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
+
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers').lean();
+
+  const myBlockedUserIds = (myProfile?.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
 
   const comments = await communityPostCommentModel.aggregate([
     {
@@ -324,7 +329,20 @@ export const getCommunityPostComments = async (
       },
     },
     { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
-
+    {
+      $match: {
+        'commenterProfileId.blockedUsers.userId': {
+          $ne: new mongoose.Types.ObjectId(myUserId),
+        },
+      },
+    },
+    {
+      $match: {
+        'commenterId._id': {
+          $nin: myBlockedUserIds,
+        },
+      },
+    },
     {
       $lookup: {
         from: 'communities',
@@ -427,7 +445,20 @@ export const getCommunityPostComments = async (
             },
           },
           { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
-
+          {
+            $match: {
+              'commenterProfileId.blockedUsers.userId': {
+                $ne: new mongoose.Types.ObjectId(myUserId),
+              },
+            },
+          },
+          {
+            $match: {
+              'commenterId._id': {
+                $nin: myBlockedUserIds,
+              },
+            },
+          },
           {
             $lookup: {
               from: 'communities',
@@ -696,13 +727,16 @@ export const commentReply = async (commentId: string, userID: string, body: any,
     isCommentVerified = verifiedCommunities.includes(communityId.toString());
   }
 
+  const { commenterProfileId } = body;
+
   const newReply = {
+    ...body,
     communityId: communityGroupID,
-    commenterId: userID,
+    commenterId: convertToObjectId(userID),
+    commenterProfileId: convertToObjectId(commenterProfileId),
     postId: convertToObjectId(communityPostId),
     isCommentVerified,
     level: level + 1,
-    ...body,
   };
 
   const savedReply = await communityPostCommentModel.create(newReply);
@@ -899,7 +933,15 @@ export const commentReply = async (commentId: string, userID: string, body: any,
   return aggregatedParent || null;
 };
 
-export const getSingleCommunityCommentByCommentId = async (commentId: string) => {
+export const getSingleCommunityCommentByCommentId = async (commentId: string, myUserId: string = '') => {
+  const myUserObjectId = myUserId ? new mongoose.Types.ObjectId(myUserId) : null;
+
+  const myBlockedUserIds = myUserId
+    ? (await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers').lean())?.blockedUsers?.map(
+        (b: any) => new mongoose.Types.ObjectId(b.userId)
+      ) || []
+    : [];
+
   const result = await communityPostCommentModel.aggregate([
     {
       $match: {
@@ -926,7 +968,31 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string) =>
       },
     },
     { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+    ...(myUserId
+      ? [
+          {
+            $match: {
+              'commenterProfileId.blockedUsers': {
+                $not: {
+                  $elemMatch: {
+                    userId: myUserObjectId,
+                  },
+                },
+              },
+            },
+          },
+        ]
+      : []),
 
+    ...(myBlockedUserIds.length
+      ? [
+          {
+            $match: {
+              'commenterId._id': { $nin: myBlockedUserIds },
+            },
+          },
+        ]
+      : []),
     {
       $lookup: {
         from: 'communities',
@@ -1030,7 +1096,31 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string) =>
             },
           },
           { $unwind: { path: '$commenterProfileId', preserveNullAndEmptyArrays: true } },
+          ...(myUserId
+            ? [
+                {
+                  $match: {
+                    'commenterProfileId.blockedUsers': {
+                      $not: {
+                        $elemMatch: {
+                          userId: myUserObjectId,
+                        },
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
 
+          ...(myBlockedUserIds.length
+            ? [
+                {
+                  $match: {
+                    'commenterId._id': { $nin: myBlockedUserIds },
+                  },
+                },
+              ]
+            : []),
           {
             $lookup: {
               from: 'communities',

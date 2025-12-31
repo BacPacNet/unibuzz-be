@@ -8,6 +8,7 @@ import { chatInterface } from '../chat/chat.interface';
 import { ApiError } from '../errors';
 import mongoose from 'mongoose';
 import { userService } from '../user';
+import { userProfileService } from '../userProfile';
 
 export const sendMessge = async (req: userIdExtend, res: Response) => {
   const UserID = req.userId;
@@ -27,8 +28,24 @@ export const sendMessge = async (req: userIdExtend, res: Response) => {
           userService.getUserById(new mongoose.Types.ObjectId(otherUser?.userId?.toString())),
         ]);
 
+        const [yourUserProfile, theirUserProfile] = await Promise.all([
+          userProfileService.getUserProfileById(UserID),
+          userProfileService.getUserProfileById(otherUser?.userId?.toString() || ''),
+        ]);
+
         if (yourUserDetails?.isDeleted || theirUserDetails?.isDeleted) {
           throw new ApiError(httpStatus.NOT_FOUND, 'User is deleted');
+        }
+
+        const isBlocked = (profile: any, userId: string) =>
+          profile?.blockedUsers.some((b: any) => b.userId.toString() === userId);
+
+        if (isBlocked(yourUserProfile, otherUser?.userId?.toString() || '')) {
+          throw new ApiError(httpStatus.NOT_FOUND, 'You are blocked by this user');
+        }
+
+        if (isBlocked(theirUserProfile, UserID)) {
+          throw new ApiError(httpStatus.NOT_FOUND, 'You are blocked by this user');
         }
       }
 
@@ -58,7 +75,7 @@ export const getUserMessages = async (req: userIdExtend, res: Response) => {
 
   try {
     if (UserID && chatId) {
-      const message = await messageService.getMessages(chatId);
+      const message = await messageService.getMessages(chatId, UserID);
       return res.status(200).json(message);
     }
   } catch (error: any) {

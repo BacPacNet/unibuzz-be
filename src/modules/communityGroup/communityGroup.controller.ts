@@ -429,13 +429,14 @@ export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Re
 
 export const getCommunityGroupMembers = async (req: extendedRequest, res: Response) => {
   const { communityGroupId, userStatus, page, limit } = req.query;
-
+  const userId = req.userId as string;
   try {
     const communityGroup = await communityGroupService.getCommunityGroupMembers(
       communityGroupId as string,
       userStatus as string,
       Number(page),
-      Number(limit)
+      Number(limit),
+      userId
     );
     return res.status(httpStatus.OK).json(communityGroup);
   } catch (error: any) {

@@ -9,6 +9,7 @@ import { communityModel } from '../community';
 // import { userFollowService } from '../userFollow';
 import User from '../user/user.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import { communityGroupModel } from '../communityGroup';
 
 export const createUserProfile = async (userId: string, body: any) => {
   const {
@@ -230,7 +231,19 @@ export const getFollowingUsers = async (userId: string) => {
   return user!.following;
 };
 
-export const getFollowing = async (name: string = '', userId: string, page: number = 1, limit: number = 10) => {
+export const getFollowing = async (
+  name: string = '',
+  userId: string,
+  page: number = 1,
+  limit: number = 10,
+  myUserId: string
+) => {
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+
+  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => b.userId) || [];
+
+  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
+
   const startIndex = (page - 1) * limit;
 
   const profile = await UserProfile.findOne({ users_id: userId }, 'following');
@@ -248,7 +261,17 @@ export const getFollowing = async (name: string = '', userId: string, page: numb
   };
 
   const users = await User.aggregate([
-    { $match: { _id: { $in: ids }, ...nameFilter, isDeleted: { $ne: true } } },
+    {
+      $match: {
+        _id: {
+          $in: ids,
+          $nin: myBlockedUserIds,
+        },
+        ...nameFilter,
+        isDeleted: { $ne: true },
+      },
+    },
+
     {
       $lookup: {
         from: 'userprofiles',
@@ -258,11 +281,25 @@ export const getFollowing = async (name: string = '', userId: string, page: numb
       },
     },
     { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+
+    {
+      $match: {
+        'profile.blockedUsers': {
+          $not: {
+            $elemMatch: {
+              userId: myUserObjectId,
+            },
+          },
+        },
+      },
+    },
+
     {
       $addFields: {
         isFollowing: true,
       },
     },
+
     { $skip: startIndex },
     { $limit: limit },
   ]);
@@ -270,40 +307,16 @@ export const getFollowing = async (name: string = '', userId: string, page: numb
   return { currentPage: page, totalPages: Math.ceil(ids.length / limit), users };
 };
 
-//export const getFollow = async (name: string = '', userId: string) => {
-//  // Fetch user profile and get list of following user IDs
-//  const profile = await UserProfile.findOne({ users_id: userId });
-//  if (!profile || !profile.following) return [];
-
-//  const ids = profile.following.map((id: any) => id.userId?._id).filter(Boolean); // Filter out any undefined/null user IDs
-
-//  if (!ids.length) return [];
-
-//  // Split name if provided
-//  const [firstNametoPush, lastNametopush] = name ? name.split(' ') : ['', ''];
-
-//  // Find user profiles based on name and following list
-//  const userFollows = await UserProfile.find({
-//    users_id: { $in: ids },
-//  }).populate({
-//    path: 'users_id',
-//    match: {
-//      $or: [
-//        { firstName: { $regex: new RegExp(firstNametoPush || '', 'i') } },
-//        ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-//      ],
-//    },
-//    select: '_id firstName lastName',
-//  });
-
-//  // Filter out any profiles without populated users_id
-//  return userFollows.filter((profile) => profile.users_id);
-//};
-
-export const getFollowers = async (name: string = '', userId: string, page: number, limit: number) => {
+export const getFollowers = async (name: string = '', userId: string, page: number, limit: number, myUserId: string) => {
   const Currpage = page ? page : 1;
   const limitpage = limit ? limit : 10;
   const startIndex = (Currpage - 1) * limitpage;
+
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+
+  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => new mongoose.Types.ObjectId(b.userId)) || [];
+
+  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
 
   // Fetch user profile and get list of follower user IDs
   const profile = await UserProfile.findOne({ users_id: userId });
@@ -320,7 +333,10 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
   const users = await User.aggregate([
     {
       $match: {
-        _id: { $in: ids },
+        _id: {
+          $in: ids,
+          $nin: myBlockedUserIds,
+        },
         isDeleted: { $ne: true },
         $or: [
           { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
@@ -342,64 +358,36 @@ export const getFollowers = async (name: string = '', userId: string, page: numb
         preserveNullAndEmptyArrays: true,
       },
     },
+
     {
-      $addFields: {
-        isFollowing: { $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))] }, // Check if user is in following list
+      $match: {
+        'profile.blockedUsers': {
+          $not: {
+            $elemMatch: {
+              userId: myUserObjectId,
+            },
+          },
+        },
       },
     },
-  ])
-    .skip(startIndex)
-    .limit(limitpage);
+
+    {
+      $addFields: {
+        isFollowing: {
+          $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))],
+        },
+      },
+    },
+
+    { $skip: startIndex },
+    { $limit: limitpage },
+  ]);
 
   const totalUsers = ids.length;
   const totalPages = Math.ceil(totalUsers / limit);
 
   return { currentPage: page, totalPages, users };
 };
-
-//export const getMutualUsers = async (userId: string, targetUserId: string, page: number = 1, limit: number = 10) => {
-//  const startIndex = (page - 1) * limit;
-
-//  // Fetch both users' following lists
-//  const [loggedInUser, targetUser] = await Promise.all([
-//    UserProfile.findOne({ users_id: userId }).select('following').lean(),
-//    UserProfile.findOne({ users_id: targetUserId }).select('following').lean(),
-//  ]);
-
-//  // Extract following user IDs and convert them to ObjectId
-//  const loggedInFollowingIds = new Set(loggedInUser?.following.map(f => f.userId.toString()) || []);
-//  const targetFollowingIds = new Set(targetUser?.following.map(f => f.userId.toString()) || []);
-
-//  // Find mutual user IDs
-//  const mutualUserIds = [...loggedInFollowingIds].filter(id => targetFollowingIds.has(id)).map(id => new mongoose.Types.ObjectId(id));
-
-//  // Fetch user details of mutual users with pagination
-//  const mutualUsers = await User.aggregate([
-//    { $match: { _id: { $in: mutualUserIds } } },
-//    {
-//      $lookup: {
-//        from: 'userprofiles',
-//        localField: '_id',
-//        foreignField: 'users_id',
-//        as: 'profile',
-//      },
-//    },
-//    {
-//      $unwind: {
-//        path: '$profile',
-//        preserveNullAndEmptyArrays: true,
-//      },
-//    },
-//    { $skip: startIndex },
-//    { $limit: limit },
-//  ]);
-
-//  return {
-//    currentPage: page,
-//    totalPages: Math.ceil(mutualUserIds.length / limit),
-//    mutualUsers,
-//  };
-//};
 
 export const getFollowersAndFollowing = async (name: string = '', userId: string) => {
   let firstNametoPush: any;
@@ -460,20 +448,65 @@ export const getFollowersAndFollowing = async (name: string = '', userId: string
 };
 
 export const getBlockedUsers = async (userId: string) => {
-  const userProfileData = await UserProfile.findOne({ users_id: userId });
+  const result = await UserProfile.aggregate([
+    // 1. Match current user
+    {
+      $match: {
+        users_id: new mongoose.Types.ObjectId(userId),
+      },
+    },
 
-  const followingBlockedUsers = userProfileData?.following.filter((item) => item.isBlock == true);
-  const followersBlockedUsers = userProfileData?.followers.filter((item) => item.isBlock == true);
-  const followingBlockedUsersIds = followingBlockedUsers?.map((item) => item.userId.toString()) || [];
-  const followersBlockedUsersIds = followersBlockedUsers?.map((item) => item.userId.toString()) || [];
+    // 2. Extract blocked user ids
+    {
+      $project: {
+        blockedUserIds: '$blockedUsers.userId',
+      },
+    },
 
-  const allBlockedUserIds = [...followingBlockedUsersIds, ...followersBlockedUsersIds];
-  const UniqueBlockUserId = Array.from(new Set(allBlockedUserIds));
+    // 3. Lookup blocked users' profiles
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'blockedUserIds',
+        foreignField: 'users_id',
+        as: 'blockedProfiles',
+      },
+    },
 
-  const allUsers = await UserProfile.find({ users_id: { $in: UniqueBlockUserId } })
-    .populate('users_id')
-    .select('firstName lastName _id');
-  return allUsers;
+    // 4. Unwind profiles
+    { $unwind: '$blockedProfiles' },
+
+    // 5. Lookup User (firstName, lastName)
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'blockedProfiles.users_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+
+    { $unwind: '$user' },
+
+    // 6. Shape final output
+    {
+      $project: {
+        id: '$user._id',
+        firstName: '$user.firstName',
+        lastName: '$user.lastName',
+        university: '$blockedProfiles.university_name',
+        study_year: '$blockedProfiles.study_year',
+        degree: '$blockedProfiles.degree',
+        major: '$blockedProfiles.major',
+        occupation: '$blockedProfiles.occupation',
+        affiliation: '$blockedProfiles.affiliation',
+        role: '$blockedProfiles.role',
+        imageUrl: '$blockedProfiles.profile_dp.imageUrl',
+      },
+    },
+  ]);
+
+  return result;
 };
 
 export const getFollowingAndMutuals = async (name: string, userId: string, page: number = 1, limit: number = 10) => {
@@ -607,26 +640,201 @@ export const addUniversityEmail = async (
   return updatedUserProfile;
 };
 
+/**
+ * Groups community groups by communityId
+ */
+const groupByCommunityId = (
+  groups: Array<{ _id: mongoose.Types.ObjectId; communityId: mongoose.Types.ObjectId }>
+): Record<string, mongoose.Types.ObjectId[]> => {
+  return groups.reduce((acc, group) => {
+    const key = group.communityId.toString();
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key]!.push(group._id);
+    return acc;
+  }, {} as Record<string, mongoose.Types.ObjectId[]>);
+};
+
+/**
+ * Validates that blocking operation is allowed
+ */
+const validateBlockOperation = (userProfile: any, userToBlockProfile: any | null): void => {
+  if (!userProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (userProfile.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'You are an admin and cannot block other users.');
+  }
+
+  if (userToBlockProfile?.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User to block is an admin of a community and cannot be blocked');
+  }
+};
+
+/**
+ * Removes users from each other's following and followers lists
+ */
+const removeFollowRelationships = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId
+): Promise<void> => {
+  await Promise.all([
+    UserProfile.updateOne(
+      { users_id: userId },
+      { $pull: { following: { userId: userToBlock }, followers: { userId: userToBlock } } }
+    ),
+    UserProfile.updateOne(
+      { users_id: userToBlock },
+      { $pull: { following: { userId: userId }, followers: { userId: userId } } }
+    ),
+  ]);
+};
+
+/**
+ * Removes users from community groups where either user is admin
+ */
+const removeFromCommunityGroups = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId
+): Promise<void> => {
+  await Promise.all([
+    // Remove current user from groups where blocked user is admin
+    communityGroupModel.updateMany(
+      {
+        adminUserId: userToBlock,
+        'users._id': userId,
+      },
+      {
+        $pull: { users: { _id: userId } },
+      }
+    ),
+    // Remove blocked user from groups where current user is admin
+    communityGroupModel.updateMany(
+      {
+        adminUserId: userId,
+        'users._id': userToBlock,
+      },
+      {
+        $pull: { users: { _id: userToBlock } },
+      }
+    ),
+  ]);
+};
+
+/**
+ * Removes community groups from user profiles
+ */
+const removeCommunityGroupsFromProfiles = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId,
+  groupsByCommunity: Record<string, mongoose.Types.ObjectId[]>,
+  myGroupsByCommunity: Record<string, mongoose.Types.ObjectId[]>
+): Promise<void> => {
+  const removeGroupsPromises = [
+    // Remove groups from current user's profile where blocked user is admin
+    ...Object.entries(groupsByCommunity).map(([communityId, groupIds]) =>
+      UserProfile.updateOne(
+        {
+          users_id: userId,
+          'communities.communityId': communityId,
+        },
+        {
+          $pull: {
+            'communities.$.communityGroups': {
+              id: { $in: groupIds },
+            },
+          },
+        }
+      )
+    ),
+    // Remove groups from blocked user's profile where current user is admin
+    ...Object.entries(myGroupsByCommunity).map(([communityId, groupIds]) =>
+      UserProfile.updateOne(
+        {
+          users_id: userToBlock,
+          'communities.communityId': communityId,
+        },
+        {
+          $pull: {
+            'communities.$.communityGroups': {
+              id: { $in: groupIds },
+            },
+          },
+        }
+      )
+    ),
+  ];
+
+  await Promise.all(removeGroupsPromises);
+};
+
+/**
+ * Handles the blocking logic when blocking a user
+ */
+const handleBlockUser = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId,
+  groupsByCommunity: Record<string, mongoose.Types.ObjectId[]>,
+  myGroupsByCommunity: Record<string, mongoose.Types.ObjectId[]>
+): Promise<{ status: string; userId: mongoose.Types.ObjectId }> => {
+  // Add user to blocked list
+  await UserProfile.findOneAndUpdate(
+    { users_id: userId },
+    { $addToSet: { blockedUsers: { userId: userToBlock } } },
+    { new: true }
+  );
+
+  // Perform all cleanup operations in parallel where possible
+  await Promise.all([removeFollowRelationships(userId, userToBlock), removeFromCommunityGroups(userId, userToBlock)]);
+
+  // Remove community groups from profiles
+  await removeCommunityGroupsFromProfiles(userId, userToBlock, groupsByCommunity, myGroupsByCommunity);
+
+  return { status: 'blocked', userId: userToBlock };
+};
+
+/**
+ * Handles the unblocking logic when unblocking a user
+ */
+const handleUnblockUser = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId
+): Promise<{ status: string; userId: mongoose.Types.ObjectId }> => {
+  await UserProfile.findOneAndUpdate(
+    { users_id: userId },
+    { $pull: { blockedUsers: { userId: userToBlock } } },
+    { new: true }
+  );
+
+  return { status: 'unblocked', userId: userToBlock };
+};
+
 export const toggleBlock = async (userId: mongoose.Types.ObjectId, userToBlock: mongoose.Types.ObjectId) => {
-  const userProfile = await UserProfile.findOne({ users_id: userId });
+  // Fetch all required data in parallel
+  const [userProfile, userToBlockProfile, adminGroups, myAdminGroups] = await Promise.all([
+    UserProfile.findOne({ users_id: userId }),
+    UserProfile.findOne({ users_id: userToBlock }),
+    communityGroupModel.find({ adminUserId: userToBlock }, { _id: 1, communityId: 1 }).lean(),
+    communityGroupModel.find({ adminUserId: userId }, { _id: 1, communityId: 1 }).lean(),
+  ]);
 
-  if (!userProfile) throw new Error('User not found');
+  // Validate the operation
+  validateBlockOperation(userProfile, userToBlockProfile);
 
-  const isBlocked = userProfile.blockedUsers.some((b: any) => b.userId.toString() === userToBlock.toString());
+  // Group admin groups by community ID
+  const groupsByCommunity = groupByCommunityId(adminGroups);
+  const myGroupsByCommunity = groupByCommunityId(myAdminGroups);
+
+  // Check if user is already blocked
+  const isBlocked = userProfile!.blockedUsers.some(
+    (blockedUser) => blockedUser.userId.toString() === userToBlock.toString()
+  );
 
   if (isBlocked) {
-    await UserProfile.findOneAndUpdate(
-      { users_id: userId },
-      { $pull: { blockedUsers: { userId: userToBlock } } },
-      { new: true }
-    );
-    return { status: 'unblocked', userId: userToBlock };
+    return await handleUnblockUser(userId, userToBlock);
   } else {
-    await UserProfile.findOneAndUpdate(
-      { users_id: userId },
-      { $addToSet: { blockedUsers: { userId: userToBlock } } },
-      { new: true }
-    );
-    return { status: 'blocked', userId: userToBlock };
+    return await handleBlockUser(userId, userToBlock, groupsByCommunity, myGroupsByCommunity);
   }
 };

@@ -54,9 +54,18 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
+  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => b.userId) || [];
+
   const [userProfile] = await User.aggregate([
     {
       $match: { _id: id },
+    },
+    {
+      $match: {
+        _id: { $nin: myBlockedUserIds },
+      },
     },
     {
       $lookup: {
@@ -90,47 +99,139 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
       },
     },
     {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'profile.following.userId',
+        foreignField: 'users_id',
+        as: 'followingProfiles',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'profile.followers.userId',
+        foreignField: 'users_id',
+        as: 'followersProfiles',
+      },
+    },
+
+    {
       $addFields: {
         'profile.following': {
           $filter: {
             input: '$profile.following',
             as: 'f',
             cond: {
-              $gt: [
+              $and: [
                 {
-                  $size: {
-                    $filter: {
-                      input: '$followingUsers',
-                      as: 'u',
-                      cond: {
-                        $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: '$followingUsers',
+                          as: 'u',
+                          cond: {
+                            $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                          },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+
+                { $not: { $in: ['$$f.userId', myBlockedUserIds] } },
+
+                {
+                  $not: {
+                    $anyElementTrue: {
+                      $map: {
+                        input: {
+                          $ifNull: [
+                            {
+                              $filter: {
+                                input: '$followingProfiles',
+                                as: 'fp',
+                                cond: { $eq: ['$$fp.users_id', '$$f.userId'] },
+                              },
+                            },
+                            [],
+                          ],
+                        },
+                        as: 'fp',
+                        in: {
+                          $anyElementTrue: {
+                            $map: {
+                              input: { $ifNull: ['$$fp.blockedUsers', []] },
+                              as: 'b',
+                              in: { $eq: ['$$b.userId', myUserObjectId] },
+                            },
+                          },
+                        },
                       },
                     },
                   },
                 },
-                0,
               ],
             },
           },
         },
+
         'profile.followers': {
           $filter: {
             input: '$profile.followers',
             as: 'f',
             cond: {
-              $gt: [
+              $and: [
                 {
-                  $size: {
-                    $filter: {
-                      input: '$followersUsers',
-                      as: 'u',
-                      cond: {
-                        $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: '$followersUsers',
+                          as: 'u',
+                          cond: {
+                            $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                          },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+
+                { $not: { $in: ['$$f.userId', myBlockedUserIds] } },
+
+                {
+                  $not: {
+                    $anyElementTrue: {
+                      $map: {
+                        input: {
+                          $ifNull: [
+                            {
+                              $filter: {
+                                input: '$followersProfiles',
+                                as: 'fp',
+                                cond: { $eq: ['$$fp.users_id', '$$f.userId'] },
+                              },
+                            },
+                            [],
+                          ],
+                        },
+                        as: 'fp',
+                        in: {
+                          $anyElementTrue: {
+                            $map: {
+                              input: { $ifNull: ['$$fp.blockedUsers', []] },
+                              as: 'b',
+                              in: { $eq: ['$$b.userId', myUserObjectId] },
+                            },
+                          },
+                        },
                       },
                     },
                   },
                 },
-                0,
               ],
             },
           },
@@ -310,13 +411,23 @@ export const getAllUser = async (
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
   const university_name = decodeURI(universityName || '');
 
-  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following');
+  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following blockedUsers');
   const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
 
+  const myBlockedUserIds = loggedInUser?.blockedUsers.map((u) => new mongoose.Types.ObjectId(u.userId.toString())) || [];
   const matchStage: any = {
-    _id: { $ne: new mongoose.Types.ObjectId(userId) },
+    _id: {
+      $ne: new mongoose.Types.ObjectId(userId),
+      $nin: myBlockedUserIds,
+    },
     isDeleted: { $ne: true },
-    'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(userId) },
+    'profile.blockedUsers': {
+      $not: {
+        $elemMatch: {
+          userId: new mongoose.Types.ObjectId(userId),
+        },
+      },
+    },
   };
 
   if (firstNametoPush) {
