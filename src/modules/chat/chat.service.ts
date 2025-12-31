@@ -440,56 +440,96 @@ export const editGroupChat = async (
   return updatedGroup;
 };
 
-export const getGroupChatMembers = async (userID: string, chatId: string) => {
-  const chat = await chatModel.findById(chatId);
-  const isMember = chat?.users.some((user) => user.userId.toString() == userID);
+export const getGroupChatMembers = async (myUserId: string, chatId: string) => {
+  const myObjectId = new mongoose.Types.ObjectId(myUserId);
+  const chatObjectId = new mongoose.Types.ObjectId(chatId);
 
-  if (!isMember) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
-  }
+  const myBlockedUserIds =
+    (await UserProfile.findOne({ users_id: myObjectId }).select('blockedUsers').lean())?.blockedUsers?.map(
+      (b: any) => new mongoose.Types.ObjectId(b.userId)
+    ) || [];
 
-  const chatWithUserDetails = await chatModel.aggregate([
+  const pipeline: any[] = [
     {
-      $match: { _id: new mongoose.Types.ObjectId(chatId) },
+      $match: {
+        _id: chatObjectId,
+        users: {
+          $elemMatch: { userId: myObjectId },
+        },
+      },
     },
-    {
-      $unwind: '$users',
-    },
+
+    { $unwind: '$users' },
+
     {
       $lookup: {
         from: 'users',
         localField: 'users.userId',
         foreignField: '_id',
-        as: 'users.userId',
+        as: 'user',
       },
     },
+    { $unwind: '$user' },
+
     {
-      $unwind: '$users.userId',
+      $match: {
+        'user.isDeleted': { $ne: true },
+      },
     },
+
     {
       $lookup: {
         from: 'userprofiles',
-        localField: 'users.userId._id',
+        localField: 'user._id',
         foreignField: 'users_id',
-        as: 'users.userProfile',
+        as: 'userProfile',
       },
     },
     {
       $unwind: {
-        path: '$users.userProfile',
+        path: '$userProfile',
         preserveNullAndEmptyArrays: true,
       },
     },
+
     {
-      $addFields: {
-        'users.userId.profileDp': '$users.userProfile.profile_dp.imageUrl',
-        'users.userId.studyYear': '$users.userProfile.study_year',
-        'users.userId.major': '$users.userProfile.major',
-        'users.userId.occupation': '$users.userProfile.occupation',
-        'users.userId.affiliation': '$users.userProfile.affiliation',
-        'users.userId.role': '$users.userProfile.role',
+      $match: {
+        'userProfile.blockedUsers': {
+          $not: {
+            $elemMatch: {
+              userId: myObjectId,
+            },
+          },
+        },
       },
     },
+
+    {
+      $match: {
+        'user._id': {
+          $nin: myBlockedUserIds,
+        },
+      },
+    },
+
+    {
+      $addFields: {
+        'users.userId': {
+          _id: '$user._id',
+          firstName: '$user.firstName',
+          lastName: '$user.lastName',
+          profileDp: '$userProfile.profile_dp.imageUrl',
+          universityName: '$userProfile.university_name',
+          studyYear: '$userProfile.study_year',
+          degree: '$userProfile.degree',
+          major: '$userProfile.major',
+          occupation: '$userProfile.occupation',
+          affiliation: '$userProfile.affiliation',
+          role: '$userProfile.role',
+        },
+      },
+    },
+
     {
       $group: {
         _id: '$_id',
@@ -503,15 +543,15 @@ export const getGroupChatMembers = async (userID: string, chatId: string) => {
         updatedAt: { $first: '$updatedAt' },
       },
     },
-    {
-      $project: {
-        'users.userProfile': 0,
-        'users.userId.password': 0,
-      },
-    },
-  ]);
+  ];
 
-  return chatWithUserDetails[0];
+  const result = await chatModel.aggregate(pipeline);
+
+  if (!result.length) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
+  }
+
+  return result[0];
 };
 export const toggleAddToGroup = async (userID: string, userToToggleId: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);
