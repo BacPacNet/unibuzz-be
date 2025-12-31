@@ -22,6 +22,29 @@ export const createUser = async (userBody: NewCreatedUser): Promise<IUserDoc> =>
 };
 
 /**
+ * Generate a unique refer code for a user
+ * Format: CAPITAL_FIRSTNAME + random 4 digit number
+ * @param {string} firstName
+ * @returns {Promise<string>}
+ */
+const generateReferCode = async (firstName: string): Promise<string> => {
+  const capitalFirstName = firstName.toUpperCase();
+  let referCode: string;
+  let isUnique = false;
+
+  while (!isUnique) {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000); // Generate 4-digit number (1000-9999)
+    referCode = `${capitalFirstName}${randomDigits}`;
+    const existingUser = await User.findOne({ referCode });
+    if (!existingUser) {
+      isUnique = true;
+    }
+  }
+
+  return referCode!;
+};
+
+/**
  * Register a user
  * @param {NewRegisteredUser} userBody
  * @returns {Promise<IUserDoc>}
@@ -30,7 +53,27 @@ export const registerUser = async (userBody: NewRegisteredUser): Promise<IUserDo
   if (await User.isEmailTaken(userBody.email)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Email already taken');
   }
-  const user = new User(userBody);
+
+  // Handle referral code if provided
+  let referredByUserId: mongoose.Types.ObjectId | null = null;
+  if (userBody.referralCode) {
+    const referringUser = await User.findOne({ referCode: userBody.referralCode });
+    if (referringUser) {
+      referredByUserId = referringUser._id;
+    }
+  }
+
+  // Generate refer code for the new user
+  const newReferCode = await generateReferCode(userBody.firstName);
+
+  // Create user with referral information
+  const userData = {
+    ...userBody,
+    referCode: newReferCode,
+    referredBy: referredByUserId,
+  };
+
+  const user = new User(userData);
   const result = await user.save();
   return result;
 };
@@ -960,6 +1003,35 @@ export const changeUserEmail = async (userID: string, email: string, newMail: st
 
   user.save();
   return user;
+};
+
+/**
+ * Get all users referred by a specific user with populated referral details
+ * @param {mongoose.Types.ObjectId} userId
+ * @returns {Promise<{referCode: string, totalReferrals: number, referrals: IUserDoc[]}>}
+ */
+export const getReferredUsers = async (
+  userId: mongoose.Types.ObjectId
+): Promise<{ referCode: string | undefined; totalReferrals: number; referrals: IUserDoc[] }> => {
+  const user = await getUserById(userId);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  // Find all users who were referred by this user
+  const referredUsers = await User.find({
+    referredBy: userId,
+    isDeleted: { $ne: true },
+  })
+    .select('-password')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    referCode: user.referCode,
+    totalReferrals: referredUsers.length,
+    referrals: referredUsers as IUserDoc[],
+  };
 };
 export const deActivateUserAccount = async (userID: string, userName: string, email: string, password: string) => {
   const user = await User.findById(userID);

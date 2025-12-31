@@ -16,6 +16,8 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   isNewUser: Joi.boolean(),
   isDeleted: Joi.boolean(),
   deletedAt: Joi.date(),
+  referCode: Joi.string().optional(),
+  referredBy: Joi.string().optional(),
 };
 
 export const createUser = {
