@@ -116,9 +116,7 @@ export const getUserChats = async (userId: string) => {
     .populate('latestMessage')
     .lean();
 
-  const userIds = chats
-    .flatMap((chat) => chat.users.map((u) => (typeof u.userId === 'object' ? u.userId?._id?.toString() : null)))
-    .filter(Boolean) as string[];
+  const userIds = chats.flatMap((chat) => chat.users.map((u) => u.userId?._id?.toString()).filter(Boolean)) as string[];
 
   const uniqueUserIds = [...new Set(userIds)];
 
@@ -140,22 +138,20 @@ export const getUserChats = async (userId: string) => {
   }
 
   function isUserBlocked(targetUser: any): boolean {
-    if (!targetUser || typeof targetUser !== 'object') return false;
-    const targetId = targetUser._id?.toString();
-    if (!targetId) return false;
+    if (!targetUser?._id) return false;
+    const targetId = targetUser._id.toString();
     return iBlocked(targetId) || theyBlockedMe(targetId);
   }
-
   const filteredChats = chats.filter((chat) => {
     if (!chat?.users) return false;
 
     if (!chat.isGroupChat) return true;
 
     const adminUser = chat.users.find(
-      (u) => typeof u.userId === 'object' && u.userId._id?.toString() === chat.groupAdmin?.toString()
+      (u) => u.userId && u.userId._id && u.userId._id.toString() === chat.groupAdmin?.toString()
     );
 
-    if (!adminUser?.userId || typeof adminUser.userId !== 'object') {
+    if (!adminUser?.userId || !adminUser.userId._id) {
       return false;
     }
 
@@ -214,9 +210,10 @@ export const getUserChats = async (userId: string) => {
     let profileDp: string | null = null;
 
     chat.users = chat.users.map((user) => {
-      if (!user?.userId || typeof user.userId !== 'object') return user;
+      if (!user?.userId || !user.userId._id) return user;
 
       const targetId = user.userId._id.toString();
+
       const userProfile = userProfiles.find((p) => p.users_id.toString() === targetId);
 
       const isDeleted =
