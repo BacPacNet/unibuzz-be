@@ -42,7 +42,7 @@ export const checkLoginEmailOtpV2 = async (req: Request, res: Response) => {
         // if the user details are not valid, then return false
         return res
           .status(200)
-          .json({ message: 'User is not university user', isAvailable: false, isUniversityDomain: false });
+          .json({ message: 'User is not university user', isAvailable: true, isUniversityDomain: false });
       }
     }
   } catch (error: any) {
