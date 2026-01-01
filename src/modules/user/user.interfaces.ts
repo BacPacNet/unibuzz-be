@@ -44,6 +44,10 @@ export interface IUser {
   profile: UserProfileDocument;
   isUserDeactive: boolean;
   isNewUser: boolean;
+  isDeleted: boolean;
+  deletedAt: Date | null;
+  referCode?: string;
+  referredBy?: mongoose.Types.ObjectId | null;
 }
 
 export interface IUserDoc extends IUser, Document {
@@ -58,7 +62,12 @@ export interface IUserModel extends Model<IUserDoc> {
 
 export type UpdateUserBody = Partial<IUser>;
 
-export type NewRegisteredUser = Omit<IUser, 'role' | 'isEmailVerified' | 'profile' | 'isUserDeactive'>;
+export type NewRegisteredUser = Omit<
+  IUser,
+  'role' | 'isEmailVerified' | 'profile' | 'isUserDeactive' | 'referCode' | 'referredBy'
+> & {
+  referralCode?: string;
+};
 
 export type NewCreatedUser = Omit<IUser, 'isEmailVerified' | 'profile' | 'isUserDeactive'>;
 

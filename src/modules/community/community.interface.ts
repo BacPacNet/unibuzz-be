@@ -36,6 +36,7 @@ interface GetCommunityUsersOptions {
   communityGroupId?: string | undefined;
   page?: number | undefined;
   limit?: number | undefined;
+  userId: string;
 }
 
 export { communityInterface, GetCommunityUsersOptions };

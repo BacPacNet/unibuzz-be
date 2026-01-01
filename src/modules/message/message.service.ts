@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { chatModel } from '../chat';
 import messageModel from './message.model';
+import { UserProfile } from '../userProfile';
 
 export const createmessage = async (
   userId: string,
@@ -51,16 +52,73 @@ export const createmessage = async (
   return message;
 };
 
-export const getMessages = async (chatId: string) => {
+export const getMessages = async (chatId: string, currentUserId: string) => {
+  const myProfile = await UserProfile.findOne({ users_id: currentUserId }, { blockedUsers: 1 }).lean();
+
+  const myBlockedUserIds = new Set((myProfile?.blockedUsers || []).map((b: any) => b.userId.toString()));
+
   const messages = await messageModel
     .find({ chat: chatId })
     .populate([
-      { path: 'sender', select: 'firstName lastName _id' },
-      { path: 'senderProfile', select: '  profile_dp' },
+      { path: 'sender', select: 'firstName lastName _id isDeleted' },
+      { path: 'senderProfile', select: 'profile_dp' },
     ])
-    .sort({ createdAt: 1 });
+    .sort({ createdAt: 1 })
+    .lean();
 
-  return messages;
+  const senderIds = messages
+    .map((m) => (typeof m.sender === 'object' ? m.sender?._id?.toString() : null))
+    .filter(Boolean) as string[];
+
+  const uniqueSenderIds = [...new Set(senderIds)];
+
+  const blockProfiles = await UserProfile.find(
+    { users_id: { $in: uniqueSenderIds } },
+    { users_id: 1, blockedUsers: 1 }
+  ).lean();
+
+  const blockedMap = new Map(
+    blockProfiles.map((p) => [p.users_id.toString(), new Set((p.blockedUsers || []).map((b: any) => b.userId.toString()))])
+  );
+
+  function isUserBlocked(sender: any): boolean {
+    if (!sender || typeof sender !== 'object') return false;
+
+    const senderId = sender._id?.toString();
+    if (!senderId) return false;
+
+    const iBlockedSender = myBlockedUserIds.has(senderId);
+    const senderBlockedMe = blockedMap.get(senderId)?.has(currentUserId.toString()) ?? false;
+
+    return iBlockedSender || senderBlockedMe;
+  }
+
+  return messages.map((message) => {
+    const sender = message.sender;
+
+    const isDeleted =
+      sender && typeof sender === 'object' && sender !== null && 'isDeleted' in sender && sender.isDeleted === true;
+
+    const isBlocked = isUserBlocked(sender);
+
+    if (isDeleted || isBlocked) {
+      return {
+        ...message,
+        sender: {
+          _id: sender?._id,
+          firstName: 'Deleted',
+          lastName: 'User',
+          isDeleted: isDeleted,
+          isBlocked: isBlocked,
+        },
+        senderProfile: {
+          profile_dp: null,
+        },
+      };
+    }
+
+    return message;
+  });
 };
 
 export const updateMessageSeen = async (messageId: string, readByUserId: string) => {

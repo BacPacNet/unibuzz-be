@@ -22,6 +22,29 @@ export const createUser = async (userBody: NewCreatedUser): Promise<IUserDoc> =>
 };
 
 /**
+ * Generate a unique refer code for a user
+ * Format: CAPITAL_FIRSTNAME + random 4 digit number
+ * @param {string} firstName
+ * @returns {Promise<string>}
+ */
+const generateReferCode = async (firstName: string): Promise<string> => {
+  const capitalFirstName = firstName.toUpperCase();
+  let referCode: string;
+  let isUnique = false;
+
+  while (!isUnique) {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000); // Generate 4-digit number (1000-9999)
+    referCode = `${capitalFirstName}${randomDigits}`;
+    const existingUser = await User.findOne({ referCode });
+    if (!existingUser) {
+      isUnique = true;
+    }
+  }
+
+  return referCode!;
+};
+
+/**
  * Register a user
  * @param {NewRegisteredUser} userBody
  * @returns {Promise<IUserDoc>}
@@ -30,7 +53,27 @@ export const registerUser = async (userBody: NewRegisteredUser): Promise<IUserDo
   if (await User.isEmailTaken(userBody.email)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Email already taken');
   }
-  const user = new User(userBody);
+
+  // Handle referral code if provided
+  let referredByUserId: mongoose.Types.ObjectId | null = null;
+  if (userBody.referralCode) {
+    const referringUser = await User.findOne({ referCode: userBody.referralCode });
+    if (referringUser) {
+      referredByUserId = referringUser._id;
+    }
+  }
+
+  // Generate refer code for the new user
+  const newReferCode = await generateReferCode(userBody.firstName);
+
+  // Create user with referral information
+  const userData = {
+    ...userBody,
+    referCode: newReferCode,
+    referredBy: referredByUserId,
+  };
+
+  const user = new User(userData);
   const result = await user.save();
   return result;
 };
@@ -54,9 +97,18 @@ export const queryUsers = async (filter: Record<string, any>, options: IOptions)
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
+  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => b.userId) || [];
+
   const [userProfile] = await User.aggregate([
     {
       $match: { _id: id },
+    },
+    {
+      $match: {
+        _id: { $nin: myBlockedUserIds },
+      },
     },
     {
       $lookup: {
@@ -70,6 +122,169 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
       $unwind: {
         path: '$profile',
         preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'profile.following.userId',
+        foreignField: '_id',
+        as: 'followingUsers',
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'profile.followers.userId',
+        foreignField: '_id',
+        as: 'followersUsers',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'profile.following.userId',
+        foreignField: 'users_id',
+        as: 'followingProfiles',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'profile.followers.userId',
+        foreignField: 'users_id',
+        as: 'followersProfiles',
+      },
+    },
+
+    {
+      $addFields: {
+        'profile.following': {
+          $filter: {
+            input: '$profile.following',
+            as: 'f',
+            cond: {
+              $and: [
+                {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: '$followingUsers',
+                          as: 'u',
+                          cond: {
+                            $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                          },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+
+                { $not: { $in: ['$$f.userId', myBlockedUserIds] } },
+
+                {
+                  $not: {
+                    $anyElementTrue: {
+                      $map: {
+                        input: {
+                          $ifNull: [
+                            {
+                              $filter: {
+                                input: '$followingProfiles',
+                                as: 'fp',
+                                cond: { $eq: ['$$fp.users_id', '$$f.userId'] },
+                              },
+                            },
+                            [],
+                          ],
+                        },
+                        as: 'fp',
+                        in: {
+                          $anyElementTrue: {
+                            $map: {
+                              input: { $ifNull: ['$$fp.blockedUsers', []] },
+                              as: 'b',
+                              in: { $eq: ['$$b.userId', myUserObjectId] },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+
+        'profile.followers': {
+          $filter: {
+            input: '$profile.followers',
+            as: 'f',
+            cond: {
+              $and: [
+                {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: '$followersUsers',
+                          as: 'u',
+                          cond: {
+                            $and: [{ $eq: ['$$u._id', '$$f.userId'] }, { $ne: ['$$u.isDeleted', true] }],
+                          },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+
+                { $not: { $in: ['$$f.userId', myBlockedUserIds] } },
+
+                {
+                  $not: {
+                    $anyElementTrue: {
+                      $map: {
+                        input: {
+                          $ifNull: [
+                            {
+                              $filter: {
+                                input: '$followersProfiles',
+                                as: 'fp',
+                                cond: { $eq: ['$$fp.users_id', '$$f.userId'] },
+                              },
+                            },
+                            [],
+                          ],
+                        },
+                        as: 'fp',
+                        in: {
+                          $anyElementTrue: {
+                            $map: {
+                              input: { $ifNull: ['$$fp.blockedUsers', []] },
+                              as: 'b',
+                              in: { $eq: ['$$b.userId', myUserObjectId] },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        followingUsers: 0,
+        followersUsers: 0,
       },
     },
 
@@ -158,6 +373,11 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
         'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(myUserId) },
       },
     },
+    {
+      $match: {
+        isDeleted: { $ne: true },
+      },
+    },
 
     {
       $lookup: {
@@ -234,12 +454,23 @@ export const getAllUser = async (
   const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
   const university_name = decodeURI(universityName || '');
 
-  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following');
+  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following blockedUsers');
   const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
 
+  const myBlockedUserIds = loggedInUser?.blockedUsers.map((u) => new mongoose.Types.ObjectId(u.userId.toString())) || [];
   const matchStage: any = {
-    _id: { $ne: new mongoose.Types.ObjectId(userId) },
-    'profile.blockedUsers.userId': { $ne: new mongoose.Types.ObjectId(userId) },
+    _id: {
+      $ne: new mongoose.Types.ObjectId(userId),
+      $nin: myBlockedUserIds,
+    },
+    isDeleted: { $ne: true },
+    'profile.blockedUsers': {
+      $not: {
+        $elemMatch: {
+          userId: new mongoose.Types.ObjectId(userId),
+        },
+      },
+    },
   };
 
   if (firstNametoPush) {
@@ -773,6 +1004,35 @@ export const changeUserEmail = async (userID: string, email: string, newMail: st
   user.save();
   return user;
 };
+
+/**
+ * Get all users referred by a specific user with populated referral details
+ * @param {mongoose.Types.ObjectId} userId
+ * @returns {Promise<{referCode: string, totalReferrals: number, referrals: IUserDoc[]}>}
+ */
+export const getReferredUsers = async (
+  userId: mongoose.Types.ObjectId
+): Promise<{ referCode: string | undefined; totalReferrals: number; referrals: IUserDoc[] }> => {
+  const user = await getUserById(userId);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  // Find all users who were referred by this user
+  const referredUsers = await User.find({
+    referredBy: userId,
+    isDeleted: { $ne: true },
+  })
+    .select('-password')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    referCode: user.referCode,
+    totalReferrals: referredUsers.length,
+    referrals: referredUsers as IUserDoc[],
+  };
+};
 export const deActivateUserAccount = async (userID: string, userName: string, email: string, password: string) => {
   const user = await User.findById(userID);
 
@@ -807,5 +1067,24 @@ export const IsNewUserFalse = async (userID: string) => {
   user.isNewUser = false;
 
   user.save();
+  return user;
+};
+
+export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, password: string) => {
+  const [user, userProfile] = await Promise.all([User.findById(userId), UserProfile.findOne({ users_id: userId })]);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  if (!(await user.isPasswordMatch(password))) {
+    throw new ApiError(httpStatus.CONFLICT, 'Password is incorrect!');
+  }
+
+  if (userProfile?.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is admin of a community and cannot be deleted');
+  }
+  user.isDeleted = true;
+  user.deletedAt = new Date();
+  await user.save();
   return user;
 };

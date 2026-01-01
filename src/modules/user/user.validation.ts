@@ -14,6 +14,10 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   userVerifiedCommunities: Joi.string(),
   userUnVerifiedCommunities: Joi.string(),
   isNewUser: Joi.boolean(),
+  isDeleted: Joi.boolean(),
+  deletedAt: Joi.date(),
+  referCode: Joi.string().optional(),
+  referredBy: Joi.string().optional(),
 };
 
 export const createUser = {

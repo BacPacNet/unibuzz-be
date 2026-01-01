@@ -7,7 +7,7 @@ router.get('/health', async (_req, res) => {
   try {
     // Check MongoDB connection
     const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-    
+
     // Check Redis connection (simplified for now)
     let redisStatus = 'unknown';
     try {
@@ -33,7 +33,7 @@ router.get('/health', async (_req, res) => {
     };
 
     const isHealthy = mongoStatus === 'connected' && redisStatus === 'connected';
-    
+
     res.status(isHealthy ? 200 : 503).json(healthStatus);
   } catch (error) {
     res.status(503).json({
@@ -44,4 +44,4 @@ router.get('/health', async (_req, res) => {
   }
 });
 
-export default router; 
+export default router;

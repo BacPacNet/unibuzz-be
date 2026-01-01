@@ -103,59 +103,86 @@ export const createChat = async (yourId: string, userId: string, isRequestAccept
 };
 
 export const getUserChats = async (userId: string) => {
+  const myProfile = await UserProfile.findOne({ users_id: userId }, { blockedUsers: 1 }).lean();
+
+  const myBlockedUserIds = new Set((myProfile?.blockedUsers || []).map((b: any) => b.userId.toString()));
+
   const chats: (chatInterface & { _id: string })[] = await chatModel
-    .find({
-      users: { $elemMatch: { userId: userId } },
-    })
+    .find({ users: { $elemMatch: { userId } } })
     .populate({
       path: 'users.userId',
-      select: 'firstName lastName',
+      select: 'firstName lastName isDeleted',
     })
     .populate('latestMessage')
     .lean();
 
-  const filteredChats = chats.filter((chat) => {
-    if (!chat?.users) return false; // Ensure chat.users exists
+  const userIds = chats.flatMap((chat) => chat.users.map((u) => u.userId?._id?.toString()).filter(Boolean)) as string[];
 
-    if (chat.isGroupChat) {
-      chat.users = chat.users.filter((user) => user?.userId !== null && user?.userId !== undefined);
-      return chat.users.length > 0; // Only keep group chats with valid users
-    }
-
-    // For non-group chats
-    const isValidChat = chat.users.every((user) => {
-      if (!user?.userId) return false;
-
-      if (typeof user.userId === 'object') {
-        return user.userId?._id !== undefined;
-      }
-
-      return typeof user.userId === 'string' || typeof user.userId === 'number';
-    });
-
-    return isValidChat;
-  });
-
-  const userIds = filteredChats
-    .flatMap((chat) =>
-      chat.users.map((user) => {
-        if (!user?.userId) return null;
-
-        if (typeof user.userId === 'object' && user.userId._id) {
-          return user.userId._id.toString();
-        }
-
-        return user.userId.toString();
-      })
-    )
-    .filter((id) => id !== null);
-
-  const chatIds = filteredChats.map((chat) => chat._id.toString());
   const uniqueUserIds = [...new Set(userIds)];
 
-  const userProfiles = await UserProfile.find({ users_id: { $in: uniqueUserIds } })
+  const blockProfiles = await UserProfile.find(
+    { users_id: { $in: uniqueUserIds } },
+    { users_id: 1, blockedUsers: 1 }
+  ).lean();
+
+  const blockedMap = new Map(
+    blockProfiles.map((p) => [p.users_id.toString(), new Set((p.blockedUsers || []).map((b: any) => b.userId.toString()))])
+  );
+
+  function iBlocked(userIdToCheck: string): boolean {
+    return myBlockedUserIds.has(userIdToCheck);
+  }
+
+  function theyBlockedMe(userIdToCheck: string): boolean {
+    return blockedMap.get(userIdToCheck)?.has(userId.toString()) ?? false;
+  }
+
+  function isUserBlocked(targetUser: any): boolean {
+    if (!targetUser?._id) return false;
+    const targetId = targetUser._id.toString();
+    return iBlocked(targetId) || theyBlockedMe(targetId);
+  }
+  const filteredChats = chats.filter((chat) => {
+    if (!chat?.users) return false;
+
+    if (!chat.isGroupChat) return true;
+
+    const adminUser = chat.users.find(
+      (u) => u.userId && u.userId._id && u.userId._id.toString() === chat.groupAdmin?.toString()
+    );
+
+    if (!adminUser?.userId || !adminUser.userId._id) {
+      return false;
+    }
+
+    const adminId = adminUser.userId._id.toString();
+
+    if (
+      typeof adminUser.userId === 'object' &&
+      adminUser.userId !== null &&
+      'isDeleted' in adminUser.userId &&
+      adminUser.userId.isDeleted === true
+    ) {
+      return false;
+    }
+
+    const iBlockedAdmin = iBlocked(adminId);
+    const adminBlockedMe = blockedMap.get(adminId)?.has(userId.toString()) ?? false;
+
+    if (iBlockedAdmin || adminBlockedMe) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const userProfiles = await UserProfile.find({
+    users_id: { $in: uniqueUserIds },
+  })
     .select('profile_dp users_id university_name study_year major affiliation occupation role')
     .lean();
+
+  const chatIds = filteredChats.map((c) => c._id.toString());
 
   const messages = await messageModel
     .find({ chat: { $in: chatIds } })
@@ -163,46 +190,63 @@ export const getUserChats = async (userId: string) => {
     .limit(50)
     .lean();
 
-  const messagesByChat = messages.reduce((acc: any, message) => {
-    const chatIdStr = message.chat.toString();
-
-    if (acc[chatIdStr]) {
-      acc[chatIdStr].push(message);
-    } else {
-      acc[chatIdStr] = [message];
-    }
-
+  const messagesByChat = messages.reduce((acc: any, msg) => {
+    const id = msg.chat.toString();
+    acc[id] = acc[id] || [];
+    acc[id].push(msg);
     return acc;
   }, {});
 
-  function getUnreadMessagesCount(messages: any, userId: string): number {
-    let unreadCount = 0;
-
-    for (let i = 0; i < messages.length; i++) {
-      const message = messages[i];
-      const isReadByUser = message.readByUsers.some((readUserId: string) => readUserId.toString() === userId.toString());
-
-      if (isReadByUser) {
-        break;
-      }
-
-      unreadCount++;
+  function getUnreadMessagesCount(messages: any[], userId: string): number {
+    let count = 0;
+    for (const msg of messages) {
+      if (msg.readByUsers.some((u: any) => u.toString() === userId)) break;
+      count++;
     }
-
-    return unreadCount;
+    return count;
   }
 
   const allChats = filteredChats.map((chat) => {
     let profileDp: string | null = null;
 
-    if (!chat.isGroupChat) {
-      chat.users = chat.users.map((user) => {
-        if (user?.userId?._id?.toString() !== userId.toString()) {
-          const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user?.userId?._id?.toString());
-          profileDp = userProfile?.profile_dp?.imageUrl ?? null;
-          return {
-            ...user,
-            userId: {
+    chat.users = chat.users.map((user) => {
+      if (!user?.userId || !user.userId._id) return user;
+
+      const targetId = user.userId._id.toString();
+
+      const userProfile = userProfiles.find((p) => p.users_id.toString() === targetId);
+
+      const isDeleted =
+        typeof user.userId === 'object' &&
+        user.userId !== null &&
+        'isDeleted' in user.userId &&
+        user.userId.isDeleted === true;
+      const isBlocked = isUserBlocked(user.userId);
+      const hideProfile = isDeleted || isBlocked;
+
+      if (!chat.isGroupChat && targetId !== userId) {
+        profileDp = hideProfile ? null : userProfile?.profile_dp?.imageUrl ?? null;
+      }
+
+      return {
+        ...user,
+        userId: hideProfile
+          ? {
+              _id: user.userId._id,
+              firstName: 'Deleted',
+              lastName: 'user',
+              profileDp: null,
+              universityName: null,
+              studyYear: null,
+              degree: null,
+              major: null,
+              role: null,
+              affiliation: null,
+              occupation: null,
+              isDeleted,
+              isBlocked,
+            }
+          : {
               ...user.userId,
               profileDp: userProfile?.profile_dp?.imageUrl ?? null,
               universityName: userProfile?.university_name ?? null,
@@ -212,42 +256,11 @@ export const getUserChats = async (userId: string) => {
               role: userProfile?.role ?? null,
               affiliation: userProfile?.affiliation ?? null,
               occupation: userProfile?.occupation ?? null,
+              isDeleted,
+              isBlocked,
             },
-          };
-        }
-        return user;
-      }) as any;
-    } else {
-      chat.users = chat.users.map((user) => {
-        const userProfile = userProfiles.find((profile) => profile.users_id.toString() === user.userId._id.toString());
-        return {
-          ...user,
-          userId: {
-            ...user.userId,
-            profileDp: userProfile?.profile_dp?.imageUrl ?? null,
-            universityName: userProfile?.university_name ?? null,
-            studyYear: userProfile?.study_year ?? null,
-            degree: userProfile?.degree ?? null,
-            major: userProfile?.major ?? null,
-            role: userProfile?.role ?? null,
-            affiliation: userProfile?.affiliation ?? null,
-            occupation: userProfile?.occupation ?? null,
-          },
-        };
-      }) as any;
-
-      if (chat.users && Array.isArray(chat.users)) {
-        chat.users.sort((a: any, b: any) => {
-          const isAAdmin = a.userId?._id?.toString() === chat.groupAdmin?.toString();
-          const isBAdmin = b.userId?._id?.toString() === chat.groupAdmin?.toString();
-
-          if (isAAdmin && !isBAdmin) return -1;
-          if (!isAAdmin && isBAdmin) return 1;
-
-          return (a.userId?.firstName || '').toLowerCase().localeCompare((b.userId?.firstName || '').toLowerCase());
-        });
-      }
-    }
+      };
+    }) as any;
 
     const latestMessageTime =
       chat.latestMessage && 'createdAt' in chat.latestMessage ? new Date(chat.latestMessage.createdAt).getTime() : 0;
@@ -261,9 +274,8 @@ export const getUserChats = async (userId: string) => {
   });
 
   allChats.sort((a: any, b: any) => {
-    const aTime = a.latestMessageTime > 0 ? a.latestMessageTime : new Date(a.createdAt || 0).getTime();
-    const bTime = b.latestMessageTime > 0 ? b.latestMessageTime : new Date(b.createdAt || 0).getTime();
-
+    const aTime = a.latestMessageTime || new Date(a.createdAt || 0).getTime();
+    const bTime = b.latestMessageTime || new Date(b.createdAt || 0).getTime();
     return bTime - aTime;
   });
 
@@ -278,22 +290,19 @@ export const createGroupChat = async (
   groupLogo: media | null = null,
   community: any
 ) => {
-  // Validate required fields
   if (!adminId || !groupName) {
     throw new Error('Admin ID and group name are required');
   }
 
-  // Normalize and validate users to add
   const normalizedUsers =
     usersToAdd
-      ?.filter((user) => user.userId && user.userId !== adminId) // Remove invalid IDs and prevent adding admin again
+      ?.filter((user) => user.userId && user.userId !== adminId)
       .map((user) => ({
         userId: new mongoose.Types.ObjectId(user.userId),
         isRequestAccepted: false,
         isStarred: false,
       })) || [];
 
-  // Create group data with proper ObjectId types
   const groupData = {
     chatName: groupName.trim(),
     community: community,
@@ -313,7 +322,6 @@ export const createGroupChat = async (
     updatedAt: new Date(),
   };
 
-  // Create and return the new group
   try {
     const newGroup = await chatModel.create(groupData);
     return newGroup;
@@ -432,56 +440,96 @@ export const editGroupChat = async (
   return updatedGroup;
 };
 
-export const getGroupChatMembers = async (userID: string, chatId: string) => {
-  const chat = await chatModel.findById(chatId);
-  const isMember = chat?.users.some((user) => user.userId.toString() == userID);
+export const getGroupChatMembers = async (myUserId: string, chatId: string) => {
+  const myObjectId = new mongoose.Types.ObjectId(myUserId);
+  const chatObjectId = new mongoose.Types.ObjectId(chatId);
 
-  if (!isMember) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
-  }
+  const myBlockedUserIds =
+    (await UserProfile.findOne({ users_id: myObjectId }).select('blockedUsers').lean())?.blockedUsers?.map(
+      (b: any) => new mongoose.Types.ObjectId(b.userId)
+    ) || [];
 
-  const chatWithUserDetails = await chatModel.aggregate([
+  const pipeline: any[] = [
     {
-      $match: { _id: new mongoose.Types.ObjectId(chatId) },
+      $match: {
+        _id: chatObjectId,
+        users: {
+          $elemMatch: { userId: myObjectId },
+        },
+      },
     },
-    {
-      $unwind: '$users',
-    },
+
+    { $unwind: '$users' },
+
     {
       $lookup: {
         from: 'users',
         localField: 'users.userId',
         foreignField: '_id',
-        as: 'users.userId',
+        as: 'user',
       },
     },
+    { $unwind: '$user' },
+
     {
-      $unwind: '$users.userId',
+      $match: {
+        'user.isDeleted': { $ne: true },
+      },
     },
+
     {
       $lookup: {
         from: 'userprofiles',
-        localField: 'users.userId._id',
+        localField: 'user._id',
         foreignField: 'users_id',
-        as: 'users.userProfile',
+        as: 'userProfile',
       },
     },
     {
       $unwind: {
-        path: '$users.userProfile',
+        path: '$userProfile',
         preserveNullAndEmptyArrays: true,
       },
     },
+
     {
-      $addFields: {
-        'users.userId.profileDp': '$users.userProfile.profile_dp.imageUrl',
-        'users.userId.studyYear': '$users.userProfile.study_year',
-        'users.userId.major': '$users.userProfile.major',
-        'users.userId.occupation': '$users.userProfile.occupation',
-        'users.userId.affiliation': '$users.userProfile.affiliation',
-        'users.userId.role': '$users.userProfile.role',
+      $match: {
+        'userProfile.blockedUsers': {
+          $not: {
+            $elemMatch: {
+              userId: myObjectId,
+            },
+          },
+        },
       },
     },
+
+    {
+      $match: {
+        'user._id': {
+          $nin: myBlockedUserIds,
+        },
+      },
+    },
+
+    {
+      $addFields: {
+        'users.userId': {
+          _id: '$user._id',
+          firstName: '$user.firstName',
+          lastName: '$user.lastName',
+          profileDp: '$userProfile.profile_dp.imageUrl',
+          universityName: '$userProfile.university_name',
+          studyYear: '$userProfile.study_year',
+          degree: '$userProfile.degree',
+          major: '$userProfile.major',
+          occupation: '$userProfile.occupation',
+          affiliation: '$userProfile.affiliation',
+          role: '$userProfile.role',
+        },
+      },
+    },
+
     {
       $group: {
         _id: '$_id',
@@ -495,15 +543,15 @@ export const getGroupChatMembers = async (userID: string, chatId: string) => {
         updatedAt: { $first: '$updatedAt' },
       },
     },
-    {
-      $project: {
-        'users.userProfile': 0,
-        'users.userId.password': 0,
-      },
-    },
-  ]);
+  ];
 
-  return chatWithUserDetails[0];
+  const result = await chatModel.aggregate(pipeline);
+
+  if (!result.length) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'you are not a member of this group');
+  }
+
+  return result[0];
 };
 export const toggleAddToGroup = async (userID: string, userToToggleId: string, chatId: string) => {
   const chat = await chatModel.findById(chatId);

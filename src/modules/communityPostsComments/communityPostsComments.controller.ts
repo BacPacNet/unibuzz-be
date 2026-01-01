@@ -87,13 +87,15 @@ export const getAllCommunityPostComments = async (req: Request, res: Response, n
 export const getCommunityPostComments = async (req: extendedRequest, res: Response) => {
   const { communityPostId } = req.params;
   const { page, limit, sortBy } = req.query;
+  const myUserId = req.userId;
   try {
     if (communityPostId) {
       let comments = await communityPostCommentsService.getCommunityPostComments(
         communityPostId,
         Number(page),
         Number(limit),
-        sortBy as Sortby
+        sortBy as Sortby,
+        myUserId || ''
       );
 
       return res.status(200).json(comments);

@@ -22,6 +22,9 @@ export const loginUserWithEmailAndPassword = async (email: string, password: str
   if (!user || !(await user.isPasswordMatch(password))) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect email or password');
   }
+  if (user.isDeleted) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User does not exist Please contact support');
+  }
   return user;
 };
 

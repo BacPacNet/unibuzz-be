@@ -122,6 +122,22 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
+export const softDeleteUser = async (req: userIdExtend, res: Response) => {
+  const userId = req.userId;
+  const { password } = req.body;
+
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
+  }
+
+  try {
+    await userService.softDeleteUserById(new mongoose.Types.ObjectId(userId), password);
+    return res.status(httpStatus.NO_CONTENT).json({ message: 'User deleted successfully' });
+  } catch (error: any) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getUsersWithProfileData = async (req: userIdExtend, res: Response) => {
   const { name } = req.query as { name?: string };
   const userID = req.userId;
@@ -315,3 +331,40 @@ export const IsNewUserToggle = async (req: userIdExtend, res: Response) => {
     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'User not authenticated');
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
+    }
+
+    const result = await userService.getReferredUsers(new mongoose.Types.ObjectId(userId));
+
+    // Get all user profiles in one query to avoid N+1 queries
+    const referralIds = result.referrals.map((referral) => new mongoose.Types.ObjectId(referral._id));
+    const profiles = await userProfileService.getUserProfiles(referralIds);
+
+    // Map profiles to referrals
+    const referralsWithProfiles = result.referrals.map((referral) => {
+      const profile = profiles.find((p) => p.users_id.toString() === referral._id.toString());
+      return {
+        ...referral,
+        profile: profile || null,
+      };
+    });
+
+    res.status(httpStatus.OK).json({
+      referCode: result.referCode,
+      totalReferrals: result.totalReferrals,
+      referrals: referralsWithProfiles,
+    });
+  } catch (error: any) {
+    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Failed to get referred users'));
+  }
+});

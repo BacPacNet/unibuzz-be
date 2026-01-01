@@ -18,6 +18,7 @@ import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { convertToObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
 import { PipelineStage } from 'mongoose';
+import { User } from '../user';
 
 type CommunityGroupDocument = Document & communityGroupInterface;
 
@@ -504,27 +505,79 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
   const communityGroup = (await communityGroupModel
     .findById(groupId)
     .populate({
-      path: 'communityId', // Assuming this is the reference to communityModel
-      select: 'communityLogoUrl adminId name', // Selecting only the communityLogo field
+      path: 'communityId',
+      select: 'communityLogoUrl adminId name',
     })
-    .lean()) as Document &
-    communityGroupInterface & {
-      communityId: { communityLogoUrl: string; adminId: string[]; name: string };
-    };
+    .lean()) as communityGroupInterface & {
+    communityId: { communityLogoUrl: string; adminId: string[]; name: string };
+  };
 
-  const communityAdminId = communityGroup?.communityId?.adminId?.map(String).includes(userId?.toString() || '');
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
   }
 
-  if (!communityGroup.isCommunityGroupLive && communityGroup.adminUserId.toString() !== userId && !communityAdminId) {
+  const communityAdminId = communityGroup?.communityId?.adminId?.map(String).includes(userId?.toString() || '');
+
+  const populatedGroup = await communityGroupModel.populate(communityGroup, [
+    { path: 'adminUserId', select: 'isDeleted  blockedUsers' },
+  ]);
+
+  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+
+  const userIds = (populatedGroup.users || []).map((u: any) => u._id);
+
+  const deletedUsers = await User.find({ _id: { $in: userIds }, isDeleted: true }, { _id: 1 }).lean();
+
+  const deletedUserIds = new Set(deletedUsers.map((u: any) => u._id.toString()));
+
+  const adminUserObj: any = populatedGroup.adminUserId;
+  const adminUserId = typeof adminUserObj === 'object' ? adminUserObj._id.toString() : adminUserObj.toString();
+
+  if (adminUserObj?.isDeleted) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community group does not exist');
+  }
+  if (adminUserObj && adminUserObj?.blockedUsers && adminUserObj?.blockedUsers?.length > 0) {
+    const isBlocked = adminUserObj?.blockedUsers.some((user: any) => user.userId.toString() === userId?.toString());
+    if (isBlocked) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+    }
+  }
+  if (myBlockedUsers && myBlockedUsers?.blockedUsers && myBlockedUsers?.blockedUsers?.length > 0) {
+    const isBlocked = myBlockedUsers?.blockedUsers.some((user: any) => user.userId.toString() === adminUserId?.toString());
+    if (isBlocked) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+    }
+  }
+
+  const memberProfiles = await UserProfile.find({ users_id: { $in: userIds } }, { users_id: 1, blockedUsers: 1 }).lean();
+
+  const memberBlockedMap = new Map(
+    memberProfiles.map((p: any) => [
+      p.users_id.toString(),
+      new Set((p.blockedUsers || []).map((b: any) => b.userId.toString())),
+    ])
+  );
+  const myBlockedUserIds = new Set(myBlockedUsers?.blockedUsers?.map((b: any) => b.userId.toString()) || []);
+  populatedGroup.users = populatedGroup.users.filter((u: any) => {
+    const memberId = u._id.toString();
+
+    if (deletedUserIds.has(memberId)) return false;
+
+    if (myBlockedUserIds.has(memberId)) return false;
+
+    const memberBlockedSet = memberBlockedMap.get(memberId);
+    if (memberBlockedSet?.has(userId.toString())) return false;
+
+    return true;
+  });
+  if (!populatedGroup.isCommunityGroupLive && adminUserId !== userId && !communityAdminId) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
   }
 
-  if (communityGroup.users && Array.isArray(communityGroup.users)) {
-    communityGroup.users.sort((a: any, b: any) => {
-      const isAAdmin = a._id?.toString() === communityGroup.adminUserId?.toString();
-      const isBAdmin = b._id?.toString() === communityGroup.adminUserId?.toString();
+  if (Array.isArray(populatedGroup.users)) {
+    populatedGroup.users.sort((a: any, b: any) => {
+      const isAAdmin = a._id.toString() === adminUserId;
+      const isBAdmin = b._id.toString() === adminUserId;
 
       if (isAAdmin && !isBAdmin) return -1;
       if (!isAAdmin && isBAdmin) return 1;
@@ -533,7 +586,7 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     });
   }
 
-  return communityGroup;
+  return populatedGroup;
 };
 
 export const joinCommunityGroup = async (
@@ -813,7 +866,8 @@ export const getCommunityGroupMembers = async (
   communityGroupId: string,
   userStatus: string,
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
+  userId: string
 ) => {
   try {
     if (!communityGroupId) {
@@ -827,7 +881,15 @@ export const getCommunityGroupMembers = async (
       throw new Error('Community group not found');
     }
 
+    const currentUserProfile = await UserProfile.findOne(
+      { users_id: new Types.ObjectId(userId) },
+      { blockedUsers: 1 }
+    ).lean();
+
+    const blockedUserIds = currentUserProfile?.blockedUsers?.map((b) => b.userId) || [];
+
     const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
+
     const adminId = communityGroup.adminUserId?.toString();
     const communityId = communityGroup.communityId;
 
@@ -837,8 +899,61 @@ export const getCommunityGroupMembers = async (
 
     const pipeline: PipelineStage[] = [
       { $match: { _id: groupId } },
+
       { $unwind: '$users' },
+
       { $match: { 'users.status': targetStatus } },
+
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'users._id',
+          foreignField: '_id',
+          as: 'userDoc',
+        },
+      },
+      { $unwind: '$userDoc' },
+      {
+        $lookup: {
+          from: 'userprofiles',
+          let: { memberUserId: '$userDoc._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$users_id', '$$memberUserId'],
+                },
+              },
+            },
+            {
+              $project: {
+                blockedUsers: 1,
+              },
+            },
+          ],
+          as: 'memberProfile',
+        },
+      },
+      {
+        $unwind: {
+          path: '$memberProfile',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $match: {
+          'userDoc.isDeleted': { $ne: true },
+          'userDoc._id': { $nin: blockedUserIds },
+          'memberProfile.blockedUsers': {
+            $not: {
+              $elemMatch: {
+                userId: new Types.ObjectId(userId),
+              },
+            },
+          },
+        },
+      },
 
       {
         $lookup: {
@@ -863,7 +978,9 @@ export const getCommunityGroupMembers = async (
 
       {
         $addFields: {
-          'users.isAdmin': { $eq: ['$users._id', new Types.ObjectId(adminId)] },
+          'users.isAdmin': {
+            $eq: ['$users._id', new Types.ObjectId(adminId)],
+          },
           'users.isVerified': '$communityUser.users.isVerified',
         },
       },
@@ -874,6 +991,7 @@ export const getCommunityGroupMembers = async (
           'users.firstName': 1,
         },
       },
+
       { $skip: (page - 1) * limit },
       { $limit: limit },
 
@@ -888,14 +1006,28 @@ export const getCommunityGroupMembers = async (
     const results = await communityGroupModel.aggregate(pipeline);
     const users = results[0]?.users || [];
 
-    const total = await communityGroupModel.aggregate([
+    const totalPipeline: PipelineStage[] = [
       { $match: { _id: groupId } },
       { $unwind: '$users' },
       { $match: { 'users.status': targetStatus } },
-      { $count: 'total' },
-    ]);
 
-    const totalCount = total[0]?.total || 0;
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'users._id',
+          foreignField: '_id',
+          as: 'userDoc',
+        },
+      },
+      { $unwind: '$userDoc' },
+
+      { $match: { 'userDoc.isDeleted': { $ne: true } } },
+
+      { $count: 'total' },
+    ];
+
+    const totalResult = await communityGroupModel.aggregate(totalPipeline);
+    const totalCount = totalResult[0]?.total || 0;
     const totalPages = Math.ceil(totalCount / limit);
 
     return {

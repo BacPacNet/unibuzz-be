@@ -265,18 +265,28 @@ export const deleteCommunityGroup = async (req: Request, res: Response) => {
 };
 
 export const getCommunityGroupById = async (req: extendedRequest, res: Response) => {
-  const { communityGroupId } = req.query;
-  const userId = req.userId;
-
   try {
-    const communityGroup = await communityGroupService.getCommunityGroupById(communityGroupId as string, userId as string);
-    const adminIds = communityGroup?.communityId?.adminId?.map(String);
+    const { communityGroupId } = req.query;
+    const userId = req.userId?.toString() || '';
 
-    if (adminIds.includes(userId?.toString() || '') || communityGroup.adminUserId.toString() == userId?.toString()) {
+    const communityGroup: any = await communityGroupService.getCommunityGroupById(communityGroupId as string, userId);
+
+    if (!communityGroup) {
+      return res.status(httpStatus.NOT_FOUND).json({ success: false, message: 'Community group not found' });
+    }
+
+    const adminUserId =
+      typeof communityGroup.adminUserId === 'object'
+        ? communityGroup.adminUserId._id.toString()
+        : communityGroup.adminUserId.toString();
+
+    const adminIds = communityGroup?.communityId?.adminId?.map(String) || [];
+
+    if (adminIds.includes(userId?.toString() || '') || adminUserId.toString() == userId?.toString()) {
       const findNotificationByCommunityGroupId = await notificationService.findNotificationByCommunityGroupId(
         communityGroupId as string,
         userId?.toString() || '',
-        communityGroup.adminUserId.toString()
+        adminUserId
       );
       (communityGroup as any).notificationId = findNotificationByCommunityGroupId?._id;
       (communityGroup as any).notificationTypes = findNotificationByCommunityGroupId?.type;
@@ -285,19 +295,20 @@ export const getCommunityGroupById = async (req: extendedRequest, res: Response)
       const findNotificationByCommunityGroupId = await notificationService.findNotificationByCommunityGroupId(
         communityGroupId as string,
         userId?.toString() || '',
-        communityGroup.adminUserId.toString()
+        adminUserId
       );
       (communityGroup as any).notificationId = findNotificationByCommunityGroupId?._id;
       (communityGroup as any).notificationTypes = findNotificationByCommunityGroupId?.type;
       (communityGroup as any).notificationStatus = findNotificationByCommunityGroupId?.status;
     }
 
-    if (!communityGroup) {
-      return res.status(httpStatus.NOT_FOUND).json({ success: false, message: 'Community group not found' });
+    if (adminUserId) {
+      communityGroup.adminUserId = adminUserId;
     }
+
     return res.status(httpStatus.OK).json(communityGroup);
   } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
 
@@ -418,13 +429,14 @@ export const removeUserFromCommunityGroup = async (req: extendedRequest, res: Re
 
 export const getCommunityGroupMembers = async (req: extendedRequest, res: Response) => {
   const { communityGroupId, userStatus, page, limit } = req.query;
-
+  const userId = req.userId as string;
   try {
     const communityGroup = await communityGroupService.getCommunityGroupMembers(
       communityGroupId as string,
       userStatus as string,
       Number(page),
-      Number(limit)
+      Number(limit),
+      userId
     );
     return res.status(httpStatus.OK).json(communityGroup);
   } catch (error: any) {
