@@ -9,6 +9,7 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   lastName: Joi.string().required(),
   userName: Joi.string().required(),
   gender: Joi.string().required(),
+  referralCode: Joi.string().optional(),
   createdAt: Joi.string(),
   userVerifiedCommunities: Joi.string(),
   userUnVerifiedCommunities: Joi.string(),
