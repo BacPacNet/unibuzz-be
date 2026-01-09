@@ -27,7 +27,7 @@ export const checkLoginEmailOtp = async (req: Request, res: Response) => {
 };
 export const checkLoginEmailOtpV2 = async (req: Request, res: Response) => {
   const { verificationOtp, email, universityId, name, dob } = req.body;
-  console.log('req.body', req.body);
+
   try {
     // first check the otp
     const isOtpValid = await loginEmailVerificationService.checkloginEmailVerificationOtpV2(verificationOtp, email);

@@ -132,10 +132,8 @@ export const softDeleteUser = async (req: userIdExtend, res: Response) => {
 
   try {
     await userService.softDeleteUserById(new mongoose.Types.ObjectId(userId), password);
-    console.log('done');
     return res.status(httpStatus.NO_CONTENT).json({ message: 'User deleted successfully' });
   } catch (error: any) {
-    console.log('err', error);
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
