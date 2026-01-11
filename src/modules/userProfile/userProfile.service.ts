@@ -10,6 +10,7 @@ import { communityModel } from '../community';
 import User from '../user/user.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { communityGroupModel } from '../communityGroup';
+import { chatModel } from '../chat';
 
 export const createUserProfile = async (userId: string, body: any) => {
   const {
@@ -771,6 +772,45 @@ const removeCommunityGroupsFromProfiles = async (
 };
 
 /**
+ * Removes user from chats
+ */
+const removeGroupChatsOnBlock = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId
+): Promise<void> => {
+  await Promise.all([
+    // Case 1:
+    //  remove me from those group chats
+    chatModel.updateMany(
+      {
+        isGroupChat: true,
+        groupAdmin: userToBlock,
+        'users.userId': userId,
+      },
+      {
+        $pull: {
+          users: { userId },
+        },
+      }
+    ),
+
+    // remove blocked user from my group chats
+    chatModel.updateMany(
+      {
+        isGroupChat: true,
+        groupAdmin: userId,
+        'users.userId': userToBlock,
+      },
+      {
+        $pull: {
+          users: { userId: userToBlock },
+        },
+      }
+    ),
+  ]);
+};
+
+/**
  * Handles the blocking logic when blocking a user
  */
 const handleBlockUser = async (
@@ -787,7 +827,11 @@ const handleBlockUser = async (
   );
 
   // Perform all cleanup operations in parallel where possible
-  await Promise.all([removeFollowRelationships(userId, userToBlock), removeFromCommunityGroups(userId, userToBlock)]);
+  await Promise.all([
+    removeFollowRelationships(userId, userToBlock),
+    removeFromCommunityGroups(userId, userToBlock),
+    removeGroupChatsOnBlock(userId, userToBlock),
+  ]);
 
   // Remove community groups from profiles
   await removeCommunityGroupsFromProfiles(userId, userToBlock, groupsByCommunity, myGroupsByCommunity);

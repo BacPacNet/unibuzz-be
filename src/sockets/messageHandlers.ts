@@ -3,37 +3,100 @@ import { Message, ReactedMessage } from './messageTypes';
 import { SocketMessageEnums } from './socketEnum';
 import { sendMessagePushNotification } from '../modules/pushNotification/pushNotification.service';
 import { OnlineUsers } from './onlineUsers';
+import { userProfileService } from '../modules/userProfile';
 
 export const handleNewMessage = (socket: Socket, io: Server, onlineUsers: OnlineUsers) => {
-  socket.on(SocketMessageEnums.RECEIVED_MESSAGE, (newMessageReceived: Message) => {
-    const chat = newMessageReceived.chat;
-    if (!chat.users) return console.log('chat.users not defined');
+  socket.on(SocketMessageEnums.RECEIVED_MESSAGE, async (newMessageReceived: Message) => {
+    const { chat, sender, content } = newMessageReceived;
 
-    chat.users.forEach((user) => {
-      if (user.userId.toString() === newMessageReceived.sender.id) {
-        return;
+    if (!chat?.users) {
+      return;
+    }
+
+    const senderId = sender.id;
+
+    const isBlocked = (profile: any, userId: string) =>
+      profile?.blockedUsers?.some((b: any) => b.userId.toString() === userId) || false;
+
+    for (const user of chat.users) {
+      const receiverId = user.userId.toString();
+
+      // Skip sender
+      if (receiverId === senderId) continue;
+
+      const room = io.sockets.adapter.rooms.get(receiverId);
+      const isUserActive = onlineUsers.isUserActive(receiverId);
+
+      // Check if user is online
+      if (room && isUserActive) {
+        try {
+          const [yourUserProfile, theirUserProfile] = await Promise.all([
+            userProfileService.getUserProfileById(senderId),
+            userProfileService.getUserProfileById(receiverId),
+          ]);
+
+          const isBlockedBySender = isBlocked(yourUserProfile, receiverId);
+          const isBlockedByReceiver = isBlocked(theirUserProfile, senderId);
+
+          // If blocked, emit message with masked sender name
+          if (isBlockedBySender || isBlockedByReceiver) {
+            const maskedMessage: Message = {
+              ...newMessageReceived,
+              sender: {
+                ...sender,
+                firstName: 'Deleted',
+                lastName: '',
+              },
+              senderProfile: {
+                ...newMessageReceived.senderProfile,
+                profile_dp: {
+                  imageUrl: '',
+                  publicId: '',
+                },
+              },
+            };
+            socket.to(receiverId).emit(SocketMessageEnums.SEND_MESSAGE, maskedMessage);
+            io.emit(`message_notification_${receiverId}`);
+            continue;
+          }
+
+          // Not blocked, emit normally
+          socket.to(receiverId).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
+          io.emit(`message_notification_${receiverId}`);
+        } catch (error) {
+          console.error('Error checking user profiles:', error);
+          socket.to(receiverId).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
+          io.emit(`message_notification_${receiverId}`);
+        }
+        continue;
       }
 
-      const room = io.sockets.adapter.rooms.get(user.userId.toString());
-      const isUserActive = onlineUsers.isUserActive(user.userId.toString());
+      // User is offline
+      try {
+        const [yourUserProfile, theirUserProfile] = await Promise.all([
+          userProfileService.getUserProfileById(senderId),
+          userProfileService.getUserProfileById(receiverId),
+        ]);
 
-      if (room && isUserActive) {
-        socket.to(user.userId.toString()).emit(SocketMessageEnums.SEND_MESSAGE, newMessageReceived);
-        io.emit(`message_notification_${user.userId}`);
-      } else {
-        sendMessagePushNotification(
-          user.userId.toString(),
-          newMessageReceived.sender.firstName || 'User',
-          newMessageReceived.content.length ? newMessageReceived.content : 'You have a new message',
+        if (isBlocked(yourUserProfile, receiverId) || isBlocked(theirUserProfile, senderId)) {
+          continue;
+        }
+
+        await sendMessagePushNotification(
+          receiverId,
+          sender.firstName || 'User',
+          content?.length ? content : 'You have a new message',
           {
-            sender_id: newMessageReceived.sender.id,
-            receiverId: user.userId.toString(),
+            sender_id: senderId,
+            receiverId,
             type: 'MESSAGE_NOTIFICATION',
-            chatId: newMessageReceived.chat._id,
+            chatId: chat._id,
           }
         );
+      } catch (error) {
+        console.error('Error sending push notification:', error);
       }
-    });
+    }
   });
 
   socket.on(SocketMessageEnums.REACTED_MESSAGE, (reactedToMessageReceived: ReactedMessage) => {
