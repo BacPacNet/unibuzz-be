@@ -1008,28 +1008,49 @@ export const changeUserEmail = async (userID: string, email: string, newMail: st
 /**
  * Get all users referred by a specific user with populated referral details
  * @param {mongoose.Types.ObjectId} userId
- * @returns {Promise<{referCode: string, totalReferrals: number, referrals: IUserDoc[]}>}
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Number of results per page (default: 10)
+ * @returns {Promise<{referCode: string, totalReferrals: number, currentPage: number, totalPages: number, referrals: IUserDoc[]}>}
  */
 export const getReferredUsers = async (
-  userId: mongoose.Types.ObjectId
-): Promise<{ referCode: string | undefined; totalReferrals: number; referrals: IUserDoc[] }> => {
+  userId: mongoose.Types.ObjectId,
+  page: number = 1,
+  limit: number = 10
+): Promise<{
+  referCode: string | undefined;
+  totalReferrals: number;
+  currentPage: number;
+  totalPages: number;
+  referrals: IUserDoc[];
+}> => {
   const user = await getUserById(userId);
   if (!user) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  // Find all users who were referred by this user
-  const referredUsers = await User.find({
+  const currentPage = page || 1;
+  const limitPerPage = limit || 10;
+  const skip = (currentPage - 1) * limitPerPage;
+
+  // Build the filter for referred users
+  const filter = {
     referredBy: userId,
     isDeleted: { $ne: true },
-  })
-    .select('-password')
-    .sort({ createdAt: -1 })
-    .lean();
+  };
+
+  // Get total count and paginated results
+  const [totalReferrals, referredUsers] = await Promise.all([
+    User.countDocuments(filter),
+    User.find(filter).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limitPerPage).lean(),
+  ]);
+
+  const totalPages = Math.ceil(totalReferrals / limitPerPage);
 
   return {
     referCode: user.referCode,
-    totalReferrals: referredUsers.length,
+    totalReferrals,
+    currentPage,
+    totalPages,
     referrals: referredUsers as IUserDoc[],
   };
 };
