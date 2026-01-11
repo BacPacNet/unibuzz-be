@@ -335,6 +335,7 @@ export const IsNewUserToggle = async (req: userIdExtend, res: Response) => {
 export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.userId;
+    const { page, limit } = req.query as { page?: string; limit?: string };
 
     if (!userId) {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'User not authenticated');
@@ -344,7 +345,11 @@ export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Respon
       throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
     }
 
-    const result = await userService.getReferredUsers(new mongoose.Types.ObjectId(userId));
+    const result = await userService.getReferredUsers(
+      new mongoose.Types.ObjectId(userId),
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10
+    );
 
     // Get all user profiles in one query to avoid N+1 queries
     const referralIds = result.referrals.map((referral) => new mongoose.Types.ObjectId(referral._id));
@@ -362,6 +367,8 @@ export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Respon
     res.status(httpStatus.OK).json({
       referCode: result.referCode,
       totalReferrals: result.totalReferrals,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
       referrals: referralsWithProfiles,
     });
   } catch (error: any) {
