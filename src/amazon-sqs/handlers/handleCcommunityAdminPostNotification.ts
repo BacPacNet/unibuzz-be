@@ -38,7 +38,7 @@ export const handleCommunityAdminPostNotification = async (job: any) => {
     sendPushNotification(
       receiverId,
       'Unibuzz',
-      ` ${res?.communityId?.name} admin has posted a new update. Be sure to check it out.`,
+      `${res?.communityId?.name} admin has posted a new update. Be sure to check it out.`,
       {
         sender_id: sender_id.toString(),
         receiverId: receiverId.toString(),
