@@ -69,6 +69,9 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
   if (communityGroupAccess) {
     communityGroup.communityGroupAccess = communityGroupAccess;
   }
+  if (title !== undefined) {
+    communityGroup.title = title;
+  }
 
   Object.assign(communityGroup, restBody);
 
