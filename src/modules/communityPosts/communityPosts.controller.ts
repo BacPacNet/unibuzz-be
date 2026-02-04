@@ -286,7 +286,7 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
 
     const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
 
-    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject);
+    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject.toString());
 
     if (!checkIfUserJoinedCommunity) {
       return res.status(httpStatus.FORBIDDEN).json({

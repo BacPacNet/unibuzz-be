@@ -1,112 +1,63 @@
-import { NextFunction, Request, Response } from 'express';
+import { Response } from 'express';
 import * as userPostService from './userPost.service';
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
-import { ApiError } from '../errors';
 import he from 'he';
 import { userIdExtend } from 'src/config/userIDType';
+import catchAsync from '../utils/catchAsync';
+import { PaginationQuery, parsePagination, parsePostIdOrThrow, requireAuthenticatedUserIdOrThrow, requireQueryUserIdOrThrow } from '../../utils/common';
+import { GetAllUserPostsQuery } from './userPost.interface';
 
-interface extendedRequest extends Request {
-  userId?: string;
-}
 
-// get all user posts
-export const getAllUserPosts = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { page, limit, userId } = req.query as any;
+export const getAllUserPosts = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, userId } = req.query as GetAllUserPostsQuery;
   const myUserId = req.userId;
-  try {
-    if (!userId) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID'));
-    }
-    const userPosts = await userPostService.getAllUserPosts(userId, Number(page), Number(limit), myUserId);
-    return res.status(200).json(userPosts);
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get User Posts'));
-  }
-};
+  const { page: pageNum, limit: limitNum } = parsePagination({
+    ...(page !== undefined ? { page } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  });
+  const targetUserId = requireQueryUserIdOrThrow(userId);
 
-export const createUserPost = async (req: extendedRequest, res: Response) => {
+  const userPosts = await userPostService.getAllUserPosts(targetUserId, pageNum, limitNum, myUserId);
+  return res.status(httpStatus.OK).json(userPosts);
+});
+
+export const createUserPost = catchAsync(async (req: userIdExtend, res: Response) => {
   const { body } = req;
   body.content = he.decode(body.content);
+  const post = await userPostService.createUserPost({ ...body, user_id: req.userId });
+  return res.status(httpStatus.CREATED).json(post);
+});
 
-  try {
-    let post = await userPostService.createUserPost({ ...body, user_id: req.userId });
-    return res.status(httpStatus.CREATED).json(post);
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+export const updateUserPost = catchAsync(async (req: userIdExtend, res: Response) => {
+  const parsedPostId = parsePostIdOrThrow(req.params['postId']);
 
-// update post
-export const updateUserPost = async (req: Request, res: Response, next: NextFunction) => {
-  const { postId } = req.params;
+  await userPostService.updateUserPost(parsedPostId, req.body);
+  return res.status(httpStatus.OK).json({ message: 'Updated Successfully' });
+});
 
-  try {
-    if (typeof postId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID'));
-      }
-      await userPostService.updateUserPost(new mongoose.Types.ObjectId(postId), req.body);
-      return res.status(200).json({ message: 'Updated Successfully' });
-    }
-  } catch (error: any) {
-    return res.status(error.statusCode).json({ message: error.message });
-  }
-};
+export const deleteUserPost = catchAsync(async (req: userIdExtend, res: Response) => {
+  const parsedPostId = parsePostIdOrThrow(req.params['postId']);
 
-// delete post
-export const deleteUserPost = async (req: extendedRequest, res: Response, next: NextFunction) => {
-  const { postId } = req.params;
-  try {
-    if (typeof postId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID'));
-      }
-      await userPostService.deleteUserPost(new mongoose.Types.ObjectId(postId));
-    }
-    return res.status(200).json({ message: 'deleted' });
-  } catch (error) {
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
-  }
-};
+  await userPostService.deleteUserPost(parsedPostId);
+  return res.status(httpStatus.OK).json({ message: 'deleted' });
+});
 
-//get all user posts
-export const getAllTimelinePosts = async (req: any, res: Response, next: NextFunction) => {
-  let timelinePosts: any;
-  const { page, limit } = req.query;
+export const getAllTimelinePosts = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit } = req.query as PaginationQuery;
+  const userId = requireAuthenticatedUserIdOrThrow(req);
+  const { page: pageNum, limit: limitNum } = parsePagination({
+    ...(page !== undefined ? { page } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  });
 
-  try {
-    timelinePosts = await userPostService.getTimelinePostsFromRelationship(req.userId, Number(page), Number(limit));
+  const timelinePosts = await userPostService.getTimelinePostsFromRelationship(userId, pageNum, limitNum);
+  return res.status(httpStatus.OK).json(timelinePosts);
+});
 
-    return res.status(200).json(timelinePosts);
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Posts'));
-  }
-};
+export const updateLikeStatus = catchAsync(async (req: userIdExtend, res: Response) => {
+  const parsedPostId = parsePostIdOrThrow(req.params['postId']);
+  const userId = requireAuthenticatedUserIdOrThrow(req);
 
-//like and unlike
-export const updateLikeStatus = async (req: extendedRequest, res: Response) => {
-  const { postId } = req.params;
-  const userId = req.userId;
-
-  if (!postId || !userId) {
-    return res.status(httpStatus.BAD_REQUEST).json({
-      message: 'Post ID and user ID are required',
-    });
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(postId)) {
-    return res.status(httpStatus.BAD_REQUEST).json({
-      message: 'Invalid post ID format',
-    });
-  }
-
-  try {
-    let likeCount = await userPostService.likeUnlike(postId, userId);
-    return res.status(201).json(likeCount);
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  const likeCount = await userPostService.likeUnlike(parsedPostId.toString(), userId);
+  return res.status(httpStatus.OK).json(likeCount);
+});
