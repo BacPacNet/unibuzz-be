@@ -105,6 +105,7 @@ export const getCommunityPostComments = async (req: extendedRequest, res: Respon
   }
 };
 
+// not being used anywhere but kept for future reference 
 export const getCommentById = async (req: extendedRequest, res: Response) => {
   const { commentId } = req.params;
 
