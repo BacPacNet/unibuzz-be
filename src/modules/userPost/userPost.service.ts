@@ -231,7 +231,7 @@ export const getUserJoinedCommunityIds = async (
   id: mongoose.Schema.Types.ObjectId
 ): Promise<string[]> => {
   const userProfile = await userProfileService.getUserProfileById(String(id));
-  return userProfile?.communities?.map((community) => community.communityId) ?? [];
+  return userProfile?.communities?.map((community) => String(community.communityId)) ?? [];
 };
 
 
@@ -454,7 +454,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
   const followingUserIds = userProfile.following.map((f) => toIdString(f.userId));
   followingUserIds.push(userId);
 
-  const joinedCommunityIds = userProfile.communities.map((c) => toIdString(c.communityId));
+  const joinedCommunityIds = userProfile.communities.map((c) => toIdString(c.communityId as string | mongoose.Types.ObjectId));
 
   const joinedGroupIds = userProfile.communities.flatMap((c) =>
     (c.communityGroups ?? [])

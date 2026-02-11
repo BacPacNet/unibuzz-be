@@ -41,8 +41,8 @@ export type PaginationQuery = {
   page?: string;
   limit?: string;
 };
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 10;
+export const DEFAULT_PAGE = 1;
+export const DEFAULT_LIMIT = 10;
 
 function parsePositiveIntOrThrow(
   value: string | undefined,
@@ -64,3 +64,15 @@ export function parsePagination(query: PaginationQuery): { page: number; limit: 
     limit: parsePositiveIntOrThrow(query.limit, DEFAULT_LIMIT, 'limit'),
   };
 }
+
+
+
+/**
+ * Returns skip offset for pagination (0-based).
+ */
+export const getPaginationSkip = (page: number, limit: number): number => (page - 1) * limit;
+
+/**
+ * Returns total number of pages for a given total count and limit.
+ */
+export const computeTotalPages = (total: number, limit: number): number => Math.ceil(total / limit);
