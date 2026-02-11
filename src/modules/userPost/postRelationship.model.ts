@@ -1,5 +1,16 @@
 import { Schema, model, Types } from 'mongoose';
 
+export interface IPostRelationship {
+  _id?: Types.ObjectId;
+  userId?: Types.ObjectId;
+  userPostId?: Types.ObjectId;
+  communityId?: Types.ObjectId;
+  communityPostId?: Types.ObjectId;
+  communityGroupId?: Types.ObjectId;
+  type: string;
+  createdAt?: Date;
+}
+
 const PostRelationshipSchema = new Schema({
   userId: { type: Types.ObjectId, ref: 'User', index: true }, // for userPost
   userPostId: { type: Types.ObjectId, ref: 'UserPost' },
@@ -13,4 +24,4 @@ const PostRelationshipSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-export default model('PostRelationship', PostRelationshipSchema);
+export default model<IPostRelationship>('PostRelationship', PostRelationshipSchema);

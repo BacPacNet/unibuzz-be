@@ -754,7 +754,7 @@ export const getCommunityGroupPostsByCommunityId = async (
 };
 
 export const getAllCommunityPost = async (
-  FollowinguserIds: mongoose.Schema.Types.ObjectId[] = [],
+  FollowinguserIds: mongoose.Types.ObjectId[] = [],
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
