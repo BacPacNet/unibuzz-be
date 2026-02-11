@@ -604,6 +604,8 @@ export const getCommunityPostComments = async (
   };
 };
 
+
+// not being used anywhere but kept for future reference  
 export const getPostCommentById = async (commentId: string) => {
   // Fetch the main comments on the post
   const comments = await communityPostCommentModel

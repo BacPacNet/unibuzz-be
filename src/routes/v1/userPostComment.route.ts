@@ -1,19 +1,34 @@
-import { userIdAuth } from '../../modules/user';
-import { userPostCommentsController } from '../../modules/userPostComments';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import { userPostCommentsController, userPostCommentsValidation } from '../../modules/userPostComments';
 
 const router: Router = express.Router();
 
 router
   .route('/:userPostId')
-  .get(userIdAuth, userPostCommentsController.getUserPostComments)
-  .post(userIdAuth, userPostCommentsController.CreateUserPostComment);
+  .get(userIdAuth, validate(userPostCommentsValidation.getUserPostComments), userPostCommentsController.getUserPostComments)
+  .post(userIdAuth, validate(userPostCommentsValidation.createUserPostComment), userPostCommentsController.CreateUserPostComment);
 
-router.route('/comment/:commentId').get(userIdAuth, userPostCommentsController.getCommentById);
-router.route('/:commentId').put(userPostCommentsController.updateComment).delete(userPostCommentsController.deleteComment);
-router.route('/:commentId/replies').post(userIdAuth, userPostCommentsController.UserPostCommentReply);
+router
+  .route('/comment/:commentId')
+  .get(userIdAuth, validate(userPostCommentsValidation.getCommentById), userPostCommentsController.getCommentById);
 
-router.put('/likeUnlike/:userPostCommentId', userIdAuth, userPostCommentsController.LikeUserPostComment);
+router
+  .route('/:commentId')
+  .put(validate(userPostCommentsValidation.updateComment), userPostCommentsController.updateComment)
+  .delete(validate(userPostCommentsValidation.deleteComment), userPostCommentsController.deleteComment);
+
+router
+  .route('/:commentId/replies')
+  .post(userIdAuth, validate(userPostCommentsValidation.userPostCommentReply), userPostCommentsController.UserPostCommentReply);
+
+router.put(
+  '/likeUnlike/:userPostCommentId',
+  userIdAuth,
+  validate(userPostCommentsValidation.likeUserPostComment),
+  userPostCommentsController.LikeUserPostComment
+);
 
 export default router;
 

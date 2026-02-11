@@ -9,6 +9,7 @@ router
   .get(userIdAuth, communityPostCommentsController.getCommunityPostComments)
   .post(userIdAuth, communityPostCommentsController.CreateComment);
 
+  // not being used anywhere
 router.route('/comment/:commentId').get(userIdAuth, communityPostCommentsController.getCommentById);
 router
   .route('/:commentId')
