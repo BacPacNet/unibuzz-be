@@ -34,6 +34,15 @@ export function requireQueryUserIdOrThrow(userId: unknown): string {
   return userId;
 }
 
+export function parseUserIdOrThrow(userId: unknown): mongoose.Types.ObjectId {
+  if (typeof userId !== 'string' || !mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
+  }
+  return new mongoose.Types.ObjectId(userId);
+}
+
+
+
 
 
 

@@ -3,9 +3,6 @@ import httpStatus from 'http-status';
 import { communityGroupModel, communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
-import { User } from '../user';
-
-import { CommunityGroupAccess } from '../../config/community.type';
 import { communityGroupInterface, status } from './communityGroup.interface';
 import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
@@ -311,48 +308,48 @@ export const getCommunityGroupById = async (req: extendedRequest, res: Response)
     return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+//not being used
+// export const getAllCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
+//   const { communityId } = req.params;
+//   const { communityGroupId } = req.query;
+//   let groups;
+//   let access = CommunityGroupAccess.Public;
+//   try {
+//     if (communityId) {
+//       const user = await User.findById(req.userId);
 
-export const getAllCommunityGroup = async (req: extendedRequest, res: Response, next: NextFunction) => {
-  const { communityId } = req.params;
-  const { communityGroupId } = req.query;
-  let groups;
-  let access = CommunityGroupAccess.Public;
-  try {
-    if (communityId) {
-      const user = await User.findById(req.userId);
+//       const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+//       const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
 
-      const userVerifiedCommunityIds = user?.userVerifiedCommunities.map((c) => c.communityId.toString()) || [];
-      const userUnverifiedVerifiedCommunityIds = user?.userUnVerifiedCommunities.map((c) => c.communityId.toString()) || [];
+//       if (
+//         !userUnverifiedVerifiedCommunityIds.includes(String(communityId)) &&
+//         !userVerifiedCommunityIds.includes(String(communityId))
+//       ) {
+//         return next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the Groups!'));
+//       }
 
-      if (
-        !userUnverifiedVerifiedCommunityIds.includes(String(communityId)) &&
-        !userVerifiedCommunityIds.includes(String(communityId))
-      ) {
-        return next(new ApiError(httpStatus.UNAUTHORIZED, 'Join the community to view the Groups!'));
-      }
+//       if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
+//         access = CommunityGroupAccess.Public;
+//       }
+//       if (userVerifiedCommunityIds.includes(String(communityId))) {
+//         access = CommunityGroupAccess.Private;
+//       }
+//       groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
 
-      if (userUnverifiedVerifiedCommunityIds.includes(String(communityId))) {
-        access = CommunityGroupAccess.Public;
-      }
-      if (userVerifiedCommunityIds.includes(String(communityId))) {
-        access = CommunityGroupAccess.Private;
-      }
-      groups = await communityGroupService.getAllCommunityGroupWithUserProfiles(communityId, access);
-
-      if (communityGroupId) {
-        const group = groups.find((g) => g._id.toString() === communityGroupId);
-        if (!group) {
-          return next(new ApiError(httpStatus.NOT_FOUND, 'Group not found'));
-        }
-        return res.status(httpStatus.OK).json(group);
-      } else {
-        return res.status(httpStatus.OK).json(groups);
-      }
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+//       if (communityGroupId) {
+//         const group = groups.find((g) => g._id.toString() === communityGroupId);
+//         if (!group) {
+//           return next(new ApiError(httpStatus.NOT_FOUND, 'Group not found'));
+//         }
+//         return res.status(httpStatus.OK).json(group);
+//       } else {
+//         return res.status(httpStatus.OK).json(groups);
+//       }
+//     }
+//   } catch (error: any) {
+//     res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+//   }
+// };
 
 export const joinCommunityGroup = async (req: extendedRequest, res: Response) => {
   const userID = req.userId as string;
