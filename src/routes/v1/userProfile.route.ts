@@ -1,21 +1,25 @@
-import { userIdAuth } from '../../modules/user';
-import { userProfileController } from '../../modules/userProfile';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import { userProfileController, userProfileValidation } from '../../modules/userProfile';
 
 const router: Router = express.Router();
 
-router.route('/').put(userIdAuth, userProfileController.toggleFollow);
+router.route('/').put(userIdAuth, validate(userProfileValidation.toggleFollow), userProfileController.toggleFollow);
 
 router.route('/me').get(userIdAuth, userProfileController.getUserProfile);
-router.route('/block').put(userIdAuth, userProfileController.toggleBlock);
-router.route('/followers').get(userIdAuth, userProfileController.getAllUserFollowers);
-router.route('/following').get(userIdAuth, userProfileController.getAllUserFollowing);
-router.route('/mutuals').get(userIdAuth, userProfileController.getAllMututalUsers);
-router.route('/following_and_followers').get(userIdAuth, userProfileController.getAllUserFollowersAndFollowing);
+router.route('/block').put(userIdAuth, validate(userProfileValidation.toggleBlock), userProfileController.toggleBlock);
+router.route('/followers').get(userIdAuth, validate(userProfileValidation.getAllUserFollowers), userProfileController.getAllUserFollowers);
+router.route('/following').get(userIdAuth, validate(userProfileValidation.getAllUserFollowing), userProfileController.getAllUserFollowing);
+router.route('/mutuals').get(userIdAuth, validate(userProfileValidation.getAllMutualUsers), userProfileController.getAllMutualUsers);
+
+// not being used
+router.route('/following_and_followers').get(userIdAuth, validate(userProfileValidation.getAllUserFollowersAndFollowing), userProfileController.getAllUserFollowersAndFollowing);
+
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
-router.route('/addUniversityEmail').put(userIdAuth, userProfileController.addUniversityEmail);
+router.route('/addUniversityEmail').put(userIdAuth, validate(userProfileValidation.addUniversityEmail), userProfileController.addUniversityEmail);
 router.route('/verifiedUniversityEmails').get(userIdAuth, userProfileController.getUserProfileVerifiedUniversityEmails);
-router.route('/:userProfileId').put(userProfileController.updateUserProfile);
+router.route('/:userProfileId').put(validate(userProfileValidation.updateUserProfile), userProfileController.updateUserProfile);
 
 export default router;
 

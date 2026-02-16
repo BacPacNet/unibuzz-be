@@ -1,5 +1,7 @@
 import { Schema } from 'mongoose';
 import { status } from '../communityGroup/communityGroup.interface';
+import { PaginationQuery } from '../../utils/common';
+import { communityInterface } from '../community';
 
 export enum UserRole {
   STUDENT = 'student',
@@ -14,9 +16,68 @@ interface userProfileEmail {
   logo: string;
 }
 
-interface following {
+export interface FollowingEntry {
   userId: Schema.Types.ObjectId;
-  isBlock: boolean;
+  isBlock?: boolean;
+}
+
+/** Following/follower item when userId is populated (e.g. in aggregates) */
+export interface FollowingEntryPopulated {
+  userId: { _id: Schema.Types.ObjectId };
+  isBlock?: boolean;
+}
+
+/** Following/follower list item (userId may be ObjectId or populated with _id) */
+export type FollowingListItem = FollowingEntry | FollowingEntryPopulated;
+
+/** Shape of a user in the follow/follower list response (from User.aggregate pipeline) */
+export interface FollowListItem {
+  _id: Schema.Types.ObjectId;
+  firstName: string;
+  lastName: string;
+  profile: {
+    _id: Schema.Types.ObjectId;
+    profile_dp?: { imageUrl: string; publicId: string };
+    degree?: string;
+    study_year?: string;
+    major?: string;
+    university_name?: string;
+    role?: string;
+    affiliation?: string;
+    occupation?: string;
+  };
+  isFollowing: boolean;
+}
+
+export interface BlockedUserEntry {
+  userId: Schema.Types.ObjectId;
+  blockedAt?: Date;
+}
+
+export interface StatusChangeHistoryUpdatedField {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface StatusChangeHistoryEntry {
+  updatedAt: Date;
+  updatedFields: StatusChangeHistoryUpdatedField[];
+}
+
+export interface CreateUserProfileBody {
+  birthDate?: string;
+  country?: string;
+  city?: string;
+  universityName?: string;
+  year?: string;
+  degree?: string;
+  major?: string;
+  occupation?: string;
+  department?: string;
+  universityId?: string | null;
+  userType?: string;
+  universityLogo?: string;
 }
 
 export interface UserCommunityGroup {
@@ -25,7 +86,7 @@ export interface UserCommunityGroup {
 }
 
 export interface UserCommunities {
-  communityId: string;
+  communityId: Schema.Types.ObjectId | string;
   isVerified: boolean;
   communityGroups: UserCommunityGroup[];
 }
@@ -51,44 +112,36 @@ interface UserProfileDocument {
   role: UserRole;
   affiliation?: string;
   occupation?: string;
-  following: following[];
-  followers: following[];
+  following: FollowingEntry[];
+  followers: FollowingEntry[];
   isCommunityAdmin?: boolean;
-  adminCommunityId?: string;
-  statusChangeHistory: {
-    updatedAt: Date;
-    updatedFields: {
-      field: string;
-      oldValue: any;
-      statusChangeHistory: any;
-    };
-  }[];
-  blockedUsers: {
-    userId: Schema.Types.ObjectId;
-    blockedAt: Date;
-  }[];
+  adminCommunityId?: Schema.Types.ObjectId | null;
+  statusChangeHistory: StatusChangeHistoryEntry[];
+  blockedUsers: BlockedUserEntry[];
 }
 
 interface EditProfileRequest {
-  firstName: string;
-  lastName: string;
-  email: string;
-  gender: string;
-  affiliation: string;
-  bio: string;
-  city: string;
-  country: string;
-  degree: string;
-  dob: string;
-  major: string;
-  occupation: string;
-  phone_number: string;
-  study_year: string;
-  profilePicture: any;
-  profile_dp: ProfileDp;
-  role: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  displayEmail?: string;
+  gender?: string;
+  affiliation?: string;
+  bio?: string;
+  city?: string;
+  country?: string;
+  degree?: string;
+  dob?: string;
+  major?: string;
+  occupation?: string;
+  phone_number?: string;
+  study_year?: string;
+  profilePicture?: any;
+  profile_dp?: ProfileDp;
+  role?: string;
   university_name?: string;
   university_id?: string;
+  universityId?: string;
   universityLogo?: string;
 }
 
@@ -97,4 +150,24 @@ interface ProfileDp {
   publicId: string;
 }
 
-export { UserProfileDocument, EditProfileRequest };
+/** UserProfile document with users_id populated (e.g. for getFollowersAndFollowing) */
+export interface UserProfileWithPopulatedUser extends Omit<UserProfileDocument, 'users_id'> {
+  _id: Schema.Types.ObjectId;
+  users_id: { _id: Schema.Types.ObjectId; firstName: string; lastName: string } | null;
+}
+
+export interface AddUniversityEmailBody {
+  universityName: string;
+  universityEmail: string;
+  UniversityOtp: string;
+}
+
+interface PaginationQueryWithUserId extends PaginationQuery {
+  name?: string;
+  userId?: string;
+}
+
+type CommunityUser = communityInterface['users'][number];
+
+
+export { UserProfileDocument, EditProfileRequest,  PaginationQueryWithUserId, CommunityUser };

@@ -1,23 +1,237 @@
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
-import { EditProfileRequest } from './userProfile.interface';
+import {
+  EditProfileRequest,
+  CreateUserProfileBody,
+  StatusChangeHistoryEntry,
+  BlockedUserEntry,
+  FollowingListItem,
+  FollowListItem,
+  UserProfileDocument,
+  UserCommunities,
+} from './userProfile.interface';
 import UserProfile from './userProfile.model';
-import mongoose from 'mongoose';
-// import { notificationRoleAccess } from '../Notification/notification.interface';
+import mongoose, { HydratedDocument } from 'mongoose';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
-import { communityModel } from '../community';
-// import { userFollowService } from '../userFollow';
-import User from '../user/user.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import { communityModel } from '../community';
+import User from '../user/user.model';
 import { communityGroupModel } from '../communityGroup';
 import { chatModel } from '../chat';
+import {
+  getFollowListPipelineStages,
+  getBlockedUsersPipelineStages,
+  getFollowingAndMutualsPipelineStages,
+} from './userProfile.pipeline';
+import { getPaginationSkip, computeTotalPages, DEFAULT_PAGE, DEFAULT_LIMIT } from '../../utils/common';
 
-export const createUserProfile = async (userId: string, body: any) => {
+// =============================================================================
+// CONSTANTS & TYPES
+// =============================================================================
+
+// Profile validation constants
+const BIO_MAX_LENGTH = 160;
+const STATUS_CHANGE_WINDOW_DAYS = 14;
+const MAX_STATUS_CHANGES_IN_WINDOW = 2;
+
+// Field names
+const FIELD_USERS_ID = 'users_id';
+const FIELD_FOLLOWING = 'following';
+const FIELD_FOLLOWERS = 'followers';
+const FIELD_BLOCKED_USERS = 'blockedUsers';
+
+// Select strings for .select() / populate
+const SELECT_USER_FIRST_LAST_NAME = 'firstName lastName';
+const SELECT_UNIVERSITY_FIELDS = 'name country logos images';
+const SELECT_PROFILE_FIELDS_FOR_FOLLOW =
+  'profile_dp degree major study_year university_name role affiliation occupation';
+const SELECT_FOLLOWING_FOLLOWERS = 'following followers';
+
+// Block operation result status
+const BLOCK_STATUS_BLOCKED = 'blocked';
+const BLOCK_STATUS_UNBLOCKED = 'unblocked';
+export type BlockStatus = typeof BLOCK_STATUS_BLOCKED | typeof BLOCK_STATUS_UNBLOCKED;
+
+// Error messages (university email & profile)
+const ERR_USER_PROFILE_NOT_FOUND = 'User profile not found.';
+const ERR_USER_PROFILE_NOT_FOUND_UPDATE = 'User Profile not found!';
+const ERR_UNIVERSITY_EMAIL_ALREADY_EXISTS = 'University email already exists in profile.';
+const ERR_FAILED_TO_UPDATE_USER_PROFILE = 'Failed to update user profile.';
+const ERR_BIO_TOO_LONG = `Bio must not exceed ${BIO_MAX_LENGTH} characters`;
+const ERR_STATUS_CHANGE_LIMIT = `You can only change your status ${MAX_STATUS_CHANGES_IN_WINDOW} times within ${STATUS_CHANGE_WINDOW_DAYS} days`;
+// Block operation
+const ERR_USER_NOT_FOUND = 'User not found';
+const ERR_ADMIN_CANNOT_BLOCK = 'You are an admin and cannot block other users.';
+const ERR_CANNOT_BLOCK_ADMIN = 'User to block is an admin of a community and cannot be blocked';
+
+/** Safely converts ObjectId-like value to mongoose.Types.ObjectId (avoids Schema vs mongoose type mismatch). */
+const toMongooseObjectId = (value: unknown): mongoose.Types.ObjectId => {
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (typeof value === 'object' && value !== null && '_id' in value) {
+    const nested = (value as { _id: unknown })._id;
+    return new mongoose.Types.ObjectId(nested != null ? String(nested) : undefined);
+  }
+  return new mongoose.Types.ObjectId(value != null ? String(value) : undefined);
+};
+
+/** Type guard for non-null ObjectId in filter. */
+const isNonNullObjectId = (id: mongoose.Types.ObjectId | null): id is mongoose.Types.ObjectId => id != null;
+
+
+// =============================================================================
+// SHARED HELPERS (follow/list, name filter, pagination)
+// =============================================================================
+
+/**
+ * Queues a follow/unfollow notification (fire-and-forget, logs errors)
+ */
+const queueFollowNotification = async (notification: {
+  sender_id: mongoose.Types.ObjectId;
+  receiverId: mongoose.Types.ObjectId;
+  type: NotificationIdentifier;
+  message: string;
+}) => {
+  try {
+    await queueSQSNotification(notification);
+  } catch (err) {
+    console.error('Failed to enqueue notification', { notification, error: err });
+  }
+};
+
+/**
+ * Returns MongoDB $or filter for firstName/lastName search from a name string
+ */
+const buildNameFilter = (name: string): { $or: Array<Record<string, { $regex: RegExp }>> } => {
+  const [firstName = '', lastName = ''] = (name || '').split(' ');
+  return {
+    $or: [
+      { firstName: { $regex: new RegExp(firstName, 'i') } },
+      ...(lastName ? [{ lastName: { $regex: new RegExp(lastName, 'i') } }] : []),
+    ],
+  };
+};
+
+/**
+ * Resolves userId from a following/follower list entry (handles both ObjectId and populated doc).
+ * Single cast at return for Schema.Types.ObjectId vs mongoose.Types.ObjectId compatibility.
+ */
+const getUserIdFromFollowEntry = (entry: FollowingListItem): mongoose.Types.ObjectId | null => {
+  const userId = entry.userId;
+  if (!userId) return null;
+  const id = typeof userId === 'object' && '_id' in userId ? (userId as { _id: unknown })._id : userId;
+  return id != null ? toMongooseObjectId(id) : null;
+};
+
+/** Return type for follow list context (myBlockedUserIds as ObjectId[] for pipeline). */
+interface FollowListContext {
+  myBlockedUserIds: mongoose.Types.ObjectId[];
+  myUserObjectId: mongoose.Types.ObjectId;
+  startIndex: number;
+  nameFilter: { $or: Array<Record<string, { $regex: RegExp }>> };
+}
+
+/**
+ * Shared context for follow/follower list: blocked IDs, viewer ID, pagination skip, name filter.
+ */
+const getFollowListContext = async (
+  myUserId: string,
+  name: string,
+  page: number,
+  limit: number
+): Promise<FollowListContext> => {
+  const myProfile = await UserProfile.findOne({ [FIELD_USERS_ID]: myUserId }, { [FIELD_BLOCKED_USERS]: 1 }).lean();
+  const rawBlocked = myProfile?.[FIELD_BLOCKED_USERS]?.map((b: BlockedUserEntry) => b.userId) ?? [];
+  const myBlockedUserIds = rawBlocked.map((userId) => toMongooseObjectId(userId));
+  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
+  const startIndex = getPaginationSkip(page, limit);
+  const nameFilter = buildNameFilter(name);
+  return { myBlockedUserIds, myUserObjectId, startIndex, nameFilter };
+};
+
+/**
+ * Returns a consistent empty paginated result for follow/follower list endpoints.
+ */
+const emptyPaginatedResult = (page: number): { currentPage: number; totalPages: number; users: FollowListItem[] } => ({
+  currentPage: page,
+  totalPages: 0,
+  users: [],
+});
+
+type FollowListType = 'following' | 'followers';
+
+/**
+ * Shared implementation for getFollowing and getFollowers: context, profile fetch, ID extraction, pipeline, paginated result.
+ */
+const getFollowListByType = async (
+  listType: FollowListType,
+  name: string,
+  userId: string,
+  page: number,
+  limit: number,
+  myUserId: string
+): Promise<{ currentPage: number; totalPages: number; users: FollowListItem[] }> => {
+  const { myBlockedUserIds, myUserObjectId, startIndex, nameFilter } = await getFollowListContext(
+    myUserId,
+    name,
+    page,
+    limit
+  );
+
+  const selectFields = listType === 'following' ? FIELD_FOLLOWING : `${FIELD_FOLLOWING} ${FIELD_FOLLOWERS}`;
+  const profile = await UserProfile.findOne({ [FIELD_USERS_ID]: userId }, selectFields);
+
+  const list = listType === 'following' ? profile?.[FIELD_FOLLOWING] : profile?.[FIELD_FOLLOWERS];
+  if (!list?.length) return emptyPaginatedResult(page);
+  if (!profile) return emptyPaginatedResult(page);
+
+  const ids = list.map((f) => getUserIdFromFollowEntry(f)).filter(isNonNullObjectId);
+  if (!ids.length) return emptyPaginatedResult(page);
+
+  const isFollowingParam: true | mongoose.Types.ObjectId[] =
+    listType === 'following'
+      ? true
+      : profile[FIELD_FOLLOWING].map((e) => getUserIdFromFollowEntry(e)).filter(isNonNullObjectId);
+
+  const pipeline = getFollowListPipelineStages({
+    userIds: ids,
+    myBlockedUserIds,
+    myUserObjectId,
+    nameFilter,
+    isFollowing: isFollowingParam,
+    skip: startIndex,
+    limit,
+  });
+  const users = (await User.aggregate(pipeline)) as FollowListItem[];
+
+  return { currentPage: page, totalPages: computeTotalPages(ids.length, limit), users };
+};
+
+// =============================================================================
+// PROFILE CRUD (create, read, build email)
+// =============================================================================
+
+/** Internal: find one profile by user id, optionally with university populated. */
+const findOneProfileByUserId = async (
+  userId: string,
+  options?: { populateUniversity?: boolean }
+) => {
+  const query = UserProfile.findOne({ [FIELD_USERS_ID]: userId });
+  if (options?.populateUniversity) {
+    return query.populate({ path: 'university_id', select: SELECT_UNIVERSITY_FIELDS });
+  }
+  return query;
+};
+
+/** Internal: find many profiles by user ids. */
+const findProfilesByUserIds = async (userIds: (string | mongoose.Types.ObjectId)[]) => {
+  return UserProfile.find({ [FIELD_USERS_ID]: { $in: userIds } });
+};
+
+export const createUserProfile = async (userId: string, body: CreateUserProfileBody) => {
   const {
     birthDate,
     country,
     city,
-    //universityEmail,
     universityName,
     year,
     degree,
@@ -29,12 +243,8 @@ export const createUserProfile = async (userId: string, body: any) => {
     universityLogo,
   } = body;
 
-  //  const emailField =
-  //    universityEmail?.length > 0 ? await buildEmailField(universityEmail, universityName, universityId) : null;
-
   const userProfileData = {
-    users_id: userId,
-    // dob: parse(birthDate, 'dd/MM/yyyy', new Date()),
+    [FIELD_USERS_ID]: userId,
     dob: birthDate,
     country,
     city,
@@ -47,7 +257,6 @@ export const createUserProfile = async (userId: string, body: any) => {
     university_name: universityName,
     study_year: year,
     universityLogo,
-    //...(emailField && { email: [emailField] }),
   };
 
   await UserProfile.create(userProfileData);
@@ -64,83 +273,87 @@ export const buildEmailField = async (universityEmail: string, universityName: s
 };
 
 export const getUserProfile = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id }).populate({
-    path: 'university_id',
-    select: 'name country logos images',
-  });
-  return userProfile;
+  return findOneProfileByUserId(id, { populateUniversity: true });
 };
 
 export const getUserProfileVerifiedUniversityEmails = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id });
+  const userProfile = await findOneProfileByUserId(id);
   return userProfile?.email;
 };
 
 export const getUserProfileById = async (id: string) => {
-  const userProfile = await UserProfile.findOne({ users_id: id });
-
-  return userProfile;
+  return findOneProfileByUserId(id);
 };
 
-export const getUserProfiles = async (userIds: any) => {
-  return await UserProfile.find({ users_id: { $in: userIds } });
+export const getUserProfiles = async (userIds: (string | mongoose.Types.ObjectId)[]) => {
+  return findProfilesByUserIds(userIds);
 };
 
-export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: EditProfileRequest) => {
-  let userProfileToUpdate: any;
+// =============================================================================
+// PROFILE UPDATE & STATUS CHANGE VALIDATION
+// =============================================================================
 
-  const bioLength = userProfileBody.bio?.trim().length || 0;
-  userProfileToUpdate = await UserProfile.findById(id);
+/**
+ * Validates status change limit within the window and appends to statusChangeHistory if allowed.
+ * Mutates profile.statusChangeHistory when there are status field changes.
+ */
+const validateAndApplyStatusChange = (
+  profile: HydratedDocument<UserProfileDocument>,
+  body: EditProfileRequest
+): void => {
+  const statusWindowStartDate = new Date();
+  statusWindowStartDate.setDate(statusWindowStartDate.getDate() - STATUS_CHANGE_WINDOW_DAYS);
 
-  if (bioLength > 160) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Bio must not exceed 160 characters');
-  }
+  const recentChanges = profile.statusChangeHistory.filter(
+    (entry: StatusChangeHistoryEntry) => entry.updatedAt >= statusWindowStartDate
+  );
 
-  if (!userProfileToUpdate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found!');
-  }
-
-  // Get 14 days ago date
-  const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
-  // Count recent status changes
-  const recentChanges = userProfileToUpdate.statusChangeHistory.filter((entry: any) => entry.updatedAt >= fourteenDaysAgo);
-
-  // Determine which status fields are being updated
   const statusFields = ['role', 'study_year', 'major', 'occupation', 'affiliation'] as const;
-  const updatedFields = [];
+  const updatedFields: Array<{ field: (typeof statusFields)[number]; oldValue: unknown; newValue: unknown }> = [];
 
   for (const field of statusFields) {
-    const newValue = userProfileBody[field];
-    if (newValue && userProfileToUpdate[field] !== newValue) {
+    const newValue = body[field];
+    if (newValue && profile[field] !== newValue) {
       updatedFields.push({
         field,
-        oldValue: userProfileToUpdate[field],
+        oldValue: profile[field],
         newValue,
       });
     }
   }
 
-  // If there are status field changes, check the limit
-  if (updatedFields.length > 0) {
-    if (recentChanges.length >= 2) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'You can only change your status twice within 14 days');
-    }
+  if (updatedFields.length === 0) return;
 
-    // Add the status change to history
-    userProfileToUpdate.statusChangeHistory.push({
-      updatedAt: new Date(),
-      updatedFields,
-    });
+  if (recentChanges.length >= MAX_STATUS_CHANGES_IN_WINDOW) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERR_STATUS_CHANGE_LIMIT);
   }
+
+  profile.statusChangeHistory.push({
+    updatedAt: new Date(),
+    updatedFields,
+  });
+};
+
+export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: EditProfileRequest) => {
+  const bioLength = userProfileBody.bio?.trim().length || 0;
+  const userProfileToUpdate: HydratedDocument<UserProfileDocument> | null = await UserProfile.findById(id);
+
+  if (bioLength > BIO_MAX_LENGTH) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERR_BIO_TOO_LONG);
+  }
+
+  if (!userProfileToUpdate) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERR_USER_PROFILE_NOT_FOUND_UPDATE);
+  }
+
+  validateAndApplyStatusChange(userProfileToUpdate, userProfileBody);
 
   const { firstName, lastName, ...updateData } = userProfileBody;
   Object.assign(userProfileToUpdate, updateData);
 
   // Update firstName and lastName in User schema if they are provided
   if (firstName || lastName) {
-    const userToUpdate = await User.findById(userProfileToUpdate.users_id);
+    const userToUpdate = await User.findById(userProfileToUpdate[FIELD_USERS_ID]);
     if (userToUpdate) {
       if (firstName) userToUpdate.firstName = firstName;
       if (lastName) userToUpdate.lastName = lastName;
@@ -153,422 +366,185 @@ export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfile
   return userProfileToUpdate;
 };
 
+// =============================================================================
+// FOLLOW / UNFOLLOW
+// =============================================================================
+
+/**
+ * Applies follow or unfollow: updates both profiles and queues the notification.
+ */
+const applyFollowState = async (
+  userId: mongoose.Types.ObjectId,
+  userToFollow: mongoose.Types.ObjectId,
+  userToFollowProfile: HydratedDocument<UserProfileDocument> | null,
+  isFollow: boolean
+) => {
+  const updateOp = isFollow ? { $push: { [FIELD_FOLLOWERS]: { userId } } } : { $pull: { [FIELD_FOLLOWERS]: { userId } } };
+  const myUpdateOp = isFollow
+    ? { $push: { [FIELD_FOLLOWING]: { userId: userToFollow } } }
+    : { $pull: { [FIELD_FOLLOWING]: { userId: userToFollow } } };
+
+  await userToFollowProfile?.updateOne(updateOp);
+  const updatedUserProfile = await UserProfile.findOneAndUpdate(
+    { [FIELD_USERS_ID]: userId },
+    myUpdateOp,
+    { new: true }
+  );
+
+  await queueFollowNotification({
+    sender_id: userId,
+    receiverId: userToFollow,
+    type: isFollow ? NotificationIdentifier.follow_user : NotificationIdentifier.un_follow_user,
+    message: isFollow ? 'Started following you' : 'Stopped following you',
+  });
+
+  return updatedUserProfile;
+};
+
 export const toggleFollow = async (userId: mongoose.Types.ObjectId, userToFollow: mongoose.Types.ObjectId) => {
-  const userProfile = await UserProfile.findOne({ users_id: userId });
-  const userToFollowProfile = await UserProfile.findOne({ users_id: userToFollow });
+  const userProfile = await UserProfile.findOne({ [FIELD_USERS_ID]: userId });
+  const userToFollowProfile = await UserProfile.findOne({ [FIELD_USERS_ID]: userToFollow });
 
-  // Determine current state BEFORE making any updates
-  const isAlreadyFollowing = userProfile?.following.some((x) => x.userId.toString() === userToFollow.toString());
+  const isAlreadyFollowing = userProfile?.[FIELD_FOLLOWING].some((x) => x.userId.toString() === userToFollow.toString());
 
-  let updatedUseProfile;
-
-  if (!isAlreadyFollowing) {
-    // FOLLOW
-    await userToFollowProfile?.updateOne({ $push: { followers: { userId } } });
-    updatedUseProfile = await UserProfile.findOneAndUpdate(
-      { users_id: userId },
-      { $push: { following: { userId: userToFollow } } },
-      { new: true }
-    );
-
-    const followNotification = {
-      sender_id: userId,
-      receiverId: userToFollow,
-      type: NotificationIdentifier.follow_user,
-      message: 'Started following you',
-    };
-
-    try {
-      console.log('🚀 Attempting to enqueue follow notification...');
-      const result = await queueSQSNotification(followNotification);
-      console.info('✅ Notification enqueued successfully', {
-        notification: followNotification,
-        sqsResult: result,
-      });
-    } catch (err) {
-      console.error('❌ Failed to enqueue notification', {
-        notification: followNotification,
-        error: err,
-      });
-    }
-    // await queueSQSNotification(followNotification);
-  } else {
-    // UNFOLLOW
-    await userToFollowProfile?.updateOne({ $pull: { followers: { userId } } });
-    updatedUseProfile = await UserProfile.findOneAndUpdate(
-      { users_id: userId },
-      { $pull: { following: { userId: userToFollow } } },
-      { new: true }
-    );
-
-    const unfollowNotification = {
-      sender_id: userId,
-      receiverId: userToFollow,
-      type: NotificationIdentifier.un_follow_user,
-      message: 'Stopped following you',
-    };
-    // await queueSQSNotification(unfollowNotification);
-    try {
-      console.log('🚀 Attempting to enqueue unfollow notification...');
-      const result = await queueSQSNotification(unfollowNotification);
-      console.info('✅ Notification enqueued successfully', {
-        notification: unfollowNotification,
-        sqsResult: result,
-      });
-    } catch (err) {
-      console.error('❌ Failed to enqueue notification', {
-        notification: unfollowNotification,
-        error: err,
-      });
-    }
-  }
-
-  return updatedUseProfile;
+  return applyFollowState(userId, userToFollow, userToFollowProfile, !isAlreadyFollowing);
 };
 
-export const getFollowingUsers = async (userId: string) => {
-  const user = await UserProfile.findById(userId).populate('following.userId', 'email profile_dp').exec();
 
-  return user!.following;
-};
 
 export const getFollowing = async (
   name: string = '',
   userId: string,
-  page: number = 1,
-  limit: number = 10,
+  page: number = DEFAULT_PAGE,
+  limit: number = DEFAULT_LIMIT,
   myUserId: string
-) => {
-  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+) => getFollowListByType('following', name, userId, page, limit, myUserId);
 
-  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => b.userId) || [];
+export const getFollowers = async (
+  name: string = '',
+  userId: string,
+  page: number = DEFAULT_PAGE,
+  limit: number = DEFAULT_LIMIT,
+  myUserId: string
+) => getFollowListByType('followers', name, userId, page, limit, myUserId);
 
-  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
-
-  const startIndex = (page - 1) * limit;
-
-  const profile = await UserProfile.findOne({ users_id: userId }, 'following');
-  if (!profile?.following?.length) return { currentPage: page, totalPages: 0, users: [] };
-
-  const ids = profile.following.map((f: any) => f.userId?._id).filter(Boolean);
-  if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
-
-  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
-  const nameFilter = {
-    $or: [
-      { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-      ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-    ],
+/**
+ * Maps a populated profile (with users_id populated) to the follow-list item shape.
+ * Returns null if users_id is not populated or missing required fields.
+ */
+const mapProfileToFollowListItem = (
+  populated: unknown
+): { _id: mongoose.Types.ObjectId; firstName: string; lastName: string; profile: Record<string, unknown> } | null => {
+  if (typeof populated !== 'object' || populated === null) return null;
+  const p = populated as Record<string, unknown>;
+  const user = p[FIELD_USERS_ID];
+  if (
+    !user ||
+    typeof user !== 'object' ||
+    !('_id' in user) ||
+    !('firstName' in user) ||
+    !('lastName' in user)
+  )
+    return null;
+  const userObj = user as { _id: unknown; firstName: string; lastName: string };
+  return {
+    _id: toMongooseObjectId(userObj._id),
+    firstName: userObj.firstName,
+    lastName: userObj.lastName,
+    profile: {
+      _id: toMongooseObjectId(p['_id']),
+      profile_dp: p['profile_dp'],
+      degree: p['degree'],
+      study_year: p['study_year'],
+      major: p['major'],
+      university_name: p['university_name'],
+      role: p['role'],
+      affiliation: p['affiliation'],
+      occupation: p['occupation'],
+    },
   };
-
-  const users = await User.aggregate([
-    {
-      $match: {
-        _id: {
-          $in: ids,
-          $nin: myBlockedUserIds,
-        },
-        ...nameFilter,
-        isDeleted: { $ne: true },
-      },
-    },
-
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: '_id',
-        foreignField: 'users_id',
-        as: 'profile',
-      },
-    },
-    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-
-    {
-      $match: {
-        'profile.blockedUsers': {
-          $not: {
-            $elemMatch: {
-              userId: myUserObjectId,
-            },
-          },
-        },
-      },
-    },
-
-    {
-      $addFields: {
-        isFollowing: true,
-      },
-    },
-
-    { $skip: startIndex },
-    { $limit: limit },
-  ]);
-
-  return { currentPage: page, totalPages: Math.ceil(ids.length / limit), users };
-};
-
-export const getFollowers = async (name: string = '', userId: string, page: number, limit: number, myUserId: string) => {
-  const Currpage = page ? page : 1;
-  const limitpage = limit ? limit : 10;
-  const startIndex = (Currpage - 1) * limitpage;
-
-  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
-
-  const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => new mongoose.Types.ObjectId(b.userId)) || [];
-
-  const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
-
-  // Fetch user profile and get list of follower user IDs
-  const profile = await UserProfile.findOne({ users_id: userId });
-  if (!profile || !profile.followers) return { currentPage: page, totalPages: 0, users: [] };
-
-  const followingIds = profile?.following.map((id) => id.userId.toString()) || [];
-
-  const ids = profile.followers.map((follower: any) => follower.userId?._id).filter(Boolean);
-
-  if (!ids.length) return { currentPage: page, totalPages: 0, users: [] };
-
-  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
-
-  const users = await User.aggregate([
-    {
-      $match: {
-        _id: {
-          $in: ids,
-          $nin: myBlockedUserIds,
-        },
-        isDeleted: { $ne: true },
-        $or: [
-          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-        ],
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: '_id',
-        foreignField: 'users_id',
-        as: 'profile',
-      },
-    },
-    {
-      $unwind: {
-        path: '$profile',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    {
-      $match: {
-        'profile.blockedUsers': {
-          $not: {
-            $elemMatch: {
-              userId: myUserObjectId,
-            },
-          },
-        },
-      },
-    },
-
-    {
-      $addFields: {
-        isFollowing: {
-          $in: ['$_id', followingIds.map((id) => new mongoose.Types.ObjectId(id))],
-        },
-      },
-    },
-
-    { $skip: startIndex },
-    { $limit: limitpage },
-  ]);
-
-  const totalUsers = ids.length;
-  const totalPages = Math.ceil(totalUsers / limit);
-
-  return { currentPage: page, totalPages, users };
 };
 
 export const getFollowersAndFollowing = async (name: string = '', userId: string) => {
-  let firstNametoPush: any;
-  let lastNametopush: any;
-  const profile: any = await UserProfile.findOne({ users_id: userId });
+  const profile = await UserProfile.findOne({ [FIELD_USERS_ID]: userId });
+  if (!profile) return { user: [] };
 
-  const followersIds = profile.followers.map((id: { userId: { _id: string } }) => id.userId._id);
-  const followingIds = profile.following.map((id: { userId: { _id: string } }) => id.userId._id);
+  const followersIds = profile[FIELD_FOLLOWERS]
+    .map((f) => getUserIdFromFollowEntry(f)?.toString())
+    .filter((id): id is string => Boolean(id));
+  const followingIds = profile[FIELD_FOLLOWING]
+    .map((f) => getUserIdFromFollowEntry(f)?.toString())
+    .filter((id): id is string => Boolean(id));
 
   const uniqueIds = new Set([...followersIds, ...followingIds]);
   const ids = Array.from(uniqueIds);
 
-  if (name) {
-    let nameParts = name.split(' ');
-    if (nameParts.length > 1) {
-      firstNametoPush = nameParts[0];
-      lastNametopush = nameParts[1];
-    } else {
-      firstNametoPush = name;
-    }
-  }
+  const nameFilter = buildNameFilter(name);
 
   const userFollows = await UserProfile.find({
-    $and: [{ users_id: { $in: ids } }],
+    $and: [{ [FIELD_USERS_ID]: { $in: ids } }],
   })
     .populate({
-      path: 'users_id',
-      select: 'firstName lastName',
-      match: {
-        $or: [
-          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-        ],
-      },
+      path: FIELD_USERS_ID,
+      select: SELECT_USER_FIRST_LAST_NAME,
+      match: nameFilter,
     })
-    .select('profile_dp degree major study_year university_name role affiliation occupation')
+    .select(SELECT_PROFILE_FIELDS_FOR_FOLLOW)
     .exec();
 
-  const filteredUserFollows = userFollows.filter((profile) => profile.users_id !== null);
-  const result = filteredUserFollows?.map((profile: any) => ({
-    _id: profile.users_id._id,
-    firstName: profile.users_id.firstName,
-    lastName: profile.users_id.lastName,
-    profile: {
-      _id: profile._id,
-      profile_dp: profile.profile_dp,
-      degree: profile.degree,
-      study_year: profile.study_year,
-      major: profile.major,
-      university_name: profile.university_name,
-      role: profile.role,
-      affiliation: profile.affiliation,
-      occupation: profile.occupation,
-    },
-  }));
-  const finalResult = { user: result };
-  return finalResult;
+  const result = userFollows
+    .map((p) => mapProfileToFollowListItem(p))
+    .filter((item): item is NonNullable<typeof item> => item != null);
+  return { user: result };
 };
+
+// =============================================================================
+// BLOCKED USERS (read)
+// =============================================================================
 
 export const getBlockedUsers = async (userId: string) => {
-  const result = await UserProfile.aggregate([
-    // 1. Match current user
-    {
-      $match: {
-        users_id: new mongoose.Types.ObjectId(userId),
-      },
-    },
-
-    // 2. Extract blocked user ids
-    {
-      $project: {
-        blockedUserIds: '$blockedUsers.userId',
-      },
-    },
-
-    // 3. Lookup blocked users' profiles
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'blockedUserIds',
-        foreignField: 'users_id',
-        as: 'blockedProfiles',
-      },
-    },
-
-    // 4. Unwind profiles
-    { $unwind: '$blockedProfiles' },
-
-    // 5. Lookup User (firstName, lastName)
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'blockedProfiles.users_id',
-        foreignField: '_id',
-        as: 'user',
-      },
-    },
-
-    { $unwind: '$user' },
-
-    // 6. Shape final output
-    {
-      $project: {
-        id: '$user._id',
-        firstName: '$user.firstName',
-        lastName: '$user.lastName',
-        university: '$blockedProfiles.university_name',
-        study_year: '$blockedProfiles.study_year',
-        degree: '$blockedProfiles.degree',
-        major: '$blockedProfiles.major',
-        occupation: '$blockedProfiles.occupation',
-        affiliation: '$blockedProfiles.affiliation',
-        role: '$blockedProfiles.role',
-        imageUrl: '$blockedProfiles.profile_dp.imageUrl',
-      },
-    },
-  ]);
-
-  return result;
+  const pipeline = getBlockedUsersPipelineStages(userId);
+  return await UserProfile.aggregate(pipeline);
 };
 
-export const getFollowingAndMutuals = async (name: string, userId: string, page: number = 1, limit: number = 10) => {
-  const startIndex = (page - 1) * limit;
+export const getFollowingAndMutuals = async (
+  name: string,
+  userId: string,
+  page: number = DEFAULT_PAGE,
+  limit: number = DEFAULT_LIMIT
+): Promise<{ currentPage: number; totalPages: number; users: FollowListItem[] }> => {
+  const startIndex = getPaginationSkip(page, limit);
 
   // Fetch the user's following and followers list
-  const loggedInUser = await UserProfile.findOne({ users_id: userId }).select('following followers').lean();
+  const loggedInUser = await UserProfile.findOne({ [FIELD_USERS_ID]: userId }).select(SELECT_FOLLOWING_FOLLOWERS).lean();
 
   // Extract following and follower IDs
-  const followingIds = new Set(loggedInUser?.following.map((f) => f.userId.toString()) || []);
-  const followerIds = new Set(loggedInUser?.followers.map((f) => f.userId.toString()) || []);
+  const followingIds = new Set(loggedInUser?.[FIELD_FOLLOWING].map((f) => f.userId.toString()) || []);
+  const followerIds = new Set(loggedInUser?.[FIELD_FOLLOWERS].map((f) => f.userId.toString()) || []);
 
   // Find mutual followers (users present in both sets)
   const mutualIds = [...followingIds].filter((id) => followerIds.has(id)).map((id) => new mongoose.Types.ObjectId(id));
 
-  // Convert followingIds to ObjectId for MongoDB query
-  //  const followingObjectIds = [...followingIds].map((id) => new mongoose.Types.ObjectId(id));
+  const nameFilter = buildNameFilter(name || '');
 
-  const [firstNametoPush = '', lastNametopush = ''] = name.split(' ');
-
-  // Fetch user details of following and mutual followers
-  const users = await User.aggregate([
-    {
-      $match: {
-        _id: { $in: mutualIds },
-        isDeleted: { $ne: true },
-        $or: [
-          { firstName: { $regex: new RegExp(firstNametoPush, 'i') } },
-          ...(lastNametopush ? [{ lastName: { $regex: new RegExp(lastNametopush, 'i') } }] : []),
-        ],
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: '_id',
-        foreignField: 'users_id',
-        as: 'profile',
-      },
-    },
-    {
-      $unwind: {
-        path: '$profile',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $addFields: {
-        isFollowing: true, // Check if the user is a mutual follower
-      },
-    },
-    { $skip: startIndex },
-    { $limit: limit },
-  ]);
+  const pipeline = getFollowingAndMutualsPipelineStages({
+    mutualIds,
+    nameFilter,
+    skip: startIndex,
+    limit,
+  });
+  const users = (await User.aggregate(pipeline)) as FollowListItem[];
 
   return {
     currentPage: page,
-    totalPages: Math.ceil(followingIds.size / limit),
+    totalPages: computeTotalPages(mutualIds?.length || 0, limit),
     users,
   };
 };
+
+// =============================================================================
+// UNIVERSITY EMAIL & COMMUNITIES
+// =============================================================================
 
 export const addUniversityEmail = async (
   userId: string,
@@ -579,23 +555,23 @@ export const addUniversityEmail = async (
 ) => {
   // First, check if the user profile exists and get current communities
   const userProfile = await UserProfile.findOne({
-    users_id: new mongoose.Types.ObjectId(userId),
+    [FIELD_USERS_ID]: new mongoose.Types.ObjectId(userId),
   });
 
   if (!userProfile) {
-    throw new Error('User profile not found.');
+    throw new ApiError(httpStatus.NOT_FOUND, ERR_USER_PROFILE_NOT_FOUND);
   }
 
   // Check if the university email already exists
   const emailExists = userProfile.email.some((email) => email.UniversityEmail === universityEmail);
   if (emailExists) {
-    throw new Error('University email already exists in profile.');
+    throw new ApiError(httpStatus.BAD_REQUEST, ERR_UNIVERSITY_EMAIL_ALREADY_EXISTS);
   }
 
   // Check if community already exists in communities array
   const communityExists = userProfile.communities.some((community) => community.communityId.toString() === communityId);
 
-  let updateOperation: any = {
+  let updateOperation: mongoose.mongo.UpdateFilter<UserProfileDocument> = {
     $push: {
       email: { UniversityName: universityName, UniversityEmail: universityEmail, communityId, logo: communityLogoUrl },
     },
@@ -608,26 +584,26 @@ export const addUniversityEmail = async (
     };
   } else {
     // Add new community to communities array
+    const newCommunity: UserCommunities = {
+      communityId: toMongooseObjectId(communityId) as unknown as UserCommunities['communityId'],
+      isVerified: true,
+      communityGroups: [],
+    };
     updateOperation.$push = {
       ...updateOperation.$push,
-      communities: {
-        communityId: new mongoose.Types.ObjectId(communityId),
-        isVerified: true,
-        communityGroups: [],
-      },
+      communities: newCommunity,
     };
   }
 
-  const filterQuery: any = {
-    users_id: new mongoose.Types.ObjectId(userId),
-  };
-
-  if (communityExists) {
-    filterQuery['communities.communityId'] = new mongoose.Types.ObjectId(communityId);
-  }
+  const filterQuery = {
+    [FIELD_USERS_ID]: new mongoose.Types.ObjectId(userId),
+    ...(communityExists && {
+      'communities.communityId': new mongoose.Types.ObjectId(communityId),
+    }),
+  } as mongoose.FilterQuery<UserProfileDocument>;
 
   // Prepare options for findOneAndUpdate, omitting arrayFilters if not needed
-  const updateOptions: any = { new: true };
+  const updateOptions: mongoose.QueryOptions = { new: true };
   if (communityExists) {
     updateOptions.arrayFilters = [{ 'elem.communityId': new mongoose.Types.ObjectId(communityId) }];
   }
@@ -635,11 +611,15 @@ export const addUniversityEmail = async (
   const updatedUserProfile = await UserProfile.findOneAndUpdate(filterQuery, updateOperation, updateOptions);
 
   if (!updatedUserProfile) {
-    throw new Error('Failed to update user profile.');
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, ERR_FAILED_TO_UPDATE_USER_PROFILE);
   }
 
   return updatedUserProfile;
 };
+
+// =============================================================================
+// BLOCK / UNBLOCK
+// =============================================================================
 
 /**
  * Groups community groups by communityId
@@ -649,29 +629,31 @@ const groupByCommunityId = (
 ): Record<string, mongoose.Types.ObjectId[]> => {
   return groups.reduce((acc, group) => {
     const key = group.communityId.toString();
-    if (!acc[key]) {
-      acc[key] = [];
-    }
-    acc[key]!.push(group._id);
+    (acc[key] ??= []).push(group._id);
     return acc;
   }, {} as Record<string, mongoose.Types.ObjectId[]>);
 };
 
 /**
- * Validates that blocking operation is allowed
+ * Validates that blocking operation is allowed. Returns the caller's profile (throws if invalid).
  */
-const validateBlockOperation = (userProfile: any, userToBlockProfile: any | null): void => {
+const validateBlockOperation = (
+  userProfile: UserProfileDocument | null,
+  userToBlockProfile: UserProfileDocument | null
+): UserProfileDocument => {
   if (!userProfile) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    throw new ApiError(httpStatus.NOT_FOUND, ERR_USER_NOT_FOUND);
   }
 
   if (userProfile.adminCommunityId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'You are an admin and cannot block other users.');
+    throw new ApiError(httpStatus.BAD_REQUEST, ERR_ADMIN_CANNOT_BLOCK);
   }
 
   if (userToBlockProfile?.adminCommunityId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'User to block is an admin of a community and cannot be blocked');
+    throw new ApiError(httpStatus.BAD_REQUEST, ERR_CANNOT_BLOCK_ADMIN);
   }
+
+  return userProfile;
 };
 
 /**
@@ -683,12 +665,12 @@ const removeFollowRelationships = async (
 ): Promise<void> => {
   await Promise.all([
     UserProfile.updateOne(
-      { users_id: userId },
-      { $pull: { following: { userId: userToBlock }, followers: { userId: userToBlock } } }
+      { [FIELD_USERS_ID]: userId },
+      { $pull: { [FIELD_FOLLOWING]: { userId: userToBlock }, [FIELD_FOLLOWERS]: { userId: userToBlock } } }
     ),
     UserProfile.updateOne(
-      { users_id: userToBlock },
-      { $pull: { following: { userId: userId }, followers: { userId: userId } } }
+      { [FIELD_USERS_ID]: userToBlock },
+      { $pull: { [FIELD_FOLLOWING]: { userId: userId }, [FIELD_FOLLOWERS]: { userId: userId } } }
     ),
   ]);
 };
@@ -738,7 +720,7 @@ const removeCommunityGroupsFromProfiles = async (
     ...Object.entries(groupsByCommunity).map(([communityId, groupIds]) =>
       UserProfile.updateOne(
         {
-          users_id: userId,
+          [FIELD_USERS_ID]: userId,
           'communities.communityId': communityId,
         },
         {
@@ -754,7 +736,7 @@ const removeCommunityGroupsFromProfiles = async (
     ...Object.entries(myGroupsByCommunity).map(([communityId, groupIds]) =>
       UserProfile.updateOne(
         {
-          users_id: userToBlock,
+          [FIELD_USERS_ID]: userToBlock,
           'communities.communityId': communityId,
         },
         {
@@ -818,11 +800,11 @@ const handleBlockUser = async (
   userToBlock: mongoose.Types.ObjectId,
   groupsByCommunity: Record<string, mongoose.Types.ObjectId[]>,
   myGroupsByCommunity: Record<string, mongoose.Types.ObjectId[]>
-): Promise<{ status: string; userId: mongoose.Types.ObjectId }> => {
+): Promise<{ status: BlockStatus; userId: mongoose.Types.ObjectId }> => {
   // Add user to blocked list
   await UserProfile.findOneAndUpdate(
-    { users_id: userId },
-    { $addToSet: { blockedUsers: { userId: userToBlock } } },
+    { [FIELD_USERS_ID]: userId },
+    { $addToSet: { [FIELD_BLOCKED_USERS]: { userId: userToBlock } } },
     { new: true }
   );
 
@@ -836,7 +818,7 @@ const handleBlockUser = async (
   // Remove community groups from profiles
   await removeCommunityGroupsFromProfiles(userId, userToBlock, groupsByCommunity, myGroupsByCommunity);
 
-  return { status: 'blocked', userId: userToBlock };
+  return { status: BLOCK_STATUS_BLOCKED, userId: userToBlock };
 };
 
 /**
@@ -845,34 +827,37 @@ const handleBlockUser = async (
 const handleUnblockUser = async (
   userId: mongoose.Types.ObjectId,
   userToBlock: mongoose.Types.ObjectId
-): Promise<{ status: string; userId: mongoose.Types.ObjectId }> => {
+): Promise<{ status: BlockStatus; userId: mongoose.Types.ObjectId }> => {
   await UserProfile.findOneAndUpdate(
-    { users_id: userId },
-    { $pull: { blockedUsers: { userId: userToBlock } } },
+    { [FIELD_USERS_ID]: userId },
+    { $pull: { [FIELD_BLOCKED_USERS]: { userId: userToBlock } } },
     { new: true }
   );
 
-  return { status: 'unblocked', userId: userToBlock };
+  return { status: BLOCK_STATUS_UNBLOCKED, userId: userToBlock };
 };
 
-export const toggleBlock = async (userId: mongoose.Types.ObjectId, userToBlock: mongoose.Types.ObjectId) => {
+export const toggleBlock = async (
+  userId: mongoose.Types.ObjectId,
+  userToBlock: mongoose.Types.ObjectId
+): Promise<{ status: BlockStatus; userId: mongoose.Types.ObjectId }> => {
   // Fetch all required data in parallel
   const [userProfile, userToBlockProfile, adminGroups, myAdminGroups] = await Promise.all([
-    UserProfile.findOne({ users_id: userId }),
-    UserProfile.findOne({ users_id: userToBlock }),
+    UserProfile.findOne({ [FIELD_USERS_ID]: userId }),
+    UserProfile.findOne({ [FIELD_USERS_ID]: userToBlock }),
     communityGroupModel.find({ adminUserId: userToBlock }, { _id: 1, communityId: 1 }).lean(),
     communityGroupModel.find({ adminUserId: userId }, { _id: 1, communityId: 1 }).lean(),
   ]);
 
-  // Validate the operation
-  validateBlockOperation(userProfile, userToBlockProfile);
+  // Validate the operation (returns validated profile or throws)
+  const profile = validateBlockOperation(userProfile, userToBlockProfile);
 
   // Group admin groups by community ID
   const groupsByCommunity = groupByCommunityId(adminGroups);
   const myGroupsByCommunity = groupByCommunityId(myAdminGroups);
 
   // Check if user is already blocked
-  const isBlocked = userProfile!.blockedUsers.some(
+  const isBlocked = profile[FIELD_BLOCKED_USERS].some(
     (blockedUser) => blockedUser.userId.toString() === userToBlock.toString()
   );
 

@@ -47,6 +47,45 @@ export const getCommunityFromUniversityId = async (universityId: string) => {
   return await communityModel.findOne({ university_id: universityId });
 };
 
+/**
+ * Find a community by university name, or create it from the university record if not found.
+ * When creating, also updates the university with communityId and isVerified.
+ */
+export const findOrCreateCommunityByUniversityName = async (
+  universityName: string,
+  createdByUserId: string
+): Promise<any> => {
+  let community = await communityModel.findOne({ name: universityName });
+  if (community) {
+    return community;
+  }
+
+  const fetchUniversity = await UniversityModel.findOne({ name: universityName });
+  if (!fetchUniversity) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  const { _id: university_id, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
+
+  community = await communityModel.create({
+    name: universityName,
+    communityLogoUrl: { imageUrl: logo },
+    communityCoverUrl: { imageUrl: campus },
+    total_students: total_students,
+    university_id: university_id,
+    created_by: createdByUserId,
+    about: short_overview,
+    adminId: config.DEFAULT_COMMUNITY_ADMIN_ID,
+  });
+
+  await UniversityModel.updateOne(
+    { _id: university_id },
+    { $set: { communityId: community._id, isVerified: true } }
+  );
+
+  return community;
+};
+
 export const getUserCommunities = async (userID: string) => {
   try {
     const user = await User.findById(userID).lean();

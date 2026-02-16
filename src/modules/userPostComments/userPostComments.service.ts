@@ -12,7 +12,7 @@ import {
   type CommentEnrichmentOptions,
 } from './userPostComments.pipeline';
 import { CreateCommentBody, UpdateCommentBody, PopulatedReplyWithReplies, CreateUserPostCommentResult, CommentReplyResult } from './userPostComments.interface';
-
+import { getPaginationSkip, computeTotalPages } from '../../utils/common';
 const DEFAULT_COMMENTS_PAGE_SIZE = 2;
 const MAX_REPLY_DEPTH = 3;
 const DEFAULT_COMMENTS_SORT_ORDER: 'asc' | 'desc' = 'desc';
@@ -139,7 +139,7 @@ export const getUserPostComments = async (
   sortOrder: 'asc' | 'desc' = DEFAULT_COMMENTS_SORT_ORDER,
   myUserId: string
 ) => {
-  const skip = (page - 1) * limit;
+  const skip = getPaginationSkip(page, limit);
   const mainSortOrder = sortOrder === 'asc' ? SORT_ASC : SORT_DESC;
   const myBlockedUserIds = await getMyBlockedUserIds(myUserId);
   const blockedUserFilterStages = getBlockedUserFilterStages(myUserId, myBlockedUserIds);
@@ -170,7 +170,7 @@ export const getUserPostComments = async (
   const totalComments = totalCommentsAgg[0]?.total || 0;
   const totalTopLevelComments = totalTopLevelAgg[0]?.total || 0;
 
-  const totalPages = Math.ceil(totalTopLevelComments / limit);
+    const totalPages = computeTotalPages(totalTopLevelComments, limit);
 
   return {
     finalComments: comments,
