@@ -107,23 +107,92 @@ export const getAllUniversity = async (
   };
 };
 
-export const searchUniversityByQuery = async (searchTerm: string, page: number = 1, limit: number = 10) => {
+
+
+
+export const searchUniversityByQuery = async (
+  searchTerm: string,
+  page: number = 1,
+  limit: number = 10
+) => {
   const skip = (page - 1) * limit;
 
-  let query: any = {};
+  const aggregation: any[] = [];
+
   if (searchTerm && searchTerm.trim() !== '') {
-    query = {
-      $or: [
-        { name: { $regex: `^${searchTerm}`, $options: 'i' } },
-        { country: { $regex: `^${searchTerm}`, $options: 'i' } },
-        { type: { $regex: `^${searchTerm}`, $options: 'i' } },
-      ],
-    };
+    aggregation.push({
+      $match: {
+        $or: [
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { country: { $regex: searchTerm, $options: 'i' } },
+          { type: { $regex: searchTerm, $options: 'i' } },
+        ],
+      },
+    });
+
+    aggregation.push({
+      $addFields: {
+        nameMatchRank: {
+          $switch: {
+            branches: [
+              {
+                case: {
+                  $eq: [{ $toLower: "$name" }, searchTerm.toLowerCase()],
+                },
+                then: 0,
+              },
+              {
+                case: {
+                  $regexMatch: {
+                    input: "$name",
+                    regex: `^${searchTerm}`,
+                    options: "i",
+                  },
+                },
+                then: 1, 
+              },
+              {
+                case: {
+                  $regexMatch: {
+                    input: "$name",
+                    regex: searchTerm,
+                    options: "i",
+                  },
+                },
+                then: 2,
+              },
+            ],
+            default: 3,
+          },
+        },
+      },
+    });
+
+    aggregation.push({ $sort: { nameMatchRank: 1, name: 1 } });
+    aggregation.push({
+      $project: { nameMatchRank: 0 },
+    });
+  } else {
+    aggregation.push({ $match: {} });
   }
 
-  const universities = await universityModal.find(query).skip(skip).limit(limit);
+  aggregation.push({ $skip: skip }, { $limit: limit });
 
-  const totalCount = await universityModal.countDocuments(query);
+  const universities = await universityModal
+    .aggregate(aggregation)
+    .option({ allowDiskUse: true });
+
+  const totalCount = await universityModal.countDocuments(
+    searchTerm && searchTerm.trim() !== ""
+      ? {
+          $or: [
+            { name: { $regex: searchTerm, $options: "i" } },
+            { country: { $regex: searchTerm, $options: "i" } },
+            { type: { $regex: searchTerm, $options: "i" } },
+          ],
+        }
+      : {}
+  );
 
   return {
     universities,

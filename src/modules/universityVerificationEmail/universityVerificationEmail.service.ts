@@ -5,15 +5,21 @@ import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
 
 export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
-  const domain = email.split('@')[1];
+  const splitedEmail = email.split(".");
+  const finalDomain = `${splitedEmail[splitedEmail?.length - 2]}.${splitedEmail[splitedEmail?.length - 1]}`;
+  const finalDomainWithoutAt = finalDomain.includes('@') ? finalDomain.split('@')[1] : finalDomain;
+  const university = await universityModal.findOne({  _id: universityId })
 
-  // Step 1: Check if domain exists in any university's domain list
-  const university = await universityModal.findOne({ domains: domain, _id: universityId });
-
-  if (!university) {
-    throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
+  if (!finalDomainWithoutAt) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid email domain.');
   }
 
+  const universityDomains = university?.domains || [];
+
+
+  if (!universityDomains?.includes(finalDomainWithoutAt)) {
+    throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
+  }
   const data = {
     email,
     otp: Math.floor(100000 + Math.random() * 900000),
