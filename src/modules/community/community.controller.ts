@@ -1,159 +1,121 @@
-import { NextFunction, Response } from 'express';
+import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from 'src/config/userIDType';
-import { getCommunityUsersService, getCommunityUsersByFilterService } from './community.service';
-import { GetCommunityUsersOptions } from './community.interface';
+import { CreateCommunityBody, GetCommunityUsersOptions, communityInterface } from './community.interface';
+import catchAsync from '../utils/catchAsync';
+import { IUniversity } from '../university/university.model';
+
+
 
 // get all userCommunity
-export const getAllUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const userID = req.userId as string;
-  try {
+export const getAllUserCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
+    const userID = req.userId as string;
     const communities = await communityService.getUserCommunities(userID);
-    res.status(httpStatus.OK).json(communities);
-  } catch (error) {
-    console.error('Error fetching user communities:', error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
-  }
-};
-export const getFilteredUserCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+    return res.status(httpStatus.OK).json(communities);
+});
+export const getFilteredUserCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const userID = req.userId as string;
   const { communityId } = req.params;
-
-  try {
     if (!communityId) {
-      throw new Error('communityId not found');
+      throw new ApiError(httpStatus.BAD_REQUEST, 'communityId not found');
     }
 
     const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body.sort, req.body);
-    res.status(httpStatus.OK).json(communities);
-  } catch (error) {
-    console.error('Error fetching user communities:', error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
-  }
-};
+   return res.status(httpStatus.OK).json(communities);
+
+})
 
 //get community
-export const getCommunity = async (req: any, res: Response, next: NextFunction) => {
+export const getCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
+  const communityId = req.params['communityId'];
+  if (!communityId || !mongoose.Types.ObjectId.isValid(communityId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID');
+  }
+
+  const options =
+    req.userId != null && req.userId.length > 0 ? { currentUserId: String(req.userId) } : undefined;
+  const community = await communityService.getCommunity(communityId, options);
+  return res.status(httpStatus.OK).json(community);
+});
+
+
+export const updateCommunity = catchAsync(async (req: Request<{ communityId: string }>, res: Response) => {
   let community;
 
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.communityId)) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
-    }
-    community = await communityService.getCommunity(req.params.communityId);
-    return res.status(200).json(community);
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
-  }
-};
-export const getCommunityFromUniversityID = async (req: any, res: Response, next: NextFunction) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.universityId)) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
-    }
-    const community = await communityService.getCommunityFromUniversityId(req.params.universityId);
-    return res.status(200).json(community);
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Community'));
-  }
-};
 
-export const updateCommunity = async (req: any, res: Response, next: NextFunction) => {
-  let community;
-
-  try {
     if (!mongoose.Types.ObjectId.isValid(req.params.communityId)) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID'));
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID')
     }
     community = await communityService.updateCommunity(req.params.communityId, req.body);
-    return res.status(200).json({ community });
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to update Community'));
+    return res.status(httpStatus.OK).json({ community });
+
+})
+
+export const CreateCommunity = catchAsync(async (req: Request<object, object, CreateCommunityBody>, res: Response) => {
+  const { university_id } = req.body;
+
+  const college: IUniversity | null = await universityService.getUniversityByRealId(university_id);
+  if (!college) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
   }
-};
 
-export const CreateCommunity = async (req: any, res: Response) => {
-  const { university_id }: any = req.body;
+  const totalStudents = typeof college.total_students === 'object' && college.total_students?.$numberInt != null
+    ? Number(college.total_students.$numberInt)
+    : Number(college.total_students) || 0;
+  const totalFaculty = Number((college as IUniversity & { total_faculty_staff?: number }).total_faculty_staff) || 0;
 
-  try {
-    const college: any = await universityService.getUniversityByRealId(university_id);
+  const community: communityInterface = await communityService.createCommunity(
+    college.name,
+    university_id,
+    String(totalStudents),
+    String(totalFaculty),
+    college.campus || '',
+    college.logo || '',
+    college.short_overview || ''
+  );
 
-    // if (!college.isCommunityCreated) {
-    //   throw new ApiError(httpStatus.BAD_REQUEST, 'community Not Allowed');
-    // }
+  return res.status(httpStatus.CREATED).json({ community });
+})
 
-    const community: any = await communityService.createCommunity(
-      college.name,
-      university_id,
-      college.total_students || 0,
-      college.total_faculty_staff || 0,
-      college.campus || '',
-      college.logo || '',
-      college.short_overview || ''
-    );
-
-    return res.status(201).json({ community });
-  } catch (error: any) {
-    console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const joinCommunityFromUniversity = async (req: userIdExtend, res: Response) => {
+export const joinCommunityFromUniversity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { universityId } = req.query as any;
   const userId = req.userId as string;
 
-  try {
     const community = await communityService.joinCommunityFromUniversity(userId, universityId);
     return res.status(httpStatus.OK).json(community);
-  } catch (error: any) {
-    console.log('err', error);
+})
 
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const joinCommunity = async (req: userIdExtend, res: Response) => {
+export const joinCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { communityId } = req.params as any;
 
   if (!mongoose.Types.ObjectId.isValid(communityId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID');
   }
 
-  try {
     const user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
     return res.status(httpStatus.OK).json({ message: 'Joined Successfully', user });
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+})
 
-export const leaveCommunity = async (req: userIdExtend, res: Response, next: NextFunction) => {
+export const leaveCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { communityId } = req.params;
-  try {
+
     if (!communityId) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID')
     }
     let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-    return res.status(200).json(user);
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+    return res.status(httpStatus.OK).json(user);
+})
 
-export const getCommunityUsersController = async (req: userIdExtend, res: Response) => {
-  try {
+export const getCommunityUsersController = catchAsync(async (req: userIdExtend, res: Response) => {
+
     const { communityId } = req.params;
     const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
     if (!communityId) {
-      throw new Error('Invalid communityId');
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
     }
     const options: GetCommunityUsersOptions = {
       isVerified,
@@ -162,16 +124,13 @@ export const getCommunityUsersController = async (req: userIdExtend, res: Respon
       limit: Number(limit),
       userId: req.userId as string,
     };
-    const users = await getCommunityUsersService(communityId, options);
-    res.status(200).json({ success: true, ...users });
-  } catch (error) {
-    console.error('[getCommunityUsersController] error:', error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-};
+    const users = await communityService.getCommunityUsersService(communityId, options);
+   return res.status(httpStatus.OK).json({ success: true, ...users });
 
-export const getCommunityUsersWithfilterController = async (req: userIdExtend, res: Response) => {
-  try {
+})
+
+export const getCommunityUsersWithfilterController = catchAsync(async (req: userIdExtend, res: Response) => {
+
     const { communityId } = req.params;
     const userId = req.userId;
     const {
@@ -183,7 +142,7 @@ export const getCommunityUsersWithfilterController = async (req: userIdExtend, r
     } = req.query as unknown as GetCommunityUsersOptions;
 
     if (!communityId) {
-      throw new Error('Invalid communityId');
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
     }
     const options: GetCommunityUsersOptions = {
       isVerified,
@@ -193,10 +152,7 @@ export const getCommunityUsersWithfilterController = async (req: userIdExtend, r
       limit: Number(limit),
       userId: userId as string,
     };
-    const users = await getCommunityUsersByFilterService(communityId, options);
-    res.status(200).json({ success: true, ...users });
-  } catch (error) {
-    console.error('[getCommunityUsersController] error:', error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-};
+    const users = await communityService.getCommunityUsersByFilterService(communityId, options);
+    return res.status(httpStatus.OK).json({ success: true, ...users });
+
+})
