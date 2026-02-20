@@ -241,7 +241,7 @@ export const getUserFilteredCommunities = async (
 
     pipeline.push({ $project: { communityGroups: 1 } });
     pipeline.push(...buildCommunityGroupsSortStages(sortBy));
-    pipeline.push(buildCommunityGroupsProjectStage());
+    pipeline.push(...buildCommunityGroupsProjectStage(userObjectId));
 
     const communities = await communityModel.aggregate(pipeline);
     return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;

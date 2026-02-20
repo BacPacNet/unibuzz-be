@@ -1,13 +1,27 @@
-import mongoose, { Types, Document } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
 import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
-import { communityGroupInterface, status } from './communityGroup.interface';
+import {
+  communityGroupInterface,
+  status,
+  UpdateCommunityGroupBody,
+  CreateCommunityGroupBody,
+  users as UsersSchema,
+  UserLike,
+  ProfileLike,
+  UserIdLike,
+  PopulatedAdminLike,
+  BlockedUserRef,
+  MemberProfileLean,
+  MemberWithVerified,
+  CommunityGroupDocument,
+  SelectedUserItem,
+} from './communityGroup.interface';
 import { UserProfile, userProfileService } from '../userProfile';
-import { communityGroupService } from '.';
 import { notificationModel, notificationService } from '../Notification';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { communityModel, communityService } from '../community';
@@ -15,19 +29,106 @@ import { io } from '../../index';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import communityPostCommentsModel from '../communityPostsComments/communityPostsComments.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
-import { convertToObjectId } from '../../utils/common';
+import { convertToObjectId, isValidObjectId } from '../../utils/common';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
-import { PipelineStage } from 'mongoose';
 import { User } from '../user';
+import {
+  buildCommunityGroupMembersDataPipeline,
+  buildCommunityGroupMembersCountPipeline,
+} from './communityGroup.pipeline';
+import { UserCommunities } from '../userProfile/userProfile.interface';
 
-type CommunityGroupDocument = Document & communityGroupInterface;
+/** Error messages used in this service (constants to avoid typos and simplify i18n later) */
+const ERROR_MESSAGES = {
+  COMMUNITY_GROUP_NOT_FOUND: 'Community group not found',
+  COMMUNITY_GROUP_NOT_FOUND_OR_USER: 'Community group or user not found',
+  COMMUNITY_GROUP_OR_USER_NOT_FOUND_IN_GROUP: 'Community group or user not found in group',
+  USER_PROFILE_NOT_FOUND: 'User profile not found',
+  USER_NOT_FOUND: 'User not found',
+  USER_NOT_FOUND_IN_COMMUNITY: 'User not found in Community',
+  INVALID_COMMUNITY_GROUP_ID_OR_USER_ID: 'Invalid communityGroupId or userId',
+  INVALID_COMMUNITY_GROUP_ID: 'Invalid community group ID',
+  INVALID_COMMUNITY_GROUP_ID_SHORT: 'Invalid communityGroupId',
+  USER_NOT_ALLOWED_TO_CREATE_GROUP: 'User is not allowed to create group',
+  COMMUNITY_GROUP_DOES_NOT_EXIST: 'Community group does not exist',
+  COMMUNITY_GROUP_IS_NOT_LIVE: 'Community group is not live',
+  VERIFY_UNIVERSITY_EMAIL_FOR_PRIVATE: 'You need to verify your university email to join private groups',
+  BLOCKED_FROM_GROUP: 'You are blocked from this community group',
+  NOT_VERIFIED_TO_JOIN: 'You are not verified to join this community',
+  ALREADY_A_MEMBER: 'User is already a member of this community',
+  NOT_A_MEMBER: 'User is not a member of this community',
+  COMMUNITY_REFERENCE_MISSING: 'Community reference missing in group',
+  ERROR_APPROVING_REQUEST: 'Error approving request',
+  ERROR_REJECTING_REQUEST: 'Error rejecting request',
+  ERROR_ACCEPTING_PRIVATE_GROUP_REQUEST: 'Error accepting private group request',
+  ERROR_FETCHING_MEMBERS: 'Error fetching community group members',
+} as const;
 
-export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: any) => {
+function buildGroupMemberFromUserAndProfile(
+  user: UserLike,
+  profile: ProfileLike,
+  options: { isRequestAccepted: boolean; status: status }
+): {
+  _id: mongoose.Types.ObjectId;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string | null;
+  universityName: string;
+  year: string;
+  degree: string;
+  major: string;
+  isRequestAccepted: boolean;
+  status: status;
+  occupation: string;
+  affiliation: string;
+  role: string | undefined;
+} {
+  if (!user._id) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User _id is required to build group member');
+  }
+  return {
+    _id: user._id,
+    firstName: user.firstName ?? '',
+    lastName: user.lastName ?? '',
+    profileImageUrl: profile.profile_dp?.imageUrl ?? null,
+    universityName: profile.university_name ?? '',
+    year: profile.study_year ?? '',
+    degree: profile.degree ?? '',
+    major: profile.major ?? '',
+    occupation: profile.occupation ?? '',
+    affiliation: profile.affiliation ?? '',
+    role: profile.role,
+    isRequestAccepted: options.isRequestAccepted,
+    status: options.status,
+  };
+}
+
+/**
+ * Updates a single member's request status in a community group (users subdocument).
+ * Returns the updated group document or null if group or user in group not found.
+ */
+async function updateGroupMemberStatus(
+  communityGroupId: mongoose.Types.ObjectId | string,
+  userId: string,
+  isRequestAccepted: boolean,
+  memberStatus: status
+) {
+  const groupId =
+    typeof communityGroupId === 'string' ? new mongoose.Types.ObjectId(communityGroupId) : communityGroupId;
+  const userIdObj = convertToObjectId(userId);
+  return communityGroupModel.findOneAndUpdate(
+    { _id: groupId, 'users._id': userIdObj },
+    { $set: { 'users.$.isRequestAccepted': isRequestAccepted, 'users.$.status': memberStatus } },
+    { new: true }
+  );
+}
+
+export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: UpdateCommunityGroupBody) => {
   const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, ...restBody } = body;
 
   const communityGroup = await communityGroupModel.findById(id);
   if (!communityGroup) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found!');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
 
   const existingGroup = await communityGroupModel.findOne({
@@ -84,7 +185,7 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
       communityGroup.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
     );
 
-    const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user?.users_id?.toString()));
+    const newUsers = selectedUsers.filter((user) => !existingUserIds.has(user?.users_id?.toString() ?? ''));
 
     if (newUsers.length > 0) {
       await notificationService.createManyNotification(
@@ -102,21 +203,24 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: an
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
   try {
-    if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityGroupId or userId');
+    if (!isValidObjectId(communityGroupId) || !userId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_OR_USER_ID);
     }
 
     const communityGroup = await communityGroupModel.findById(communityGroupId);
     const userProfile = await getUserProfileById(userId);
 
-    if (!communityGroup) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    if (!userProfile) {
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
     }
 
-    if (communityGroup.communityGroupAccess === 'Private') {
-      const userProfile = await getUserProfileById(userId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+    }
+
+    if (communityGroup.communityGroupAccess === CommunityGroupAccess.Private) {
       if (!userProfile) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+        throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
       }
 
       const hasMatchingUniversity = userProfile.email?.some(
@@ -124,30 +228,24 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
       );
 
       if (!hasMatchingUniversity) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'You need to verify your university email to join private groups');
+        throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.VERIFY_UNIVERSITY_EMAIL_FOR_PRIVATE);
       }
     }
 
-    const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users._id': convertToObjectId(userId) },
-      {
-        $set: {
-          'users.$.isRequestAccepted': true,
-          'users.$.status': status.accepted,
-        },
-      },
-      { new: true }
+    const updatedGroup = await updateGroupMemberStatus(
+      communityGroupId,
+      userId,
+      true,
+      status.accepted
     );
 
     if (!updatedGroup) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group or user not found in group');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_OR_USER_NOT_FOUND_IN_GROUP);
     }
 
     const communityId = updatedGroup.communityId;
 
-    if (!userProfile) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
-    }
+   
 
     const hasCommunityGroup = userProfile.communities.some(
       (c) =>
@@ -191,36 +289,36 @@ export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoos
     return updatedGroup;
   } catch (error: any) {
     console.error(error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Error approving request');
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_APPROVING_REQUEST);
   }
 };
 
 export const rejectCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
   try {
-    if (!Types.ObjectId.isValid(communityGroupId) || !userId) {
-      throw new Error('Invalid communityGroupId or userId');
+    if (!isValidObjectId(communityGroupId) || !userId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_OR_USER_ID);
     }
-    const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users._id': userId },
-      {
-        $set: {
-          'users.$.isRequestAccepted': false,
-          'users.$.status': status.rejected,
-        },
-      },
-      { new: true }
+
+    const userProfile = await getUserProfileById(userId);
+    if (!userProfile) {
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
+    }
+
+    const updatedGroup = await updateGroupMemberStatus(
+      communityGroupId,
+      userId,
+      false,
+      status.rejected
     );
 
     if (!updatedGroup) {
-      throw new Error('Community group or user not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND_OR_USER);
     }
     const communityId = updatedGroup.communityId;
 
-    const userProfile = await getUserProfileById(userId);
-
     await UserProfile.updateOne(
       {
-        _id: userProfile?._id,
+        _id: userProfile._id,
         'communities.communityId': communityId,
         'communities.communityGroups.id': communityGroupId,
       },
@@ -236,23 +334,23 @@ export const rejectCommunityGroupJoinApproval = async (communityGroupId: mongoos
 
     return updatedGroup;
   } catch (error: any) {
-    throw new Error(error.message);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_REJECTING_REQUEST);
   }
 };
 
-export const RejectCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
+export const rejectCommunityGroupApproval = async (id: mongoose.Types.ObjectId) => {
   const groupToDelete = await communityGroupModel.findById(id);
   if (!groupToDelete) {
-    throw new Error('Community group not found');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
   await communityGroupModel.findByIdAndDelete(id);
 };
 
-export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, adminIds: string[] = []) => {
+export const acceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, adminIds: string[] = []) => {
   const communityGroupToUpdate = await communityGroupModel.findById(id);
 
   if (!communityGroupToUpdate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
 
   communityGroupToUpdate.status = status.accepted;
@@ -290,21 +388,10 @@ export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, 
 
       if (!userDetails || !userProfile) return null;
 
-      return {
-        _id: userDetails._id,
-        firstName: userDetails.firstName,
-        lastName: userDetails.lastName,
-        profileImageUrl: userProfile?.profile_dp?.imageUrl || null,
-        universityName: userProfile?.university_name || '',
-        year: userProfile?.study_year || '',
-        degree: userProfile?.degree || '',
-        major: userProfile?.major || '',
-        occupation: userProfile?.occupation || '',
-        affiliation: userProfile?.affiliation || '',
-        role: userProfile?.role,
+      return buildGroupMemberFromUserAndProfile(userDetails, userProfile, {
         isRequestAccepted: true,
         status: status.accepted,
-      };
+      });
     })
   );
 
@@ -313,12 +400,13 @@ export const AcceptCommunityGroupApproval = async (id: mongoose.Types.ObjectId, 
   const existingUserIds = new Set(communityGroupToUpdate.users.map((u) => u._id.toString()));
 
   for (const adminUser of validAdminUsers) {
-    if (!existingUserIds.has(adminUser?._id.toString())) {
-      communityGroupToUpdate.users.push(adminUser as any);
+    const adminUserId = adminUser?._id?.toString();
+    if (adminUserId && !existingUserIds.has(adminUserId)) {
+      communityGroupToUpdate.users.push(adminUser as unknown as UsersSchema);
 
       await UserProfile.findOneAndUpdate(
         {
-          _id: adminUser?._id,
+          _id: adminUser!._id,
           'communities.communityId': communityGroupToUpdate.communityId,
         },
         {
@@ -348,12 +436,12 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
     // Get the group before deleting
     const groupToDelete = await communityGroupModel.findById(id).session(session);
     if (!groupToDelete) {
-      throw new Error('Community group not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
     }
 
     const receiverIds = groupToDelete.users
       .map((user) => user._id)
-      .filter((id) => id, toString() !== groupToDelete.adminUserId.toString());
+      .filter((id) => id?.toString() !== groupToDelete.adminUserId.toString());
 
     // Delete the community group
     await communityGroupModel.findByIdAndDelete(id, { session });
@@ -381,7 +469,6 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
       message: `${groupToDelete.title} group has been deleted by admin`,
     };
     await queueSQSNotification(jobData);
-    // await notificationQueue.add(NotificationIdentifier.delete_community_group, jobData);
 
     await session.commitTransaction();
     session.endSession();
@@ -429,15 +516,15 @@ export const getCommunityGroupByCommunity = async (communityId: string) => {
 };
 
 export const getCommunityGroup = async (groupId: string): Promise<CommunityGroupDocument | null> => {
-  if (!Types.ObjectId.isValid(groupId)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community group ID');
+  if (!isValidObjectId(groupId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID);
   }
   return (await communityGroupModel.findById(groupId)) as CommunityGroupDocument | null;
 };
 
 export const getCommunityGroupByObjectId = async (groupId: string): Promise<CommunityGroupDocument | null> => {
-  if (!mongoose.Types.ObjectId.isValid(groupId)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community group ID');
+  if (!isValidObjectId(groupId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID);
   }
 
   const objectId = new mongoose.Types.ObjectId(groupId);
@@ -445,7 +532,7 @@ export const getCommunityGroupByObjectId = async (groupId: string): Promise<Comm
 };
 
 export const createCommunityGroup = async (
-  body: any,
+  body: CreateCommunityGroupBody,
   communityId: string,
   userId: string,
   isOfficial: boolean,
@@ -455,15 +542,15 @@ export const createCommunityGroup = async (
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
   }
   const isUserAllowtoCreateGroup = userProfile?.email.some((item) => item.communityId === communityId);
 
   if (!isUserAllowtoCreateGroup) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'User is not allowed to create group');
+    throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.USER_NOT_ALLOWED_TO_CREATE_GROUP);
   }
 
-  const inviteUsers = selectedUsers.map((user: any) => ({
+  const inviteUsers = (selectedUsers ?? []).map((user: SelectedUserItem) => ({
     userId: user.users_id,
   }));
 
@@ -485,20 +572,21 @@ export const createCommunityGroup = async (
     inviteUsers: inviteUsers,
   });
 
-  await communityGroupService.joinCommunityGroup(
+  await joinCommunityGroup(
     userId,
     createdGroup._id.toString(),
     true,
     isOfficial && isAdminOfCommunity
   );
 
-  if (selectedUsers?.length >= 1 && createdGroup?._id && (!isOfficial || isAdminOfCommunity)) {
+  const selectedUsersList = selectedUsers ?? [];
+  if (selectedUsersList.length >= 1 && createdGroup?._id && (!isOfficial || isAdminOfCommunity)) {
     await notificationService.createManyNotification(
       createdGroup.adminUserId,
       createdGroup._id,
-      selectedUsers,
+      selectedUsersList,
       notificationRoleAccess.GROUP_INVITE,
-      'recieved an invitation to join group'
+      'received an invitation to join group'
     );
   }
   return createdGroup;
@@ -516,7 +604,7 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
   };
 
   if (!communityGroup) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
 
   const communityAdminId = communityGroup?.communityId?.adminId?.map(String).includes(userId?.toString() || '');
@@ -527,41 +615,52 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
 
   const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
 
-  const userIds = (populatedGroup.users || []).map((u: any) => u._id);
+  const userIds = (populatedGroup.users || []).map((u: UsersSchema) => u._id);
 
   const deletedUsers = await User.find({ _id: { $in: userIds }, isDeleted: true }, { _id: 1 }).lean();
 
-  const deletedUserIds = new Set(deletedUsers.map((u: any) => u._id.toString()));
+  const deletedUserIds = new Set(
+    (deletedUsers as UserIdLike[]).map((u) => (u as UserIdLike)._id.toString())
+  );
 
-  const adminUserObj: any = populatedGroup.adminUserId;
-  const adminUserId = typeof adminUserObj === 'object' ? adminUserObj._id.toString() : adminUserObj.toString();
+  const adminUserObj = populatedGroup.adminUserId as PopulatedAdminLike;
+  const adminUserId =
+    typeof adminUserObj === 'object' && adminUserObj !== null && '_id' in adminUserObj
+      ? adminUserObj._id.toString()
+      : String(adminUserObj);
 
   if (adminUserObj?.isDeleted) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community group does not exist');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_DOES_NOT_EXIST);
   }
   if (adminUserObj && adminUserObj?.blockedUsers && adminUserObj?.blockedUsers?.length > 0) {
-    const isBlocked = adminUserObj?.blockedUsers.some((user: any) => user.userId.toString() === userId?.toString());
+    const isBlocked = adminUserObj?.blockedUsers.some(
+      (user) => (user as unknown as BlockedUserRef).userId.toString() === userId?.toString()
+    );
     if (isBlocked) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+      throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.BLOCKED_FROM_GROUP);
     }
   }
   if (myBlockedUsers && myBlockedUsers?.blockedUsers && myBlockedUsers?.blockedUsers?.length > 0) {
-    const isBlocked = myBlockedUsers?.blockedUsers.some((user: any) => user.userId.toString() === adminUserId?.toString());
+    const isBlocked = myBlockedUsers?.blockedUsers.some(
+      (user) => (user as unknown as BlockedUserRef).userId.toString() === adminUserId?.toString()
+    );
     if (isBlocked) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked from this community group');
+      throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.BLOCKED_FROM_GROUP);
     }
   }
 
   const memberProfiles = await UserProfile.find({ users_id: { $in: userIds } }, { users_id: 1, blockedUsers: 1 }).lean();
 
   const memberBlockedMap = new Map(
-    memberProfiles.map((p: any) => [
+    (memberProfiles as unknown as MemberProfileLean[]).map((p) => [
       p.users_id.toString(),
-      new Set((p.blockedUsers || []).map((b: any) => b.userId.toString())),
+      new Set((p.blockedUsers || []).map((b) => (b as unknown as BlockedUserRef).userId.toString())),
     ])
   );
-  const myBlockedUserIds = new Set(myBlockedUsers?.blockedUsers?.map((b: any) => b.userId.toString()) || []);
-  populatedGroup.users = populatedGroup.users.filter((u: any) => {
+  const myBlockedUserIds = new Set(
+    myBlockedUsers?.blockedUsers?.map((b) => (b as unknown as BlockedUserRef).userId.toString()) || []
+  );
+  populatedGroup.users = populatedGroup.users.filter((u: UsersSchema) => {
     const memberId = u._id.toString();
 
     if (deletedUserIds.has(memberId)) return false;
@@ -574,11 +673,11 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     return true;
   });
   if (!populatedGroup.isCommunityGroupLive && adminUserId !== userId && !communityAdminId) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
   }
 
   if (Array.isArray(populatedGroup.users)) {
-    populatedGroup.users.sort((a: any, b: any) => {
+    populatedGroup.users.sort((a: UsersSchema, b: UsersSchema) => {
       const isAAdmin = a._id.toString() === adminUserId;
       const isBAdmin = b._id.toString() === adminUserId;
 
@@ -598,27 +697,26 @@ export const joinCommunityGroup = async (
   isAdmin: boolean = false,
   isCreatorAdmin: boolean = false
 ) => {
-  //   asd
   try {
     const [user, userProfile] = await Promise.all([
       getUserById(new mongoose.Types.ObjectId(userID)),
       userProfileService.getUserProfileById(String(userID)),
     ]);
     if (!user) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
     }
 
     if (!userProfile) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
     }
 
     const communityGroup = await getCommunityGroup(groupId);
     if (!communityGroup) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
     }
 
     if (!communityGroup.isCommunityGroupLive && communityGroup.adminUserId.toString() !== userID) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group is not live');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
     }
 
     //check if community is private and user is verified
@@ -628,7 +726,7 @@ export const joinCommunityGroup = async (
     );
 
     if (!isUserVerified && isCommunityPrivate) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'You are not verified to join this community');
+      throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.NOT_VERIFIED_TO_JOIN);
     }
 
     const community = await communityService.getCommunity(String(communityGroup.communityId));
@@ -637,36 +735,20 @@ export const joinCommunityGroup = async (
 
     const userIDSet = new Set(communityUsersID);
 
-    if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, 'User not found in Community  ');
-    // const isUserVerifiedToJoin = userProfile.communities.some(
-    //   (community) => community.communityId.toString() === communityGroup.communityId.toString()
-    // );
-
-    // if (!isUserVerified) {
-    //   throw new ApiError(httpStatus.NOT_FOUND, 'User is not a member of this community');
-    // }
+    if (!userIDSet.has(userID)) throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND_IN_COMMUNITY);
 
     const userAlreadyMember = communityGroup.users.some((user) => user._id.toString() === userID && user.isRequestAccepted);
 
     if (userAlreadyMember) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a member of this community');
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.ALREADY_A_MEMBER);
     }
 
-    communityGroup.users.push({
-      _id: new mongoose.Types.ObjectId(userID),
-      firstName: user.firstName,
-      lastName: user.lastName,
-      profileImageUrl: userProfile.profile_dp?.imageUrl || null,
-      universityName: userProfile.university_name as string,
-      year: userProfile.study_year as string,
-      degree: userProfile.degree as string,
-      major: userProfile.major as string,
-      isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
-      status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
-      occupation: userProfile.occupation as string,
-      affiliation: userProfile.affiliation as string,
-      role: userProfile.role,
-    });
+    communityGroup.users.push(
+      buildGroupMemberFromUserAndProfile(user, userProfile, {
+        isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
+        status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+      }) as unknown as UsersSchema
+    );
 
     if (isAdmin && Array.isArray(communityAdminIds) && communityAdminIds.length > 0 && isCreatorAdmin) {
       const adminDetails = await Promise.all(
@@ -683,21 +765,12 @@ export const joinCommunityGroup = async (
 
       for (const { adminUser, adminProfile } of adminDetails) {
         if (adminUser && adminProfile && !existingUserIds.has(adminUser._id.toString())) {
-          communityGroup.users.push({
-            _id: adminUser._id,
-            firstName: adminUser.firstName,
-            lastName: adminUser.lastName,
-            profileImageUrl: adminProfile.profile_dp?.imageUrl || null,
-            universityName: adminProfile.university_name as string,
-            year: adminProfile.study_year as string,
-            degree: adminProfile.degree as string,
-            major: adminProfile.major as string,
-            isRequestAccepted: true,
-            status: status.accepted,
-            occupation: adminProfile.occupation as string,
-            affiliation: adminProfile.affiliation as string,
-            role: adminProfile.role || 'admin',
-          });
+          communityGroup.users.push(
+            buildGroupMemberFromUserAndProfile(adminUser, { ...adminProfile, role: adminProfile.role || 'admin' }, {
+              isRequestAccepted: true,
+              status: status.accepted,
+            }) as unknown as UsersSchema
+          );
         }
       }
     }
@@ -723,29 +796,7 @@ export const joinCommunityGroup = async (
       }
     );
 
-    //const joinCommunity = userProfile.communities.find(
-    //  (c) => c.communityId.toString() === communityGroup.communityId.toString()
-    //) as UserCommunities;
 
-    //if (joinCommunity) {
-    //  const newGroupMember: UserCommunityGroup = {
-    //    id: groupId,
-    //    status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
-    //  };
-
-    //  // Initialize array if it doesn't exist
-    //  if (!joinCommunity.communityGroup) {
-    //    joinCommunity.communityGroup = [];
-    //  }
-
-    //  joinCommunity.communityGroup.push(newGroupMember);
-
-    //  // Explicitly mark the modified path
-    //  userProfile.markModified('communities');
-
-    //  userProfile.communities, 'userProfile');
-    //  await userProfile.save();
-    //}
 
     if (isCommunityPrivate && !isAdmin) {
       const notificationPayload = {
@@ -770,10 +821,16 @@ export const joinCommunityGroup = async (
 
       return { success: true, message: 'Request sent successfully', isGroupPrivate: true };
     } else {
+      const plainProfile = updateUserProfile?.toObject();
+
+      const updatedCommunities = plainProfile?.communities.map((community: UserCommunities) => ({
+        ...community,
+        communityGroups: []
+      }));
       return {
         success: true,
         message: 'Successfully joined the community group',
-        data: { communityGroup, communities: updateUserProfile?.communities, isGroupPrivate: false },
+        data: { communityGroup, communities: updatedCommunities, isGroupPrivate: false },
       };
     }
   } catch (error: any) {
@@ -792,19 +849,19 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
     ]);
 
     if (!user) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
     }
 
     if (!communityGroup) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
     }
-    if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+    if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
 
     // Check if the user is a member of the communityGroup
     const userIndex = communityGroup.users.findIndex((groupUser) => groupUser._id.toString() === userID);
 
     if (userIndex === -1) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.NOT_A_MEMBER);
     }
 
     // Remove the user from the community's users array
@@ -831,7 +888,14 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
 
     communityGroup.users = filteredUsers;
 
-    return { communityGroup, communities: updatedUserProfile.communities };
+    const plainProfile = updatedUserProfile.toObject();
+
+    const updatedCommunities = plainProfile?.communities.map((community: UserCommunities) => ({
+      ...community,
+      communityGroups: []
+    }));
+
+    return { communityGroup, communities: updatedCommunities };
   } catch (error: any) {
     console.error(error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
@@ -841,27 +905,18 @@ export const leaveCommunityGroup = async (userID: string, groupId: string) => {
 export const acceptPrivateCommunityGroupRequest = async (userId: string, communityGroupId: string) => {
   try {
     if (!communityGroupId || !userId) {
-      throw new Error('Invalid communityGroupId or userId');
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_OR_USER_ID);
     }
 
-    const updatedGroup = await communityGroupModel.findOneAndUpdate(
-      { _id: communityGroupId, 'users._id': userId },
-      {
-        $set: {
-          'users.$.isRequestAccepted': true,
-          'users.$.status': status.accepted,
-        },
-      },
-      { new: true }
-    );
+    const updatedGroup = await updateGroupMemberStatus(communityGroupId, userId, true, status.accepted);
 
     if (!updatedGroup) {
-      throw new Error('Community group or user not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND_OR_USER);
     }
 
     return updatedGroup;
   } catch (error: any) {
-    throw new Error(error.message);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_ACCEPTING_PRIVATE_GROUP_REQUEST);
   }
 };
 
@@ -874,14 +929,14 @@ export const getCommunityGroupMembers = async (
 ) => {
   try {
     if (!communityGroupId) {
-      throw new Error('Invalid communityGroupId');
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_SHORT);
     }
 
     const groupId = new Types.ObjectId(communityGroupId);
 
     const communityGroup = await getCommunityGroupByObjectId(communityGroupId);
     if (!communityGroup) {
-      throw new Error('Community group not found');
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
     }
 
     const currentUserProfile = await UserProfile.findOne(
@@ -897,144 +952,35 @@ export const getCommunityGroupMembers = async (
     const communityId = communityGroup.communityId;
 
     if (!communityId) {
-      throw new Error('Community reference missing in group');
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.COMMUNITY_REFERENCE_MISSING);
     }
 
-    const pipeline: PipelineStage[] = [
-      { $match: { _id: groupId } },
+    const blockedUserObjectIds = (blockedUserIds || []).map((id) =>
+      id instanceof Types.ObjectId ? id : new Types.ObjectId(id.toString())
+    );
 
-      { $unwind: '$users' },
-
-      { $match: { 'users.status': targetStatus } },
-
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'users._id',
-          foreignField: '_id',
-          as: 'userDoc',
-        },
-      },
-      { $unwind: '$userDoc' },
-      {
-        $lookup: {
-          from: 'userprofiles',
-          let: { memberUserId: '$userDoc._id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $eq: ['$users_id', '$$memberUserId'],
-                },
-              },
-            },
-            {
-              $project: {
-                blockedUsers: 1,
-              },
-            },
-          ],
-          as: 'memberProfile',
-        },
-      },
-      {
-        $unwind: {
-          path: '$memberProfile',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-
-      {
-        $match: {
-          'userDoc.isDeleted': { $ne: true },
-          'userDoc._id': { $nin: blockedUserIds },
-          'memberProfile.blockedUsers': {
-            $not: {
-              $elemMatch: {
-                userId: new Types.ObjectId(userId),
-              },
-            },
-          },
-        },
-      },
-
-      {
-        $lookup: {
-          from: 'communities',
-          let: { userId: '$users._id' },
-          pipeline: [
-            { $match: { _id: new Types.ObjectId(communityId) } },
-            { $unwind: '$users' },
-            {
-              $match: {
-                $expr: {
-                  $eq: [{ $toString: '$users._id' }, { $toString: '$$userId' }],
-                },
-              },
-            },
-            { $project: { 'users.isVerified': 1 } },
-          ],
-          as: 'communityUser',
-        },
-      },
-      { $unwind: { path: '$communityUser', preserveNullAndEmptyArrays: true } },
-
-      {
-        $addFields: {
-          'users.isAdmin': {
-            $eq: ['$users._id', new Types.ObjectId(adminId)],
-          },
-          'users.isVerified': '$communityUser.users.isVerified',
-        },
-      },
-
-      {
-        $sort: {
-          'users.isAdmin': -1,
-          'users.firstName': 1,
-        },
-      },
-
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
-
-      {
-        $group: {
-          _id: '$_id',
-          users: { $push: '$users' },
-        },
-      },
-    ];
+    const pipeline = buildCommunityGroupMembersDataPipeline(
+      groupId,
+      targetStatus,
+      blockedUserObjectIds,
+      userId,
+      adminId,
+      communityId,
+      page,
+      limit
+    );
 
     const results = await communityGroupModel.aggregate(pipeline);
     const users = results[0]?.users || [];
 
-    const totalPipeline: PipelineStage[] = [
-      { $match: { _id: groupId } },
-      { $unwind: '$users' },
-      { $match: { 'users.status': targetStatus } },
-
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'users._id',
-          foreignField: '_id',
-          as: 'userDoc',
-        },
-      },
-      { $unwind: '$userDoc' },
-
-      { $match: { 'userDoc.isDeleted': { $ne: true } } },
-
-      { $count: 'total' },
-    ];
+    const totalPipeline = buildCommunityGroupMembersCountPipeline(groupId, targetStatus);
 
     const totalResult = await communityGroupModel.aggregate(totalPipeline);
     const totalCount = totalResult[0]?.total || 0;
     const totalPages = Math.ceil(totalCount / limit);
 
     return {
-      data: users.map((u: any) => ({
+      data: (users as MemberWithVerified[]).map((u) => ({
         ...u,
         isVerified: u.isVerified ?? false,
       })),
@@ -1044,6 +990,6 @@ export const getCommunityGroupMembers = async (
       totalPages,
     };
   } catch (error: any) {
-    throw new Error(error.message);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_FETCHING_MEMBERS);
   }
 };

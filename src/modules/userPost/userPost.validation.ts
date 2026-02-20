@@ -23,11 +23,14 @@ export const getAllUserPosts = {
 };
 
 export const createUserPost = {
-  body: Joi.object().keys({
-    content: Joi.string().required(),
-    imageUrl: Joi.array().items(imageUrlItem).optional(),
+ body: Joi.object().keys({
     PostType: Joi.string().valid('PUBLIC', 'FOLLOWER_ONLY', 'MUTUAL', 'ONLY_ME').optional(),
-  }),
+  })
+  .keys({
+    content: Joi.string().required().allow(''),
+    imageUrl: Joi.array().items(imageUrlItem).optional(),
+  })
+  .min(1),
 };
 
 export const getAllTimelinePosts = {

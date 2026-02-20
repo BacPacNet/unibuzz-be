@@ -724,7 +724,7 @@
 //       type: notificationRoleAccess.REJECTED_OFFICIAL_GROUP_REQUEST,
 //     });
 
-//     await communityGroupService.RejectCommunityGroupApproval(groupObjectId);
+//     await communityGroupService.rejectCommunityGroupApproval(groupObjectId);
 //     //   }
 //   } catch (error) {
 //     logger.error('Error in CreateRejectedOfficialGroupRequestNotification:', error);
