@@ -1,38 +1,64 @@
+import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
 import { userIdAuth } from '../../modules/user';
-import { communityController } from '../../modules/community';
-import { Router } from 'express';
-import {
-  getCommunityUsersController,
-  getCommunityUsersWithfilterController,
-} from '../../modules/community/community.controller';
-import { requireCommunityMember } from '../../modules/community';
+import { communityController, communityValidation, requireCommunityMember } from '../../modules/community';
+import { noErrorUserIdAuth } from '../../modules/user/user.middleware';
 
-const router: Router = Router();
+const router: Router = express.Router();
 
 router.route('/').get(userIdAuth, communityController.getAllUserCommunity);
 
 // query-params:
 // isVerified: boolean,searchQuery: string,page: number,limit: number,
-router.route('/:communityId/users').get(userIdAuth, requireCommunityMember, getCommunityUsersController);
+router
+  .route('/:communityId/users')
+  .get(
+    userIdAuth,
+    validate(communityValidation.getCommunityUsers),
+    requireCommunityMember,
+    communityController.getCommunityUsersController
+  );
 
 // query-params:
 // isVerified: boolean,searchQuery: string,page: number,limit: number,
-router.route('/:communityId/filteredusers').get(userIdAuth, requireCommunityMember, getCommunityUsersWithfilterController);
+router
+  .route('/:communityId/filteredusers')
+  .get(
+    userIdAuth,
+    validate(communityValidation.getCommunityUsersWithFilter),
+    requireCommunityMember,
+    communityController.getCommunityUsersWithfilterController
+  );
 
 router
   .route('/filtered/:communityId')
-  .post(userIdAuth, requireCommunityMember, communityController.getFilteredUserCommunity);
+  .post(
+    userIdAuth,
+    validate(communityValidation.getFilteredUserCommunity),
+    requireCommunityMember,
+    communityController.getFilteredUserCommunity
+  );
 
-router.route('/:communityId').get(communityController.getCommunity);
+router
+  .route('/:communityId')
+  .get(noErrorUserIdAuth, validate(communityValidation.getCommunity), communityController.getCommunity);
 
-// router.route('/:communityId').put(userIdAuth, requireVerifiedCommunityMember, communityController.updateCommunity);
 
-router.route('/uni/:universityId').get(userIdAuth, communityController.getCommunityFromUniversityID);
+router
+  .route('/:communityId/join')
+  .put(userIdAuth, validate(communityValidation.joinCommunity), communityController.joinCommunity);
 
-router.route('/:communityId/join').put(userIdAuth, communityController.joinCommunity);
+router
+  .route('/join')
+  .post(userIdAuth, validate(communityValidation.joinCommunityFromUniversity), communityController.joinCommunityFromUniversity);
 
-router.route('/join').post(userIdAuth, communityController.joinCommunityFromUniversity);
-
-router.route('/:communityId/leave').delete(userIdAuth, requireCommunityMember, communityController.leaveCommunity);
+router
+  .route('/:communityId/leave')
+  .delete(
+    userIdAuth,
+    validate(communityValidation.leaveCommunity),
+    requireCommunityMember,
+    communityController.leaveCommunity
+  );
 
 export default router;

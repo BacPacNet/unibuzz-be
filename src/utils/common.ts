@@ -85,3 +85,19 @@ export const getPaginationSkip = (page: number, limit: number): number => (page 
  * Returns total number of pages for a given total count and limit.
  */
 export const computeTotalPages = (total: number, limit: number): number => Math.ceil(total / limit);
+
+/**
+ * Builds a consistent pagination response object.
+ */
+export function buildPaginationResponse(
+  total: number,
+  page: number,
+  limit: number
+): { total: number; page: number; limit: number; totalPages: number } {
+  return {
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}

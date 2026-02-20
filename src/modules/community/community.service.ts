@@ -3,18 +3,42 @@ import { ApiError } from '../errors';
 import communityModel from './community.model';
 import { User } from '../user';
 import { userProfileService, UserProfile } from '../userProfile';
+import { BlockedUserEntry } from '../userProfile/userProfile.interface';
 import mongoose, { PipelineStage } from 'mongoose';
-import { getUserById } from '../user/user.service';
-import { communityService } from '.';
 import UniversityModel, { IUniversity } from '../university/university.model';
-import { getUserProfileById } from '../userProfile/userProfile.service';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
-import { convertToObjectId } from '../../utils/common';
-import { GetCommunityUsersOptions } from './community.interface';
-import { CommunityGroupType } from '../../config/community.type';
-import { status } from '../communityGroup/communityGroup.interface';
+import { convertToObjectId, buildPaginationResponse } from '../../utils/common';
+import { GetCommunityUsersOptions, GetUserFilteredCommunitiesResult, communityInterface } from './community.interface';
+import type { HydratedDocument } from 'mongoose';
 import config from '../../config/config';
 import { communityGroupService } from '../communityGroup';
+import {
+  CommunityGroupFilters,
+  buildFilteredCommunitiesBasePipeline,
+  buildGroupVisibilityFilterStage,
+  buildTypeAndLabelFilterStage,
+  buildSelectedFiltersStage,
+  buildCommunityGroupsSortStages,
+  buildCommunityUsersBasePipeline,
+  buildCommunityGroupUsersExclusionStage,
+  buildVerifiedUsersFilterStage,
+  buildUserFieldsExtractionStage,
+  buildUserProfileLookupStage,
+  buildBlockedUsersFilterStage,
+  buildBlockedUsersFilterStageForProfileRoot,
+  buildUserLookupAndFilterStage,
+  buildUserFieldsAddStage,
+  buildSearchQueryFilterStage,
+  buildPaginationFacetStage,
+  buildUserCommunitiesBasePipeline,
+  buildUserInCommunityCheckStage,
+  // buildUserCommunitiesGroupFilterStage,
+  buildUserCommunitiesProjectStage,
+  buildUserCommunitiesUsersFilterStage,
+  buildCommunityGroupsProjectStage,
+  buildCommunityUsersServiceBaseStages,
+  buildCommunityUsersServiceSearchStage,
+} from './community.pipeline';
 
 export const createCommunity = async (
   name: string,
@@ -40,11 +64,70 @@ export const createCommunity = async (
   return await communityModel.create(data);
 };
 
-export const getCommunity = async (communityId: string) => {
-  return await communityModel.findById(communityId);
+export const getCommunity = async (
+  communityId: string,
+  options?: { currentUserId?: string }
+) => {
+  const id = convertToObjectId(communityId);
+  if (options?.currentUserId) {
+    const userId = convertToObjectId(options.currentUserId);
+    const [community] = await communityModel.aggregate([
+      { $match: { _id: id } },
+      {
+        $project: {
+          communityCoverUrl: 1,
+          communityLogoUrl: 1,
+          name: 1,
+          university_id: 1,
+          about: 1,
+          communityGroups: 1,
+          adminId: 1,
+          numberOfStudent: 1,
+          numberOfFaculty: 1,
+          assistantId: 1,
+          users: {
+            $filter: {
+              input: '$users',
+              as: 'u',
+              cond: { $eq: ['$$u._id', userId] },
+            },
+          },
+        },
+      },
+    ]);
+    return community as communityInterface;
+  }
+  return await communityModel.findById(id).lean();
 };
-export const getCommunityFromUniversityId = async (universityId: string) => {
-  return await communityModel.findOne({ university_id: universityId });
+
+
+/**
+ * Finds a community by ID. Throws ApiError if not found.
+ */
+const getCommunityOrThrow = async (communityId: string, options?: { lean?: boolean }) => {
+  const query = communityModel.findById(convertToObjectId(communityId));
+  const community = options?.lean ? await query.lean() : await query;
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+  return community;
+};
+
+/**
+ * Fetches user and user profile by user ID. Throws ApiError if either is not found.
+ */
+const getUserAndProfileOrThrow = async (userID: string) => {
+  const [user, userProfile] = await Promise.all([
+    User.findById(userID).lean(),
+    userProfileService.getUserProfileById(userID),
+  ]);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  if (!userProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found');
+  }
+  return { user, userProfile };
 };
 
 /**
@@ -54,7 +137,7 @@ export const getCommunityFromUniversityId = async (universityId: string) => {
 export const findOrCreateCommunityByUniversityName = async (
   universityName: string,
   createdByUserId: string
-): Promise<any> => {
+): Promise<HydratedDocument<communityInterface>> => {
   let community = await communityModel.findOne({ name: universityName });
   if (community) {
     return community;
@@ -88,120 +171,27 @@ export const findOrCreateCommunityByUniversityName = async (
 
 export const getUserCommunities = async (userID: string) => {
   try {
-    const user = await User.findById(userID).lean();
-    if (!user) throw new Error('User not found');
+    const { userProfile } = await getUserAndProfileOrThrow(userID);
 
-    const userProfile = await userProfileService.getUserProfileById(userID);
-    if (!userProfile) throw new Error('User Profile not found');
+    const getAllUserCommunityIds = userProfile.communities.map((community) => {
+      const communityId = community.communityId instanceof mongoose.Types.ObjectId
+        ? community.communityId.toString()
+        : String(community.communityId);
+      return convertToObjectId(communityId);
+    });
+    const userObjectId = convertToObjectId(userID);
 
-    const getAllUserCommunityIds = userProfile.communities.map((community) => community.communityId);
+    const pipeline: PipelineStage[] = [
+      ...buildUserCommunitiesBasePipeline(getAllUserCommunityIds),
+      buildUserInCommunityCheckStage(userObjectId),
+      // buildUserCommunitiesGroupFilterStage(userObjectId),
+      ...(buildUserCommunitiesUsersFilterStage(userObjectId)
+      ? [buildUserCommunitiesUsersFilterStage(userObjectId)!]
+      : []),
+      buildUserCommunitiesProjectStage(),
+    ];
 
-    // First get all communities with their groups
-    // const communities = await communityModel.aggregate([
-    //   {
-    //     $match: { _id: { $in: getAllUserCommunityIds } },
-    //   },
-    //   {
-    //     $lookup: {
-    //       from: 'communitygroups',
-    //       localField: '_id',
-    //       foreignField: 'communityId',
-    //       as: 'communityGroups',
-    //     },
-    //   },
-    //   {
-    //     $addFields: {
-    //       communityGroups: {
-    //         $cond: {
-    //           if: {
-    //             $in: [new mongoose.Types.ObjectId(userID), '$users._id'],
-    //           },
-    //           then: '$communityGroups',
-    //           else: [],
-    //         },
-    //       },
-    //     },
-    //   },
-    // ]);
-
-    const userObjectId = new mongoose.Types.ObjectId(userID);
-
-    const communities = await communityModel.aggregate([
-      {
-        $match: { _id: { $in: getAllUserCommunityIds } },
-      },
-      {
-        $lookup: {
-          from: 'communitygroups',
-          localField: '_id',
-          foreignField: 'communityId',
-          as: 'communityGroups',
-        },
-      },
-      {
-        $addFields: {
-          // Determine if user is in this community
-          isUserInCommunity: {
-            $gt: [
-              {
-                $size: {
-                  $filter: {
-                    input: '$users',
-                    as: 'u',
-                    cond: { $eq: ['$$u._id', userObjectId] },
-                  },
-                },
-              },
-              0,
-            ],
-          },
-        },
-      },
-
-      {
-        // Filter communityGroups if user is not in the community
-        $addFields: {
-          communityGroups: {
-            $cond: {
-              if: '$isUserInCommunity',
-              then: {
-                $filter: {
-                  input: '$communityGroups',
-                  as: 'cg',
-                  cond: {
-                    $or: [
-                      // Always show if adminUserId is 123
-                      { $eq: ['$$cg.adminUserId', userObjectId] },
-
-                      // Otherwise, keep if NOT (CASUAL + pending/rejected)
-                      {
-                        $not: [
-                          {
-                            $and: [
-                              { $eq: ['$$cg.communityGroupType', CommunityGroupType.CASUAL] },
-                              {
-                                $or: [{ $eq: ['$$cg.status', status.pending] }, { $eq: ['$$cg.status', status.rejected] }],
-                              },
-                            ],
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                },
-              },
-              else: [],
-            },
-          },
-        },
-      },
-      {
-        // Optionally remove helper field
-        $project: {
-          isUserInCommunity: 0,
-        },
-      },
-    ]);
+    const communities = await communityModel.aggregate(pipeline);
 
     // Now enrich with verification status from userProfile
     const communitiesWithVerification = communities.map((community) => {
@@ -223,489 +213,76 @@ export const getUserFilteredCommunities = async (
   userID: string,
   communityId: string = '',
   sortBy: string,
-  filters?: {
-    selectedType?: string[];
-    selectedLabel?: string[];
-    selectedFilters?: Record<string, string[]>;
-  }
-): Promise<any[]> => {
+  filters?: CommunityGroupFilters
+): Promise<GetUserFilteredCommunitiesResult> => {
   try {
-    const user = await User.findById(userID).lean();
-    if (!user) throw new Error('User not found');
+    const { userProfile } = await getUserAndProfileOrThrow(userID);
 
-    const userProfile = await userProfileService.getUserProfileById(userID);
-    if (!userProfile) throw new Error('User Profile not found');
+    const myBlockedUserIds = new Set((userProfile.blockedUsers || []).map((u: BlockedUserEntry) => u.userId.toString()));
+    const userObjectId = convertToObjectId(userID);
 
-    const myBlockedUserIds = new Set((userProfile.blockedUsers || []).map((u: any) => u.userId.toString()));
-
-    const userObjectId = new mongoose.Types.ObjectId(userID);
+    const hasFilters = Boolean(
+      (filters?.selectedType && filters.selectedType.length > 0) ||
+        (filters?.selectedLabel && filters.selectedLabel.length > 0) ||
+        (filters?.selectedFilters && Object.keys(filters.selectedFilters || {}).length > 0)
+    );
 
     const pipeline: PipelineStage[] = [
-      { $match: { _id: new mongoose.Types.ObjectId(communityId) } },
-
-      {
-        $lookup: {
-          from: 'communitygroups',
-          localField: '_id',
-          foreignField: 'communityId',
-          as: 'communityGroups',
-        },
-      },
-
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'communityGroups.adminUserId',
-          foreignField: '_id',
-          as: 'groupAdmins',
-        },
-      },
-      {
-        $lookup: {
-          from: 'userprofiles',
-          localField: 'communityGroups.adminUserId',
-          foreignField: 'users_id',
-          as: 'adminProfiles',
-        },
-      },
-
-     
-      {
-        $addFields: {
-          communityGroups: {
-            $map: {
-              input: '$communityGroups',
-              as: 'group',
-              in: {
-                $mergeObjects: [
-                  '$$group',
-                  {
-                    admin: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$groupAdmins',
-                            as: 'a',
-                            cond: { $eq: ['$$a._id', '$$group.adminUserId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                    adminProfile: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$adminProfiles',
-                            as: 'p',
-                            cond: { $eq: ['$$p.users_id', '$$group.adminUserId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                ],
-              },
-            },
-          },
-        },
-      },
-
-
-      {
-        $addFields: {
-          communityGroups: {
-            $filter: {
-              input: '$communityGroups',
-              as: 'group',
-              cond: {
-                $and: [
-                  { $ne: ['$$group.admin.isDeleted', true] },
-
-                  {
-                    $not: {
-                      $in: [
-                        '$$group.adminUserId',
-                        Array.from(myBlockedUserIds).map((id) => new mongoose.Types.ObjectId(id)),
-                      ],
-                    },
-                  },
-
-                  {
-                    $not: {
-                      $anyElementTrue: {
-                        $map: {
-                          input: { $ifNull: ['$$group.adminProfile.blockedUsers', []] },
-                          as: 'b',
-                          in: { $eq: ['$$b.userId', userObjectId] },
-                        },
-                      },
-                    },
-                  },
-                ],
-              },
-            },
-          },
-        },
-      },
+      ...buildFilteredCommunitiesBasePipeline(communityId, userObjectId, myBlockedUserIds),
+      buildGroupVisibilityFilterStage(userObjectId, hasFilters),
     ];
 
-    const hasFilters =
-      (filters?.selectedType && filters.selectedType.length > 0) ||
-      (filters?.selectedLabel && filters.selectedLabel.length > 0) ||
-      (filters?.selectedFilters && Object.keys(filters.selectedFilters).length > 0);
+    const typeLabelStage = filters ? buildTypeAndLabelFilterStage(filters) : null;
+    if (typeLabelStage) pipeline.push(typeLabelStage);
 
-    const groupFilterConditions: any[] = [];
-
-    if (!hasFilters) {
-      groupFilterConditions.push({
-        $eq: ['$$group.adminUserId', userObjectId],
-      });
-    }
-
-    groupFilterConditions.push({
-      $not: [
-        {
-          $and: [
-            { $eq: ['$$group.communityGroupType', 'casual'] },
-            {
-              $or: [{ $eq: ['$$group.status', 'pending'] }, { $eq: ['$$group.status', 'rejected'] }],
-            },
-          ],
-        },
-      ],
-    });
-
-    pipeline.push({
-      $addFields: {
-        communityGroups: {
-          $filter: {
-            input: '$communityGroups',
-            as: 'group',
-            cond: { $or: groupFilterConditions },
-          },
-        },
-      },
-    });
-
-    if (filters) {
-      const { selectedType, selectedFilters, selectedLabel } = filters;
-
-      if (selectedType?.length || selectedLabel?.length) {
-        const filterConditions: any[] = [];
-
-        if (selectedType?.length) {
-          const accessConditions: any[] = [];
-          const typeConditions: any[] = [];
-
-          if (selectedType.includes('Private')) {
-            accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Private'] });
-          }
-          if (selectedType.includes('Public')) {
-            accessConditions.push({ $eq: ['$$group.communityGroupAccess', 'Public'] });
-          }
-          if (selectedType.includes('Official')) {
-            typeConditions.push({ $eq: ['$$group.communityGroupType', 'official'] });
-          }
-          if (selectedType.includes('Casual')) {
-            typeConditions.push({ $eq: ['$$group.communityGroupType', 'casual'] });
-          }
-
-          if (accessConditions.length && typeConditions.length) {
-            filterConditions.push({
-              $or: [{ $and: accessConditions }, { $and: typeConditions }],
-            });
-          } else if (accessConditions.length) {
-            filterConditions.push({ $or: accessConditions });
-          } else if (typeConditions.length) {
-            filterConditions.push({ $or: typeConditions });
-          }
-        }
-
-        if (selectedLabel?.length) {
-          const labelConditions = selectedLabel.map((label) => ({
-            $eq: ['$$group.communityGroupLabel', label],
-          }));
-          filterConditions.push({ $or: labelConditions });
-        }
-
-        if (filterConditions.length > 0) {
-          pipeline.push({
-            $addFields: {
-              communityGroups: {
-                $filter: {
-                  input: '$communityGroups',
-                  as: 'group',
-                  cond: {
-                    $and: filterConditions,
-                  },
-                },
-              },
-            },
-          });
-        }
-      }
-
-      if (selectedFilters && Object.keys(selectedFilters).length > 0) {
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $filter: {
-                input: '$communityGroups',
-                as: 'group',
-                cond: {
-                  $anyElementTrue: {
-                    $map: {
-                      input: {
-                        $ifNull: [
-                          {
-                            $filter: {
-                              input: { $objectToArray: '$$group.communityGroupCategory' },
-                              as: 'category',
-                              cond: {
-                                $or: Object.entries(selectedFilters).map(([key, subcategories]) => ({
-                                  $and: [
-                                    { $eq: ['$$category.k', key] },
-                                    {
-                                      $anyElementTrue: {
-                                        $map: {
-                                          input: subcategories,
-                                          as: 'sub',
-                                          in: { $in: ['$$sub', '$$category.v'] },
-                                        },
-                                      },
-                                    },
-                                  ],
-                                })),
-                              },
-                            },
-                          },
-                          [],
-                        ],
-                      },
-                      as: 'matchedCategory',
-                      in: { $ne: ['$$matchedCategory', null] },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        });
-      }
+    if (filters?.selectedFilters && Object.keys(filters.selectedFilters).length > 0) {
+      pipeline.push(buildSelectedFiltersStage(filters.selectedFilters));
     }
 
     pipeline.push({ $project: { communityGroups: 1 } });
-
-    switch (sortBy) {
-      case 'name':
-      case 'alphabetAsc':
-        pipeline.push(
-          {
-            $addFields: {
-              communityGroups: {
-                $map: {
-                  input: '$communityGroups',
-                  as: 'group',
-                  in: {
-                    $mergeObjects: ['$$group', { lowerTitle: { $toLower: '$$group.title' } }],
-                  },
-                },
-              },
-            },
-          },
-          {
-            $addFields: {
-              communityGroups: {
-                $sortArray: {
-                  input: '$communityGroups',
-                  sortBy: { lowerTitle: 1 },
-                },
-              },
-            },
-          },
-          { $unset: 'communityGroups.lowerTitle' }
-        );
-        break;
-
-      case 'alphabetDesc':
-        pipeline.push(
-          {
-            $addFields: {
-              communityGroups: {
-                $map: {
-                  input: '$communityGroups',
-                  as: 'group',
-                  in: {
-                    $mergeObjects: [
-                      '$$group',
-                      {
-                        lowerTitle: {
-                          $cond: {
-                            if: { $isArray: ['$$group.title'] },
-                            then: '',
-                            else: { $toLower: '$$group.title' },
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-          },
-          {
-            $addFields: {
-              communityGroups: {
-                $sortArray: {
-                  input: '$communityGroups',
-                  sortBy: { lowerTitle: -1 },
-                },
-              },
-            },
-          },
-          { $unset: 'communityGroups.lowerTitle' }
-        );
-        break;
-
-      case 'users':
-        pipeline.push(
-          {
-            $addFields: {
-              communityGroups: {
-                $map: {
-                  input: '$communityGroups',
-                  as: 'group',
-                  in: {
-                    $mergeObjects: ['$$group', { userCount: { $size: '$$group.users' } }],
-                  },
-                },
-              },
-            },
-          },
-          {
-            $addFields: {
-              communityGroups: {
-                $sortArray: {
-                  input: '$communityGroups',
-                  sortBy: { userCount: -1 },
-                },
-              },
-            },
-          },
-          { $unset: 'communityGroups.userCount' }
-        );
-        break;
-
-      case 'userCountDesc':
-      case 'userCountAsc':
-        pipeline.push(
-          {
-            $addFields: {
-              communityGroups: {
-                $map: {
-                  input: '$communityGroups',
-                  as: 'group',
-                  in: {
-                    $mergeObjects: [
-                      '$$group',
-                      {
-                        userCount: {
-                          $size: {
-                            $filter: {
-                              input: '$$group.users',
-                              as: 'user',
-                              cond: { $eq: ['$$user.status', 'accepted'] },
-                            },
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-          },
-          {
-            $addFields: {
-              communityGroups: {
-                $sortArray: {
-                  input: '$communityGroups',
-                  sortBy: {
-                    userCount: sortBy === 'userCountAsc' ? 1 : -1,
-                  },
-                },
-              },
-            },
-          },
-          { $unset: 'communityGroups.userCount' }
-        );
-        break;
-
-      case 'latest':
-        pipeline.push({
-          $addFields: {
-            communityGroups: {
-              $sortArray: {
-                input: '$communityGroups',
-                sortBy: { createdAt: -1 },
-              },
-            },
-          },
-        });
-        break;
-
-      default:
-        break;
-    }
+    pipeline.push(...buildCommunityGroupsSortStages(sortBy));
+    pipeline.push(buildCommunityGroupsProjectStage());
 
     const communities = await communityModel.aggregate(pipeline);
-    return communities.length ? communities[0] : { _id: communityId, communityGroups: [] };
+    return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
   }
 };
 
-export const updateCommunity = async (id: string, community: any) => {
-  let communityToUpadate;
+export const updateCommunity = async (id: string, community: Partial<communityInterface>) => {
+  const communityToUpdate = await communityModel.findById(id);
 
-  communityToUpadate = await communityModel.findById(id);
-
-  if (!communityToUpadate) {
+  if (!communityToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
   }
-  Object.assign(communityToUpadate, community);
-  await communityToUpadate.save();
-  return communityToUpadate;
+  Object.assign(communityToUpdate, community);
+  await communityToUpdate.save();
+  return communityToUpdate;
 };
 
-export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string, isVerfied: boolean = false) => {
-  const user = await getUserById(userId);
-  const userProfile = await userProfileService.getUserProfileById(String(userId));
-
-  if (!user || !userProfile) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-  }
+export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId: string, isVerified: boolean = false) => {
+  const { user, userProfile } = await getUserAndProfileOrThrow(String(userId));
 
   const community = await communityModel.findOne({ _id: communityId, 'users._id': userId });
 
-  if (community && !isVerfied) {
+  if (community && !isVerified) {
     throw new ApiError(httpStatus.CONFLICT, 'User is already a member of this community');
   }
 
-  const communityToJoin = await communityModel.findById(communityId);
-  let isCommunityVerified = userProfile?.email.some(
-    (userCommunity) => userCommunity.communityId.toString() === communityToJoin?._id.toString()
+  const communityToJoin = await getCommunityOrThrow(communityId);
+
+  const isCommunityVerified = userProfile.email.some(
+    (userCommunity) => userCommunity.communityId.toString() === communityToJoin._id.toString()
   );
 
-  let isAlreadyJoined = userProfile.communities.some(
-    (community) => community.communityId.toString() === communityId.toString()
+  const isAlreadyJoined = userProfile.communities.some(
+    (c) => c.communityId.toString() === communityId.toString()
   );
 
   if (!isAlreadyJoined) {
-    userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerfied, communityGroups: [] });
+    userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerified, communityGroups: [] });
     await userProfile.save();
   }
 
@@ -731,7 +308,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
             occupation: userProfile.occupation,
             affiliation: userProfile.affiliation,
             role: userProfile.role,
-            isVerified: isVerfied || isCommunityVerified,
+            isVerified: isVerified || isCommunityVerified,
           },
         },
       }
@@ -741,30 +318,36 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
       { _id: communityId, 'users._id': user._id },
       {
         $set: {
-          'users.$.isVerified': isVerfied || isCommunityVerified,
+          'users.$.isVerified': isVerified || isCommunityVerified,
         },
       }
     );
   }
+
+  userProfile.followers =[]
+  userProfile.following =[]
+  userProfile.blockedUsers =[]
+  userProfile.statusChangeHistory =[]
+
   return userProfile;
 };
 
-export const joinCommunityFromUniversity = async (userId: string, universityId: string, isVerfied: boolean = false) => {
+export const joinCommunityFromUniversity = async (userId: string, universityId: string, isVerified: boolean = false) => {
   const fetchUniversity = await UniversityModel.findById(universityId);
   if (!fetchUniversity) {
-    throw new Error('University not found');
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
   }
   try {
     let community = await communityModel.findOne({ university_id: universityId });
-    let userProfile = await getUserProfileById(userId);
+    let userProfile = await userProfileService.getUserProfileById(userId);
     let numberOfUnverifiedJoinCommunity =
-      userProfile?.communities?.reduce((acc, community) => (community?.isVerified === false ? acc + 1 : acc), 0) || 0;
+      userProfile?.communities?.reduce((acc, c) => (c?.isVerified === false ? acc + 1 : acc), 0) || 0;
 
     let isCommunityVerified = userProfile?.email.some(
       (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
     );
     if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
-      return new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
+      throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
     }
     if (!community) {
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
@@ -781,36 +364,23 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
       });
       await UniversityModel.updateOne({ _id: universityId }, { $set: { communityId: community._id } });
     }
-    const updatedUserProfile = await communityService.joinCommunity(
-      new mongoose.Types.ObjectId(userId),
+    const updatedUserProfile = await joinCommunity(
+      convertToObjectId(userId),
       (community?._id).toString(),
-      isCommunityVerified || isVerfied
+      isCommunityVerified || isVerified
     );
 
     return { message: 'Joined successfully', data: { profile: updatedUserProfile, community: community } };
-  } catch (error: any) {
-    console.log('errrr', error);
-
-    throw new Error(error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, message);
   }
 };
 
 export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
   try {
-    // Fetch user and profile in parallel
-    const [user, userProfile, community] = await Promise.all([
-      getUserById(userId),
-      userProfileService.getUserProfileById(String(userId)),
-      getCommunity(communityId),
-    ]);
-
-    if (!user || !userProfile) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    }
-
-    if (!community) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
-    }
+    const { userProfile } = await getUserAndProfileOrThrow(String(userId));
+    await getCommunityOrThrow(communityId);
 
     // Remove community from user's profile
     const communityIndex = userProfile.communities.findIndex((c) => c.communityId.toString() === communityId.toString());
@@ -820,6 +390,10 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     }
 
     userProfile.communities.splice(communityIndex, 1);
+    userProfile.communities = userProfile?.communities?.map((c) => {
+        c.communityGroups = [];
+        return c;
+      }) || [];
     await userProfile.save();
 
     // Remove user from the community users list using atomic update
@@ -832,9 +406,10 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
       message: 'You have left the community',
       data: { communities: userProfile.communities },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in leaveCommunity:', error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, message);
   }
 };
 
@@ -844,122 +419,33 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
 
     const myProfile = await UserProfile.findOne({ users_id: userId }, { blockedUsers: 1 }).lean();
 
-    const myBlockedUserIds = myProfile?.blockedUsers?.map((b: any) => convertToObjectId(b.userId)) || [];
+    const myBlockedUserIds = myProfile?.blockedUsers?.map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString())) || [];
 
     const currentUserObjectId = convertToObjectId(options.userId);
 
     const communityGroup = communityGroupId
       ? await communityGroupService.getCommunityGroupByObjectId(communityGroupId as string)
       : null;
-    const communityGroupUsers = communityGroup?.users.map((user) => user._id);
+    const communityGroupUsers = communityGroup?.users.map((user) => user._id as mongoose.Types.ObjectId);
 
-    const pipeline: any[] = [{ $match: { _id: convertToObjectId(communityId) } }, { $unwind: '$users' }];
+    const pipeline: PipelineStage[] = [...buildCommunityUsersBasePipeline(communityId)];
 
-    if (communityGroupUsers?.length) {
-      pipeline.push({
-        $match: {
-          'users._id': { $nin: communityGroupUsers },
-        },
-      });
-    }
+    const exclusionStage = buildCommunityGroupUsersExclusionStage(communityGroupUsers || []);
+    if (exclusionStage) pipeline.push(exclusionStage);
 
-    if (isVerified) {
-      pipeline.push({ $match: { 'users.isVerified': true } });
-    }
+    const verifiedStage = buildVerifiedUsersFilterStage(isVerified || false);
+    if (verifiedStage) pipeline.push(verifiedStage);
 
-    pipeline.push({
-      $addFields: {
-        users_id: '$users._id',
-        isVerified: '$users.isVerified',
-      },
-    });
+    pipeline.push(...buildUserFieldsExtractionStage());
+    pipeline.push(...buildUserProfileLookupStage());
+    pipeline.push(buildBlockedUsersFilterStage(myBlockedUserIds, currentUserObjectId));
+    pipeline.push(...buildUserLookupAndFilterStage());
+    pipeline.push(buildUserFieldsAddStage());
 
-    pipeline.push({
-      $replaceRoot: { newRoot: { users_id: '$users_id', isVerified: '$isVerified' } },
-    });
+    const searchStage = buildSearchQueryFilterStage(searchQuery || '');
+    if (searchStage) pipeline.push(searchStage);
 
-    pipeline.push({
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'users_id',
-        foreignField: 'users_id',
-        as: 'profile',
-      },
-    });
-    pipeline.push({ $unwind: '$profile' });
-    pipeline.push({
-      $match: {
-        users_id: { $nin: myBlockedUserIds },
-
-        'profile.blockedUsers': {
-          $not: {
-            $elemMatch: {
-              userId: currentUserObjectId,
-            },
-          },
-        },
-      },
-    });
-    pipeline.push({
-      $lookup: {
-        from: 'users',
-        localField: 'users_id',
-        foreignField: '_id',
-        as: 'user',
-      },
-    });
-    pipeline.push({ $unwind: '$user' });
-    pipeline.push({ $match: { 'user.isDeleted': { $ne: true } } });
-
-    pipeline.push({
-      $addFields: {
-        firstName: '$user.firstName',
-        lastName: '$user.lastName',
-        createdAt: '$user.createdAt',
-      },
-    });
-
-    if (searchQuery && searchQuery.trim() !== '') {
-      const terms = searchQuery.trim().split(/\s+/);
-
-      const searchConditions = terms.map((term) => {
-        const regex = new RegExp(term, 'i');
-        return {
-          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
-        };
-      });
-
-      pipeline.push({
-        $match: { $and: searchConditions },
-      });
-    }
-
-    const skip = (page - 1) * limit;
-
-    pipeline.push({
-      $facet: {
-        data: [
-          { $skip: skip },
-          { $limit: limit },
-          {
-            $replaceRoot: {
-              newRoot: {
-                $mergeObjects: [
-                  '$profile',
-                  {
-                    firstName: '$user.firstName',
-                    lastName: '$user.lastName',
-                    createdAt: '$user.createdAt',
-                    isVerified: '$isVerified',
-                  },
-                ],
-              },
-            },
-          },
-        ],
-        totalCount: [{ $count: 'total' }],
-      },
-    });
+    pipeline.push(buildPaginationFacetStage(page, limit));
 
     const result = await communityModel.aggregate(pipeline);
     const data = result[0]?.data ?? [];
@@ -967,16 +453,12 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
 
     return {
       data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: buildPaginationResponse(total, page, limit),
     };
-  } catch (error: any) {
-    console.error('Error in getCommunityUsersService:', error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+  } catch (error: unknown) {
+    console.error('Error in getCommunityUsersByFilterService:', error);
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, message);
   }
 };
 
@@ -984,10 +466,12 @@ export const getCommunityUsersService = async (communityId: string, options: Get
   try {
     const { isVerified, searchQuery, page = 1, limit = 10 } = options;
 
-    const community = await communityModel.findById(convertToObjectId(communityId)).lean();
-    if (!community) {
-      throw new Error('Community not found');
-    }
+    const myProfile = await UserProfile.findOne({ users_id: options.userId }, { blockedUsers: 1 }).lean();
+    const myBlockedUserIds =
+      myProfile?.blockedUsers?.map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString())) || [];
+    const currentUserObjectId = convertToObjectId(options.userId);
+
+    const community = await getCommunityOrThrow(communityId, { lean: true });
 
     let userList = community.users;
     if (isVerified) {
@@ -996,139 +480,40 @@ export const getCommunityUsersService = async (communityId: string, options: Get
 
     const userIds = userList.map((u) => u._id);
 
-    const matchStage: any = { users_id: { $in: userIds } };
+    const baseStages = buildCommunityUsersServiceBaseStages(userIds);
+    const searchStage = buildCommunityUsersServiceSearchStage(searchQuery || '');
+    const blockedFilterStage = buildBlockedUsersFilterStageForProfileRoot(myBlockedUserIds, currentUserObjectId);
 
-    const pipeline: any[] = [
-      { $match: matchStage },
-      {
-        $lookup: {
-          from: 'users', // confirm collection name
-          localField: 'users_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      {
-        $unwind: {
-          path: '$user',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $addFields: {
-          firstName: '$user.firstName',
-          lastName: '$user.lastName',
-          createdAt: '$user.createdAt',
-        },
-      },
+    const dataPipeline: PipelineStage[] = [
+      ...baseStages,
+      blockedFilterStage,
+      ...(searchStage ? [searchStage] : []),
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      { $project: { user: 0,email:0,communities:0,following:0,followers:0,blockedUsers:0,statusChangeHistory:0 } },
+    ];
+    const countPipeline: PipelineStage[] = [
+      ...baseStages,
+      blockedFilterStage,
+      ...(searchStage ? [searchStage] : []),
+      { $count: 'total' },
     ];
 
-    if (searchQuery && searchQuery.trim() !== '') {
-      const regex = new RegExp(searchQuery.trim(), 'i');
-      pipeline.push({
-        $match: {
-          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
-        },
-      });
-    }
+    const [usersWithProfile, countResult] = await Promise.all([
+      UserProfile.aggregate(dataPipeline),
+      UserProfile.aggregate(countPipeline),
+    ]);
 
-    // Pagination
-    const skip = (page - 1) * limit;
-    pipeline.push({ $skip: skip });
-    pipeline.push({ $limit: limit });
-
-    pipeline.push({
-      $project: {
-        user: 0, // remove joined user object if not needed
-      },
-    });
-
-    const usersWithProfile = await UserProfile.aggregate(pipeline);
-
-    // Total count for pagination
-    const countPipeline: any[] = [
-      { $match: matchStage },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'users_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-      {
-        $addFields: {
-          firstName: '$user.firstName',
-          lastName: '$user.lastName',
-        },
-      },
-    ];
-
-    if (searchQuery && searchQuery.trim() !== '') {
-      const regex = new RegExp(searchQuery.trim(), 'i');
-      countPipeline.push({
-        $match: {
-          $or: [{ firstName: { $regex: regex } }, { lastName: { $regex: regex } }],
-        },
-      });
-    }
-
-    countPipeline.push({ $count: 'total' });
-    const countResult = await UserProfile.aggregate(countPipeline);
     const total = countResult[0]?.total ?? 0;
 
     return {
       data: usersWithProfile,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: buildPaginationResponse(total, page, limit),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in getCommunityUsersService:', error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, message);
   }
 };
 
-//export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityId: string) => {
-//  try {
-//    const user = await getUserById(userId);
-//    const userProfile = await userProfileService.getUserProfileById(String(userId));
-//    if (!user || !userProfile) {
-//      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-//    }
-
-//    const community = await getCommunity(communityId);
-//    if (!community) {
-//      throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
-//    }
-
-//    const communityIndex = userProfile.communities.findIndex(
-//      (community) => community.communityId.toString() === communityId.toString()
-//    );
-//    userProfile.communities.splice(communityIndex, 1);
-//    const updatedUserProfile = await userProfile.save();
-
-//    // Check if the user is a member of the communityGroup
-//    const userIndex = community.users.findIndex((user) => user._id.toString() === userId.toString());
-
-//    if (userIndex === -1) {
-//      throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
-//    }
-
-//    await cleanUpUserFromCommunityGroups(userId)
-
-//    // Remove the user from the community's users array
-//    community.users.splice(userIndex, 1);
-
-//    // Save the updated communityGroup
-//    await community.save();
-//    return { message: 'You have left the community', data: { community: updatedUserProfile.communities } };
-//  } catch (error: any) {
-//    console.error(error);
-//    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'An error occurred');
-//  }
-//};

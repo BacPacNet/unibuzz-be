@@ -39,4 +39,14 @@ interface GetCommunityUsersOptions {
   userId: string;
 }
 
-export { communityInterface, GetCommunityUsersOptions };
+/** Result shape of getUserFilteredCommunities (aggregate or empty fallback). */
+export interface GetUserFilteredCommunitiesResult {
+  _id: mongoose.Types.ObjectId | string;
+  communityGroups: unknown[];
+}
+
+/** Request body for CreateCommunity */
+interface CreateCommunityBody {
+  university_id: string;
+}
+export { communityInterface, GetCommunityUsersOptions,CreateCommunityBody };
