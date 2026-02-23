@@ -65,6 +65,7 @@ const envVarsSchema = Joi.object()
       })
       .description('AWS SQS Queue URL'),
     DEFAULT_COMMUNITY_ADMIN_ID: Joi.string().required().description('Default Community Admin ID'),
+    RECAPTCHA_SECRET_KEY: Joi.string().optional().description('Google reCAPTCHA v2 secret key'),
   })
   .unknown();
 
@@ -125,6 +126,7 @@ const config = {
   },
   sqsQueueUrl: envVars.SQS_QUEUE_URL,
   DEFAULT_COMMUNITY_ADMIN_ID: envVars.DEFAULT_COMMUNITY_ADMIN_ID,
+  recaptchaSecretKey: envVars.RECAPTCHA_SECRET_KEY,
 };
 
 export default config;
