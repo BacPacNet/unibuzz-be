@@ -108,3 +108,20 @@ export function buildPaginationResponse(
     totalPages: Math.ceil(total / limit),
   };
 }
+
+
+
+
+/**
+ * Extracts a message from an unknown error and throws ApiError.
+ * @param messagePrefix - If provided, the final message is "${messagePrefix}: ${errorMessage}".
+ */
+export function throwApiError(
+  error: unknown,
+  options?: { status?: number; messagePrefix?: string }
+): never {
+  const status = options?.status ?? httpStatus.INTERNAL_SERVER_ERROR;
+  const message = error instanceof Error ? error.message : String(error);
+  const fullMessage = options?.messagePrefix ? `${options.messagePrefix}: ${message}` : message;
+  throw new ApiError(status, fullMessage);
+}
