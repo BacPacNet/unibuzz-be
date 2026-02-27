@@ -7,6 +7,13 @@ export const convertToObjectId = (id: string) => {
   return new mongoose.Types.ObjectId(id);
 };
 
+/**
+ * Returns true if the value is a valid MongoDB ObjectId (string or ObjectId).
+ */
+export function isValidObjectId(id: string | mongoose.Types.ObjectId | undefined | null): boolean {
+  return id != null && mongoose.Types.ObjectId.isValid(id);
+}
+
 
 export function requireAuthenticatedUserIdOrThrow(req: userIdExtend): string {
   const userId = req.userId;

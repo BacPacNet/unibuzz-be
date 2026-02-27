@@ -420,17 +420,40 @@ export function buildCommunityGroupsSortStages(sortBy: string): PipelineStage[] 
 
 
 
-export function buildCommunityGroupsProjectStage(): PipelineStage {
-  return {
-    $project: {
-      "communityGroups.users": 0,
-      "communityGroups.adminProfile": 0,
-      "communityGroups.admin": 0,
-      "communityGroups.inviteUsers": 0,
-    
-      
+export function buildCommunityGroupsProjectStage(userObjectId: mongoose.Types.ObjectId): PipelineStage[] {
+  return [
+    {
+      $addFields: {
+        communityGroups: {
+          $map: {
+            input: '$communityGroups',
+            as: 'group',
+            in: {
+              $mergeObjects: [
+                '$$group',
+                {
+                  users: {
+                    $filter: {
+                      input: { $ifNull: ['$$group.users', []] },
+                      as: 'u',
+                      cond: { $eq: ['$$u._id', userObjectId] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
     },
-  };
+    {
+      $project: {
+        'communityGroups.adminProfile': 0,
+        'communityGroups.admin': 0,
+        'communityGroups.inviteUsers': 0,
+      },
+    },
+  ];
 }
 
 /**

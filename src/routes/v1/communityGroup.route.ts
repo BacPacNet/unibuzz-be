@@ -1,32 +1,69 @@
-import { userIdAuth } from '../../modules/user';
-import { communityGroupController } from '../../modules/communityGroup';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import { communityGroupController, communityGroupValidation } from '../../modules/communityGroup';
 
 const router: Router = express.Router();
 
 // query-params:
 // communityGroupId:string, userStatus: string,page: number,limit: number,
-router.route('/members').get(userIdAuth, communityGroupController.getCommunityGroupMembers);
+router
+  .route('/members')
+  .get(userIdAuth, validate(communityGroupValidation.getCommunityGroupMembers), communityGroupController.getCommunityGroupMembers);
 
 router
   .route('/:communityId')
-  .get(userIdAuth, communityGroupController.getCommunityGroupById)
-  .post(userIdAuth, communityGroupController.CreateCommunityGroup);
+  .get(
+    userIdAuth,
+    validate(communityGroupValidation.getCommunityGroupById),
+    communityGroupController.getCommunityGroupById
+  )
+  .post(
+    userIdAuth,
+    validate(communityGroupValidation.createCommunityGroup),
+    communityGroupController.CreateCommunityGroup
+  );
 
 router
   .route('/:groupId')
-  .put(communityGroupController.updateCommunityGroup)
-  .delete(communityGroupController.deleteCommunityGroup);
+  .put(validate(communityGroupValidation.updateCommunityGroup), communityGroupController.updateCommunityGroup)
+  .delete(validate(communityGroupValidation.deleteCommunityGroup), communityGroupController.deleteCommunityGroup);
 
-router.route('/status/:groupId').put(userIdAuth, communityGroupController.changeCommunityGroupStatus);
+router
+  .route('/status/:groupId')
+  .put(
+    userIdAuth,
+    validate(communityGroupValidation.changeCommunityGroupStatus),
+    communityGroupController.changeCommunityGroupStatus
+  );
 
-router.route('/join-request/:groupId').put(communityGroupController.updateCommunityGroupJoinRequest);
+router
+  .route('/join-request/:groupId')
+  .put(
+    userIdAuth,
+    validate(communityGroupValidation.updateCommunityGroupJoinRequest),
+    communityGroupController.updateCommunityGroupJoinRequest
+  );
 
-router.route('/:groupId/join').put(userIdAuth, communityGroupController.joinCommunityGroup);
+router
+  .route('/:groupId/join')
+  .put(userIdAuth, validate(communityGroupValidation.joinCommunityGroup), communityGroupController.joinCommunityGroup);
 
-router.route('/:groupId/leave').delete(userIdAuth, communityGroupController.leaveCommunityGroup);
+router
+  .route('/:groupId/leave')
+  .delete(
+    userIdAuth,
+    validate(communityGroupValidation.leaveCommunityGroup),
+    communityGroupController.leaveCommunityGroup
+  );
 
-router.route('/:groupId/user/:userId').delete(userIdAuth, communityGroupController.removeUserFromCommunityGroup);
+router
+  .route('/:groupId/user/:userId')
+  .delete(
+    userIdAuth,
+    validate(communityGroupValidation.removeUserFromCommunityGroup),
+    communityGroupController.removeUserFromCommunityGroup
+  );
 
 export default router;
 

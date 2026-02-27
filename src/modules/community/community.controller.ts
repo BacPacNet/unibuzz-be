@@ -4,7 +4,7 @@ import { ApiError } from '../errors';
 import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
-import { userIdExtend } from 'src/config/userIDType';
+import { userIdExtend } from '../../config/userIDType';
 import { CreateCommunityBody, GetCommunityUsersOptions, communityInterface } from './community.interface';
 import catchAsync from '../utils/catchAsync';
 import { IUniversity } from '../university/university.model';
