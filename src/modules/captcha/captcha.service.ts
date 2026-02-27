@@ -34,6 +34,5 @@ export const verifyCaptcha = async (
 
   const data = (await response.json()) as RecaptchaVerifyResponse;
 
-
   return data;
 };

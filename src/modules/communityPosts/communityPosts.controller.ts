@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import { Request, Response } from 'express';
 import * as communityPostsService from './communityPosts.service';
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
@@ -6,20 +6,17 @@ import { userPostService } from '../userPost';
 import { communityService } from '../community';
 import { communityGroupModel, communityGroupService } from '../communityGroup';
 import he from 'he';
-import { userIdExtend } from 'src/config/userIDType';
+import { userIdExtend } from '../../config/userIDType';
 import mongoose from 'mongoose';
-import { convertToObjectId } from '../../utils/common';
+import { convertToObjectId, isValidObjectId, parsePostIdOrThrow } from '../../utils/common';
 import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
 import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
 import { CommunityGroupType } from '../../config/community.type';
+import type { users as CommunityGroupUser } from '../communityGroup/communityGroup.interface';
 import { notificationRoleAccess } from '../Notification/notification.interface';
-// import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { queueSQSNotificationBatch } from '../../amazon-sqs/sqsBatchWrapperFunction';
-
-interface extendedRequest extends Request {
-  userId?: string;
-}
+import catchAsync from '../utils/catchAsync';
 
 interface CommunityPostQueryParams {
   page?: string;
@@ -27,139 +24,121 @@ interface CommunityPostQueryParams {
   communityId?: string;
 }
 
+interface CommunityPostParams {
+  communityId?: string;
+  communityGroupId?: string;
+}
+
+/** Post type for getPostById query */
+const POST_TYPE_COMMUNITY = 'Community' as const;
+const POST_TYPE_TIMELINE = 'Timeline' as const;
+
+const MESSAGE_UPDATED_SUCCESS = 'Updated Successfully';
+const MESSAGE_DELETED = 'deleted';
+const NOTIFICATION_MESSAGE_COMMUNITY_ADMIN_POST = 'Community admin post';
+
+const NOTIFICATION_BATCH_CHUNK_SIZE = 10;
+
 // create community post
-export const createCommunityPost = async (req: extendedRequest, res: Response) => {
+export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Response) => {
   const userId = req.userId as string;
   const { communityId, communityGroupId } = req.body;
   req.body.content = he.decode(req.body.content);
   let isOfficialGroup = false;
   let isPostLive = false;
 
-  try {
-    const community = await communityService.getCommunity(req.body.communityId);
-    if (communityId && !communityGroupId) {
-      if (!community) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
-      }
-
-      const isAdmin = community?.adminId?.map(String).includes(userId?.toString());
-      if (!isAdmin) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create post');
-      }
-      isPostLive = true;
+  const community = await communityService.getCommunity(req.body.communityId);
+  if (communityId && !communityGroupId) {
+    if (!community) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
     }
 
-    if (communityId && communityGroupId) {
-      const communityGroup = await communityGroupService.getCommunityGroupById(communityGroupId, userId);
-      if (!communityGroup) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
-      }
-
-      isPostLive =
-        communityGroup.adminUserId.toString() === userId.toString() ||
-        communityGroup.communityGroupType === CommunityGroupType.CASUAL;
-
-      isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
-
-      if (!communityGroup.isCommunityGroupLive) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Community Group is not live');
-      }
-
-      const userIds = communityGroup.users.map((item: any) => item._id.toString());
-      const userIdSet = new Set(userIds);
-
-      if (!userIdSet.has(userId)) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
-      }
+    const isAdmin = community?.adminId?.map(String).includes(userId?.toString());
+    if (!isAdmin) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin can create post');
     }
-    const post = await communityPostsService.createCommunityPost(
-      req.body,
-      new mongoose.Types.ObjectId(userId),
-      isPostLive,
-      isOfficialGroup
-    );
-
-    const verifiedNonAdmins = community?.users?.filter((user: any) => user._id.toString() !== userId?.toString()) || [];
-
-    const verifiedAdminsUserIds = verifiedNonAdmins.map((user: any) => user._id.toString());
-
-    if (communityId && !communityGroupId && post?._id && !verifiedAdminsUserIds.includes(userId?.toString() || '')) {
-      const messages = verifiedAdminsUserIds.map((receiverId) => ({
-        sender_id: userId,
-        receiverId,
-        communityId,
-        communityPostId: post?._id,
-        type: notificationRoleAccess.COMMUNITY_ADMIN_POST,
-        message: 'Community admin post',
-      }));
-
-      const chunkSize = 10;
-      for (let i = 0; i < messages.length; i += chunkSize) {
-        const chunk = messages.slice(i, i + chunkSize);
-        await queueSQSNotificationBatch(chunk);
-      }
-    }
-
-    return res.status(httpStatus.CREATED).json(post);
-  } catch (error: any) {
-    console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    isPostLive = true;
   }
-};
+
+  if (communityId && communityGroupId) {
+    const communityGroup = await communityGroupService.getCommunityGroupById(communityGroupId, userId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+    }
+
+    isPostLive =
+      communityGroup.adminUserId.toString() === userId.toString() ||
+      communityGroup.communityGroupType === CommunityGroupType.CASUAL;
+
+    isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
+
+    if (!communityGroup.isCommunityGroupLive) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community Group is not live');
+    }
+
+    const userIds = communityGroup.users.map((item: CommunityGroupUser) => item._id.toString());
+    const userIdSet = new Set(userIds);
+
+    if (!userIdSet.has(userId)) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
+    }
+  }
+  const post = await communityPostsService.createCommunityPost(
+    req.body,
+    new mongoose.Types.ObjectId(userId),
+    isPostLive,
+    isOfficialGroup
+  );
+
+  const verifiedNonAdmins =
+    community?.users?.filter(
+      (user: { _id: mongoose.Types.ObjectId }) => user._id.toString() !== userId?.toString()
+    ) || [];
+
+  const verifiedAdminsUserIds = verifiedNonAdmins.map((user: { _id: mongoose.Types.ObjectId }) =>
+    user._id.toString()
+  );
+
+  if (communityId && !communityGroupId && post?._id && !verifiedAdminsUserIds.includes(userId?.toString() || '')) {
+    const messages = verifiedAdminsUserIds.map((receiverId) => ({
+      sender_id: userId,
+      receiverId,
+      communityId,
+      communityPostId: post?._id,
+      type: notificationRoleAccess.COMMUNITY_ADMIN_POST,
+      message: NOTIFICATION_MESSAGE_COMMUNITY_ADMIN_POST,
+    }));
+
+    for (let i = 0; i < messages.length; i += NOTIFICATION_BATCH_CHUNK_SIZE) {
+      const chunk = messages.slice(i, i + NOTIFICATION_BATCH_CHUNK_SIZE);
+      await queueSQSNotificationBatch(chunk);
+    }
+  }
+
+  return res.status(httpStatus.CREATED).json(post);
+});
 
 // update post
-export const updateCommunityPost = async (req: Request, res: Response, next: NextFunction) => {
-  const { postId } = req.params;
+export const updateCommunityPost = catchAsync(async (req: Request, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
+  await communityPostsService.updateCommunityPost(postId, req.body);
+  return res.status(httpStatus.OK).json({ message: MESSAGE_UPDATED_SUCCESS });
+});
 
-  try {
-    if (typeof postId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
-      }
-      await communityPostsService.updateCommunityPost(new mongoose.Types.ObjectId(postId), req.body);
-      return res.status(200).json({ message: 'Updated Successfully' });
-    }
-  } catch (error: any) {
-    res.status(error.statusCode).json({ message: error.message });
-  }
-};
-
-export const updateCommunityPostLive = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { postId } = req.params;
-  const { status } = req.query;
+export const updateCommunityPostLive = catchAsync(async (req: userIdExtend, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
   const userId = req.userId as string;
-  try {
-    if (typeof postId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID'));
-      }
-      await communityPostsService.updateCommunityPostLiveStatus(
-        new mongoose.Types.ObjectId(postId),
-        userId,
-        status as string
-      );
-      return res.status(200).json({ message: 'Updated Successfully' });
-    }
-  } catch (error: any) {
-    res.status(error.statusCode).json({ message: error.message });
-  }
-};
+  const { status } = req.query;
+  await communityPostsService.updateCommunityPostLiveStatus(postId, userId, status as string);
+  return res.status(httpStatus.OK).json({ message: MESSAGE_UPDATED_SUCCESS });
+});
 
 // delete post
-export const deleteCommunityPost = async (req: Request, res: Response, next: NextFunction) => {
-  const { postId } = req.params;
-  try {
-    if (typeof postId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(postId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID'));
-      }
-      await communityPostsService.deleteCommunityPost(new mongoose.Types.ObjectId(postId));
-    }
-    return res.status(200).json({ message: 'deleted' });
-  } catch (error) {
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to delete'));
-  }
-};
+export const deleteCommunityPost = catchAsync(async (req: Request, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
+  await communityPostsService.deleteCommunityPost(postId);
+  return res.status(httpStatus.OK).json({ message: MESSAGE_DELETED });
+});
 
 export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) => {
   try {
@@ -204,89 +183,71 @@ export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) =>
  * @param req - Express request object with userId extension
  * @param res - Express response object
  */
-export const getAllCommunityGroupPostV2 = async (req: userIdExtend, res: Response) => {
-  try {
-    const { page = '1', limit = '10', communityId, communityGroupId, filterPostBy } = req.query;
-    const userId = req.userId as string;
+export const getAllCommunityGroupPostV2 = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page = '1', limit = '10', communityId, communityGroupId, filterPostBy } = req.query;
+  const userId = req.userId as string;
 
-    // Input validation
-    if (!communityId || !communityGroupId) {
-      return res.status(httpStatus.BAD_REQUEST).json({
-        message: 'Community ID and Community Group ID are required',
-      });
-    }
-
-    // Validate ObjectIds
-    if (
-      !mongoose.Types.ObjectId.isValid(communityId as string) ||
-      !mongoose.Types.ObjectId.isValid(communityGroupId as string)
-    ) {
-      return res.status(httpStatus.BAD_REQUEST).json({
-        message: 'Invalid Community ID or Community Group ID format',
-      });
-    }
-
-    // Get community and validate
-    const community = await communityService.getCommunity(communityId as string);
-    if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({
-        message: 'Community not found',
-      });
-    }
-
-    // Get community group and validate
-    const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId as string));
-    if (!communityGroup) {
-      return res.status(httpStatus.NOT_FOUND).json({
-        message: 'Community Group not found',
-      });
-    }
-
-    // Check user membership
-    if (!isUserCommunityGroupMember(communityGroup, userId)) {
-      return res.status(httpStatus.UNAUTHORIZED).json({
-        message: 'You are not a member of this community group',
-      });
-    }
-    const isAdminOfCommunityGroup = communityGroup.adminUserId.toString() === userId.toString();
-    // Get posts with pagination
-    const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
-      communityId as string,
-      communityGroupId as string,
-      Number(page),
-      Number(limit),
-      isAdminOfCommunityGroup,
-      userId,
-      filterPostBy?.toString() || ''
-    );
-
-    return res.status(httpStatus.OK).json(communityPosts);
-  } catch (error: any) {
-    console.error('Error in getAllCommunityGroupPostV2:', error);
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
-      message: 'Failed to fetch community group posts',
-      error: error.message,
-    });
+  // Input validation
+  if (!communityId || !communityGroupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID and Community Group ID are required');
   }
-};
+
+
+  if (!isValidObjectId(communityId as string) || !isValidObjectId(communityGroupId as string)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid Community ID or Community Group ID format');
+  }
+
+  // Get community and validate
+  const community = await communityService.getCommunity(communityId as string);
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  // Get community group and validate
+  const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId as string));
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+  }
+
+  // Check user membership
+  if (!isUserCommunityGroupMember(communityGroup, userId)) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community group');
+  }
+  const isAdminOfCommunityGroup = communityGroup.adminUserId.toString() === userId.toString();
+  // Get posts with pagination
+  const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
+    communityId as string,
+    communityGroupId as string,
+    Number(page),
+    Number(limit),
+    isAdminOfCommunityGroup,
+    userId,
+    filterPostBy?.toString() || ''
+  );
+
+  return res.status(httpStatus.OK).json(communityPosts);
+});
 
 //get all community post
-export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
+export const getAllCommunityPost = catchAsync(async (req: userIdExtend, res: Response) => {
   const { page, limit } = req.query;
-  const { communityId, communityGroupId } = req.params as any;
+  const { communityId, communityGroupId } = req.params as CommunityPostParams;
   const userId = req.userId as string;
-  // let access = CommunityType.PUBLIC;
   const userIdObject = new mongoose.Types.ObjectId(userId);
-  try {
-    const community = await communityService.getCommunity(communityId);
 
-    if (!community) {
-      return res.status(httpStatus.NOT_FOUND).json({ message: 'Community not foundddd' });
-    }
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
+  }
 
-    const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
+  const community = await communityService.getCommunity(communityId);
 
-    const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject.toString());
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const checkIfUserJoinedCommunity = community.users.some((user) => user._id.toString() === userId.toString());
+
+  const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userIdObject.toString());
 
     if (!checkIfUserJoinedCommunity) {
       return res.status(httpStatus.FORBIDDEN).json({
@@ -295,102 +256,92 @@ export const getAllCommunityPost = async (req: userIdExtend, res: Response) => {
       });
     }
 
-    if (communityGroupId) {
-      const communityGroup = await communityGroupModel.findOne({
-        _id: communityGroupId,
-        $or: [
-          {
-            'users._id': userId,
-            'users.status': 'accepted',
-          },
-          {
-            adminUserId: req.userId,
-          },
-        ],
-      });
+  if (communityGroupId) {
+    const communityGroup = await communityGroupModel.findOne({
+      _id: communityGroupId,
+      $or: [
+        {
+          'users._id': userId,
+          'users.status': 'accepted',
+        },
+        {
+          adminUserId: req.userId,
+        },
+      ],
+    });
 
-      if (!communityGroup) {
-        return res.status(httpStatus.NOT_FOUND).json({ message: 'Not a member' });
-      }
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Not a member');
     }
-
-    const communityPosts = await communityPostsService.getAllCommunityPost(
-      followingAndSelfUserIds,
-      communityId,
-      communityGroupId,
-      Number(page),
-      Number(limit),
-      userId || ''
-    );
-
-    return res.status(200).json(communityPosts);
-  } catch (error: any) {
-    console.error(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
-};
+
+  const communityPosts = await communityPostsService.getAllCommunityPost(
+    followingAndSelfUserIds,
+    communityId,
+    communityGroupId ?? undefined,
+    Number(page),
+    Number(limit),
+    userId || ''
+  );
+
+  return res.status(httpStatus.OK).json(communityPosts);
+});
 
 //like and unlike
-export const likeUnlikePost = async (req: extendedRequest, res: Response) => {
-  const { postId } = req.params;
+export const likeUnlikePost = catchAsync(async (req: userIdExtend, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
 
-  try {
-    if (postId && req.userId) {
-      let likeCount = await communityPostsService.likeUnlike(postId, req.userId);
-      return res.status(200).json(likeCount);
-    }
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!req.userId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is required');
   }
-};
+  const likeCount = await communityPostsService.likeUnlike(postId.toString(), req.userId);
+  return res.status(httpStatus.OK).json(likeCount);
+});
 
-export const getPostById = async (req: extendedRequest, res: Response) => {
+export const getPostById = catchAsync(async (req: userIdExtend, res: Response) => {
   const { postId } = req.params;
   const { isType, commentId } = req.query;
 
-  let post: any;
-  let comment: any;
-  try {
-    if (postId) {
-      if (isType == 'Community') {
-        if (!req.userId) {
-          throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
-        }
-        const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
+  let post: unknown;
+  let comment: unknown;
 
-        post = postResult[0];
-
-        if (!postResult.length) {
-          throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
-        }
-
-        if (commentId?.toString().length) {
-          comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(
-            commentId?.toString(),
-            req.userId
-          );
-        }
-      } else if (isType == 'Timeline') {
-        const postResult = await userPostService.getUserPost(postId, req.userId);
-
-        post = postResult[0];
-
-        if (!postResult.length) {
-          throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
-        }
-
-        if (commentId?.toString().length) {
-          comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString(), req.userId);
-        }
-      } else {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');
-      }
-
-      return res.status(200).json({ post, comment });
-    }
-  } catch (error: any) {
-    console.log('Err', error);
-
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!postId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Post ID is required');
   }
-};
+
+  if (isType === POST_TYPE_COMMUNITY) {
+    if (!req.userId) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'token not found');
+    }
+    const postResult = await communityPostsService.getcommunityPost(postId, req.userId);
+
+    post = postResult[0];
+
+    if (!postResult.length) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
+    }
+
+    if (commentId?.toString().length) {
+      comment = await communityPostCommentsService.getSingleCommunityCommentByCommentId(
+        commentId?.toString(),
+        req.userId
+      );
+    }
+  } else if (isType === POST_TYPE_TIMELINE) {
+    const postResult = await userPostService.getUserPost(postId, req.userId);
+
+    post = postResult[0];
+
+    if (!postResult.length) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'This is a private post to view please!');
+    }
+
+    if (commentId?.toString().length) {
+      comment = await userPostCommentsService.getSingleCommentByCommentId(commentId?.toString(), req.userId);
+    }
+  } else {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Invalid Request');
+  }
+
+  return res.status(httpStatus.OK).json({ post, comment });
+});
