@@ -26,6 +26,7 @@ import reportBug from './reportBug';
 import pushNotification from './pushNotification.route';
 import healthRoute from './health.route';
 import reportContent from './reportContent.route';
+import captchaRoute from './captcha.route';
 
 const router = express.Router();
 
@@ -134,6 +135,10 @@ const defaultIRoute: IRoute[] = [
   {
     path: '/health',
     route: healthRoute,
+  },
+  {
+    path: '/captcha',
+    route: captchaRoute,
   },
 ];
 
