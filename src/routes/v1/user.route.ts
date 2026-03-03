@@ -41,6 +41,18 @@ router
   .route('/referrals')
   .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getReferredUsers);
 
+
+
+  router
+  .route('/eligible')
+  .get(userIdAuth, userController.isUserEligibleForRewards);
+
+  router
+  .route('/rewards')
+  .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getRewards);
+
+
+
 router
   .route('/:userId')
   .get(userIdAuth, validate(userValidation.getUser), userController.getUser)
