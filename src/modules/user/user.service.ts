@@ -25,6 +25,7 @@ import {
   DEFAULT_LIMIT,
   convertToObjectId,
 } from '../../utils/common';
+import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.service';
 
 /** Centralized user-related error messages and status for consistency */
 const USER_ERROR_MESSAGES = {
@@ -467,26 +468,26 @@ export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, passwo
 
 
 
+// function calculateReward(invites: number): number {
+//   if (invites <= 0) return 0;
+
+//   if (invites <= 10) {
+//     return invites * 10;
+//   }
+
+//   if (invites <= 15) {
+//     return invites * 13.33;
+//   }
+
+//   if (invites <= 20) {
+//     return invites * 20;
+//   }
+
+//   return invites * 20;
+// }
+
+
 function calculateReward(invites: number): number {
-  if (invites <= 0) return 0;
-
-  if (invites <= 10) {
-    return invites * 10;
-  }
-
-  if (invites <= 15) {
-    return invites * 13.33;
-  }
-
-  if (invites <= 20) {
-    return invites * 20;
-  }
-
-  return invites * 20;
-}
-
-
-function calculatePreviousMonthReward(invites: number): number {
   if (invites < 10) return 0;
 
   if (invites < 15) return 100;
@@ -521,6 +522,7 @@ export const getRewardsDetails = async (
   previousMonthProgress: number;
   thisMonthReward: number;
   previousMonthReward: number;
+  previousMonthRedeemed: boolean;
 }> => {
   const user = await getUserByIdOrThrow(userId);
 
@@ -544,7 +546,7 @@ export const getRewardsDetails = async (
     isDeleted: { $ne: true },
   };
 
-  const [thisMonthProgress, previousMonthProgress] = await Promise.all([
+  const [thisMonthProgress, previousMonthProgress, previousMonthRedeemed] = await Promise.all([
     // ✅ This month (e.g. March 1 → April 1 UTC)
     User.countDocuments({
       ...baseFilter,
@@ -562,16 +564,19 @@ export const getRewardsDetails = async (
         $lt: startOfThisMonthUTC,
       },
     }),
+
+    rewardRedemptionService.hasRedeemedRewardForMonth(userId, startOfPreviousMonthUTC),
   ]);
 
   const thisMonthReward = calculateReward(thisMonthProgress);
-  const previousMonthReward = calculatePreviousMonthReward(previousMonthProgress);
+  const previousMonthReward = calculateReward(previousMonthProgress);
 
   return {
     referCode: user.referCode,
     thisMonthProgress,
     previousMonthProgress,
-    thisMonthReward : thisMonthReward || 0,
-    previousMonthReward : previousMonthReward || 0,
+    thisMonthReward: thisMonthReward || 0,
+    previousMonthReward: previousMonthReward || 0,
+    previousMonthRedeemed,
   };
 };
