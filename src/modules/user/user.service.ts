@@ -25,6 +25,7 @@ import {
   DEFAULT_LIMIT,
   convertToObjectId,
 } from '../../utils/common';
+import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.service';
 
 /** Centralized user-related error messages and status for consistency */
 const USER_ERROR_MESSAGES = {
@@ -460,4 +461,122 @@ export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, passwo
   user.deletedAt = new Date();
   await user.save();
   return user;
+};
+
+
+
+
+
+
+// function calculateReward(invites: number): number {
+//   if (invites <= 0) return 0;
+
+//   if (invites <= 10) {
+//     return invites * 10;
+//   }
+
+//   if (invites <= 15) {
+//     return invites * 13.33;
+//   }
+
+//   if (invites <= 20) {
+//     return invites * 20;
+//   }
+
+//   return invites * 20;
+// }
+
+
+function calculateReward(invites: number): number {
+  if (invites < 10) return 0;
+
+  if (invites < 15) return 100;
+
+  if (invites < 20) return 200;
+
+
+  let reward = 400;
+
+  const extraInvites = invites - 20;
+
+  const extraBlocks = Math.floor(extraInvites / 5);
+
+  reward += extraBlocks * 100;
+
+  return reward;
+}
+
+
+/**
+ * Get all users referred by a specific user with populated referral details
+ * @param {mongoose.Types.ObjectId} userId
+  * @param {number} page - Page number (default: 1)
+  * @param {number} limit - Number of results per page (default: 10)
+ * @returns {Promise<{referCode: string, totalReferrals: number, currentPage: number, totalPages: number, referrals: IUserDoc[]}>}
+ */
+export const getRewardsDetails = async (
+  userId: mongoose.Types.ObjectId,
+): Promise<{
+  referCode: string | undefined;
+  thisMonthProgress: number;
+  previousMonthProgress: number;
+  thisMonthReward: number;
+  previousMonthReward: number;
+  previousMonthRedeemed: boolean;
+}> => {
+  const user = await getUserByIdOrThrow(userId);
+
+  const now = new Date();
+
+  // ✅ UTC month boundaries
+  const startOfThisMonthUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+  );
+
+  const startOfNextMonthUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+  );
+
+  const startOfPreviousMonthUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
+  );
+
+  const baseFilter = {
+    referredBy: userId,
+    isDeleted: { $ne: true },
+  };
+
+  const [thisMonthProgress, previousMonthProgress, previousMonthRedeemed] = await Promise.all([
+    // ✅ This month (e.g. March 1 → April 1 UTC)
+    User.countDocuments({
+      ...baseFilter,
+      createdAt: {
+        $gte: startOfThisMonthUTC,
+        $lt: startOfNextMonthUTC,
+      },
+    }),
+
+    // ✅ Previous month (e.g. Feb 1 → March 1 UTC)
+    User.countDocuments({
+      ...baseFilter,
+      createdAt: {
+        $gte: startOfPreviousMonthUTC,
+        $lt: startOfThisMonthUTC,
+      },
+    }),
+
+    rewardRedemptionService.hasRedeemedRewardForMonth(userId, startOfPreviousMonthUTC),
+  ]);
+
+  const thisMonthReward = calculateReward(thisMonthProgress);
+  const previousMonthReward = calculateReward(previousMonthProgress);
+
+  return {
+    referCode: user.referCode,
+    thisMonthProgress,
+    previousMonthProgress,
+    thisMonthReward: thisMonthReward || 0,
+    previousMonthReward: previousMonthReward || 0,
+    previousMonthRedeemed,
+  };
 };

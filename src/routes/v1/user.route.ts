@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
 import { userController, userIdAuth, userValidation } from '../../modules/user';
+import { rewardRedemptionController, rewardRedemptionValidation } from '../../modules/rewardRedemption';
 
 const router: Router = express.Router();
 
@@ -40,6 +41,21 @@ router.route('/new-user').put(userIdAuth, userController.IsNewUserToggle);
 router
   .route('/referrals')
   .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getReferredUsers);
+
+
+
+  router
+  .route('/eligible')
+  .get(userIdAuth, userController.isUserEligibleForRewards);
+
+router
+  .route('/rewards')
+  .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getRewards);
+
+router
+  .route('/rewards/request')
+  .post(userIdAuth, validate(rewardRedemptionValidation.createPreviousMonthRewardRequest), rewardRedemptionController.createPreviousMonthRewardRequest);
+
 
 router
   .route('/:userId')

@@ -11,6 +11,7 @@ import { userIdExtend } from '../../config/userIDType';
 import { userProfileService } from '../userProfile';
 import { BlockedUserEntry } from '../userProfile/userProfile.interface';
 import { GetAllUserQuery } from './user.interfaces';
+import { whitelistRewardCommunityService } from '../whitelistRewardCommunity';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -157,4 +158,30 @@ export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Respon
     totalPages: result.totalPages,
     referrals: referralsWithProfiles,
   });
+});
+
+
+
+export const getRewards = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+  const userId = parseUserIdOrThrow(req.userId);
+  const result = await userService.getRewardsDetails(
+    userId,
+  );
+
+  res.status(httpStatus.OK).json({
+    referCode: result.referCode,
+    thisMonthProgress: result.thisMonthProgress,
+    previousMonthProgress: result.previousMonthProgress,
+    thisMonthReward: result.thisMonthReward,
+    previousMonthReward: result.previousMonthReward,
+    previousMonthRedeemed: result.previousMonthRedeemed,
+  });
+});
+
+export const isUserEligibleForRewards = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+
+  
+  const userId = parseUserIdOrThrow(req.userId);
+  const eligible = await whitelistRewardCommunityService.isUserEligibleForRewards(userId);
+  res.status(httpStatus.OK).json({ eligible });
 });

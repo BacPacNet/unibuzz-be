@@ -211,7 +211,7 @@ const getFollowListByType = async (
 // =============================================================================
 
 /** Internal: find one profile by user id, optionally with university populated. */
-const findOneProfileByUserId = async (
+ export const findOneProfileByUserId = async (
   userId: string,
   options?: { populateUniversity?: boolean }
 ) => {
