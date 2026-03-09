@@ -32,6 +32,13 @@ export function parsePostIdOrThrow(postId: unknown): mongoose.Types.ObjectId {
   return new mongoose.Types.ObjectId(postId);
 }
 
+export function parseCommentIdOrThrow(commentId: unknown): mongoose.Types.ObjectId {
+  if (typeof commentId !== 'string' || !mongoose.Types.ObjectId.isValid(commentId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment ID');
+  }
+  return new mongoose.Types.ObjectId(commentId);
+}
+
 
 
 export function requireQueryUserIdOrThrow(userId: unknown): string {

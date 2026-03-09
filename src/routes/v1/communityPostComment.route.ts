@@ -1,23 +1,58 @@
-import { userIdAuth } from '../../modules/user';
-import { communityPostCommentsController } from '../../modules/communityPostsComments';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import {
+  communityPostCommentsController,
+  communityPostCommentsValidation,
+} from '../../modules/communityPostsComments';
 
 const router: Router = express.Router();
 
 router
   .route('/:communityPostId')
-  .get(userIdAuth, communityPostCommentsController.getCommunityPostComments)
-  .post(userIdAuth, communityPostCommentsController.CreateComment);
+  .get(
+    userIdAuth,
+    validate(communityPostCommentsValidation.getCommunityPostComments),
+    communityPostCommentsController.getCommunityPostComments
+  )
+  .post(
+    userIdAuth,
+    validate(communityPostCommentsValidation.createComment),
+    communityPostCommentsController.CreateComment
+  );
 
-  // not being used anywhere
-router.route('/comment/:commentId').get(userIdAuth, communityPostCommentsController.getCommentById);
+// not being used anywhere
+router
+  .route('/comment/:commentId')
+  .get(
+    userIdAuth,
+    validate(communityPostCommentsValidation.getCommentById),
+    communityPostCommentsController.getCommentById
+  );
 router
   .route('/:commentId')
-  .put(communityPostCommentsController.updateComment)
-  .delete(communityPostCommentsController.deleteCommunityPostComment);
+  .put(
+    validate(communityPostCommentsValidation.updateComment),
+    communityPostCommentsController.updateComment
+  )
+  .delete(
+    validate(communityPostCommentsValidation.deleteCommunityPostComment),
+    communityPostCommentsController.deleteCommunityPostComment
+  );
 
-router.route('/:commentId/replies').post(userIdAuth, communityPostCommentsController.CommunityPostCommentReply);
-router.put('/likeUnlike/:communityPostCommentId', userIdAuth, communityPostCommentsController.LikeCommunityPostComments);
+router
+  .route('/:commentId/replies')
+  .post(
+    userIdAuth,
+    validate(communityPostCommentsValidation.communityPostCommentReply),
+    communityPostCommentsController.CommunityPostCommentReply
+  );
+router.put(
+  '/likeUnlike/:communityPostCommentId',
+  userIdAuth,
+  validate(communityPostCommentsValidation.likeUnlikeCommunityPostComment),
+  communityPostCommentsController.LikeCommunityPostComments
+);
 
 export default router;
 
