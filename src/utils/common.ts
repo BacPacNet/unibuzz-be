@@ -7,6 +7,27 @@ export const convertToObjectId = (id: string) => {
   return new mongoose.Types.ObjectId(id);
 };
 
+
+/**
+ * Converts a user ID (string or ObjectId) to a string. Use for consistent comparison and Map keys.
+ */
+export function toUserIdString(id: mongoose.Types.ObjectId | string | undefined | null): string {
+  if (id == null) return '';
+  return typeof id === 'string' ? id : id.toString();
+}
+
+/**
+ * Safely compares two Mongo ObjectId-like values (string or ObjectId) by value.
+ */
+export function sameId(a: mongoose.Types.ObjectId | string | undefined | null, b: mongoose.Types.ObjectId | string | undefined | null): boolean {
+  if (a == null || b == null) return false;
+  const aStr = toUserIdString(a);
+  const bStr = toUserIdString(b);
+  return aStr === bStr;
+}
+
+
+
 /**
  * Returns true if the value is a valid MongoDB ObjectId (string or ObjectId).
  */

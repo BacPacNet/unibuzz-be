@@ -506,8 +506,13 @@ export const getCommunityUsersService = async (communityId: string, options: Get
 
     const total = countResult[0]?.total ?? 0;
 
+    const mappedUsersWithProfile = usersWithProfile.map((user: any) => ({
+      ...user,
+      _id: user.users_id,
+    }));
+
     return {
-      data: usersWithProfile,
+      data: mappedUsersWithProfile,
       pagination: buildPaginationResponse(total, page, limit),
     };
   } catch (error: unknown) {
