@@ -9,6 +9,16 @@ interface reaction {
   emoji: string;
 }
 
+type ObjectIdLike = string | mongoose.Types.ObjectId;
+
+type MessageMedia = {
+  imageUrl: string;
+  publicId: string;
+};
+
+/** Shape of a single entry in UserProfile.blockedUsers when reading from DB */
+export type BlockedUserEntry = { userId?: unknown } | null;
+
 interface messageInterface {
   sender: mongoose.Types.ObjectId;
   senderProfile: mongoose.Types.ObjectId;
@@ -21,4 +31,4 @@ interface messageInterface {
   updatedAt?: Date;
 }
 
-export { messageInterface };
+export { messageInterface, ObjectIdLike, MessageMedia };
