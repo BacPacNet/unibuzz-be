@@ -8,6 +8,15 @@ export const convertToObjectId = (id: string) => {
 };
 
 
+export function toIdString(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && 'toString' in value && typeof (value as { toString: () => string }).toString === 'function')
+    return (value as { toString: () => string }).toString();
+  return String(value);
+}
+
+
 /**
  * Converts a user ID (string or ObjectId) to a string. Use for consistent comparison and Map keys.
  */
