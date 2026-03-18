@@ -3,6 +3,7 @@ import { ApiError } from '../errors';
 import universityVerificationEmailModal from './universityVerificationEmail.modal';
 import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
+import { UniversityVerificationEmailStatus } from './universityVerificationEmail.interface';
 
 export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
   const splitedEmail = email.split(".");
@@ -22,8 +23,11 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
   }
   const data = {
     email,
+    universityId,
     otp: Math.floor(100000 + Math.random() * 900000),
-    otpValidTill: Date.now() + 30 * 10000,
+    otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    status: UniversityVerificationEmailStatus.PENDING,
+    isEmailVerified: false,
   };
 
   const universityVerificationEmail = await universityVerificationEmailModal.findOne({ email });
@@ -31,8 +35,14 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
   if (!universityVerificationEmail) {
     await universityVerificationEmailModal.create(data);
   } else {
+    if (universityVerificationEmail.status === UniversityVerificationEmailStatus.COMPLETE) {
+      throw new ApiError(httpStatus.CONFLICT, 'This university email has already been verified and cannot be used again.');
+    }
     const updatedData = { ...data };
-    await universityVerificationEmailModal.updateOne({ email }, updatedData);
+    await universityVerificationEmailModal.updateOne(
+      { email },
+      { $set: updatedData, $unset: { otpValidTill: "" } }
+    );
   }
 
   await sendEmail(
@@ -58,14 +68,18 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
     throw new ApiError(httpStatus.NOT_FOUND, 'Verification code not found, please request a new one.');
   }
 
-  const otpValidTillUTC = new Date(universityVerificationEmail.otpValidTill).toISOString();
+  if (universityVerificationEmail.status === UniversityVerificationEmailStatus.COMPLETE) {
+    throw new ApiError(httpStatus.CONFLICT, 'This university email has already been verified.');
+  }
+
+  const otpExpiresAtUTC = new Date(universityVerificationEmail.otpExpiresAt).toISOString();
   const currentUTC = new Date(Date.now()).toISOString();
 
   // if (universityVerificationEmail.otpValidTill.getTime() < Date.now()) {
   //   throw new ApiError(httpStatus.UNAUTHORIZED, 'OTP has expired!');
   // }
 
-  if (new Date(otpValidTillUTC).getTime() < new Date(currentUTC).getTime()) {
+  if (new Date(otpExpiresAtUTC).getTime() < new Date(currentUTC).getTime()) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'verification code has expired.');
   }
 
@@ -73,16 +87,21 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect verification code.');
   }
 
-  await universityVerificationEmail.deleteOne();
+  await universityVerificationEmailModal.updateOne(
+    { email },
+    { $set: { status: UniversityVerificationEmailStatus.COMPLETE, isEmailVerified: true } }
+  );
 };
 
 export const universityEmailDomainCheck = async (email: string, universityId: string) => {
   const domain = email.split('@')[1];
   const university = await universityModal.findOne({ domains: domain, _id: universityId });
-
+  const universityVerificationEmail = await universityVerificationEmailModal.findOne({ email });
   if (!university) {
     return false;
   }
-
+  if (universityVerificationEmail?.status === UniversityVerificationEmailStatus.COMPLETE) {
+    return false;
+  }
   return true;
 };

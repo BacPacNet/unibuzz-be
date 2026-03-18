@@ -1,19 +1,23 @@
 import { Schema, model } from 'mongoose';
-import { universityVerificationEmailinterface } from './universityVerificationEmail.interface';
+import {
+  UniversityVerificationEmailStatus,
+  universityVerificationEmailinterface,
+} from './universityVerificationEmail.interface';
 
 const universityVerificationEmailSchema = new Schema<universityVerificationEmailinterface>({
   email: { type: String, required: true, unique: true },
+  universityId: { type: String, required: true },
   otp: { type: Number, required: true },
+  status: {
+    type: String,
+    enum: Object.values(UniversityVerificationEmailStatus),
+    default: UniversityVerificationEmailStatus.PENDING,
+  },
   isEmailVerified: {
     type: Boolean,
     default: false,
   },
-  otpValidTill: { type: Date, required: true, expires: 300 },
-  expireAt: {
-    type: Date,
-    default: () => new Date(Date.now() + 5 * 60 * 1000),
-    expires: 0,
-  },
+  otpExpiresAt: { type: Date, required: true },
 });
 
 const universityVerificationEmailModal = model<universityVerificationEmailinterface>(
