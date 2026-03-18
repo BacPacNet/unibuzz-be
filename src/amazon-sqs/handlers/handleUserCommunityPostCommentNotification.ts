@@ -70,7 +70,7 @@ export const handleUserCommunityPostCommentNotification = async (job: any) => {
         },
       };
 
-      await notificationService.CreateNotification(newNotification);
+      await notificationService.createNotification(newNotification);
     }
 
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.like_notification });

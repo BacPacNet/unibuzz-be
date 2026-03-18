@@ -23,7 +23,6 @@ export const getFilteredUserCommunity = catchAsync(async (req: userIdExtend, res
     if (!communityId) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'communityId not found');
     }
-
     const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body.sort, req.body);
    return res.status(httpStatus.OK).json(communities);
 

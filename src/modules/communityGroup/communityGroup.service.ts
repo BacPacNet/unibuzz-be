@@ -23,7 +23,7 @@ import {
 } from './communityGroup.interface';
 import { UserProfile, userProfileService } from '../userProfile';
 import { notificationModel, notificationService } from '../Notification';
-import { notificationRoleAccess } from '../Notification/notification.interface';
+import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
 import { communityModel, communityService } from '../community';
 import { io } from '../../index';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
@@ -799,14 +799,14 @@ export const joinCommunityGroup = async (
 
 
     if (isCommunityPrivate && !isAdmin) {
-      const notificationPayload = {
+      const notificationPayload: CreateNotificationPayload = {
         sender_id: userID,
         receiverId: communityGroup.adminUserId,
         communityGroupId: communityGroup._id,
         type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
         message: 'User has requested to join your private group',
       };
-      await notificationService.CreateNotification(notificationPayload);
+      await notificationService.createNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
       sendPushNotification(
         communityGroup.adminUserId.toString(),

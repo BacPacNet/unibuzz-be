@@ -2,7 +2,7 @@ import { logger } from '../../modules/logger';
 import { getUserById } from '../../modules/user/user.service';
 import mongoose from 'mongoose';
 import { notificationModel } from '../../modules/Notification';
-import { notificationRoleAccess } from '../../modules/Notification/notification.interface';
+import { CreateNotificationPayload, notificationRoleAccess } from '../../modules/Notification/notification.interface';
 import { notificationService } from '../../modules/Notification';
 import { io } from '../../index';
 import { NotificationIdentifier } from '../NotificationIdentifierEnums';
@@ -74,7 +74,7 @@ export const handleUserPostReplyCommentNotification = async (job: any): Promise<
         },
       };
 
-      await notificationService.CreateNotification(newNotification);
+      await notificationService.createNotification(newNotification as unknown as CreateNotificationPayload);
     }
 
     io.emit(`notification_${receiverId}`, { type: NotificationIdentifier.REPLIED_TO_COMMENT });

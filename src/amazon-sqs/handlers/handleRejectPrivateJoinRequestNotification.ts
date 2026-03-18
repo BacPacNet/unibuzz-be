@@ -21,7 +21,7 @@ export const handleRejectPrivateJoinRequestNotification = async (job: any) => {
       type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST,
       message: 'Your Request has been Rejected',
     };
-    const notification = await notificationService.CreateNotification(notifications);
+    const notification = await notificationService.createNotification(notifications);
     const res: any = await notification.populate('communityGroupId');
 
     io.emit(`notification_${receiverId}`, { type: notificationRoleAccess.REJECTED_PRIVATE_GROUP_REQUEST });

@@ -16,7 +16,6 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
 
   const universityDomains = university?.domains || [];
 
-
   if (!universityDomains?.includes(finalDomainWithoutAt)) {
     throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
   }

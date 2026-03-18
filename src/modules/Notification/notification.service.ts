@@ -1,20 +1,59 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import notificationModel from './notification.modal';
-import { notificationRoleAccess, notificationStatus } from './notification.interface';
+import { CreateNotificationPayload, notificationInterface, notificationRoleAccess, notificationStatus } from './notification.interface';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-// import { notificationQueue } from '../../bullmq/Notification/notificationQueue';
-// import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import {
+  buildReceiverMatchStage,
+  buildUserNotificationTotalPipeline,
+  buildUserNotificationCountPipeline,
+  buildUserNotificationMainTotalPipeline,
+  buildSenderAndProfileLookupStages,
+  buildUserNotificationMainDetailLookupStages,
+  buildUserNotificationMainProjectStage,
+  buildReactedToPostWithLikesFilterStage,
+  buildUserNotificationSummaryProjectStage,
+  buildDedupePaginatePipeline,
+} from './notification.pipelines';
+import { convertToObjectId, getPaginationSkip, computeTotalPages, throwApiError } from '../../utils/common';
+import { SelectedUserItem } from '../communityGroup/communityGroup.interface';
+
+
+
+
+
+
+const runPaginatedAggregation = async (
+  listPipeline: PipelineStage[],
+  countPipeline: PipelineStage[],
+  page: number,
+  limit: number
+) => {
+  const [notifications, totalNotificationsResult] = await Promise.all([
+    notificationModel.aggregate(listPipeline),
+    notificationModel.aggregate(countPipeline),
+  ]);
+
+  const totalNotifications = totalNotificationsResult[0]?.total || 0;
+  const totalPages = computeTotalPages(totalNotifications, limit);
+
+  return {
+    notifications,
+    currentPage: page,
+    totalPages,
+    totalNotifications,
+  };
+};
 
 export const createManyNotification = async (
   adminId: mongoose.Types.ObjectId,
   communityGroupId: mongoose.Types.ObjectId,
-  receiverArr: Array<any>,
+  receiverArr: SelectedUserItem[],
   type: string,
   message: string
 ) => {
-  const receiverIds = receiverArr.map((user) => new mongoose.Types.ObjectId(user?.users_id));
+  const receiverIds = receiverArr.map((user) => convertToObjectId(user.users_id.toString()));
 
   const jobData = {
     adminId: adminId.toString(),
@@ -23,12 +62,11 @@ export const createManyNotification = async (
     type,
     message,
   };
-  //   await notificationQueue.add(NotificationIdentifier.group_invite_notifications, jobData);
+
 
   try {
-    console.log('🚀 Attempting to enqueue follow notification...');
     await queueSQSNotification(jobData);
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('❌ Failed to enqueue notification', {
       error: err,
     });
@@ -36,159 +74,36 @@ export const createManyNotification = async (
 };
 
 export const getUserNotification = async (userID: string, page: number = 1, limit: number = 3) => {
-  const skip = (page - 1) * limit;
+  const skip = getPaginationSkip(page, limit);
 
-  const pipeline: PipelineStage[] = [
-    {
-      $match: {
-        receiverId: new mongoose.Types.ObjectId(userID),
-        isRead: false,
-        $nor: [
-          {
-            $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
-          },
-        ],
-      },
-    },
-    {
-      $sort: { createdAt: -1 }, // Sort by createdAt in descending order
-    },
-    {
-      $group: {
-        _id: {
-          type: '$type',
-          senderId: '$sender_id',
-          receiverId: '$receiverId',
+  const pipeline: PipelineStage[] = buildDedupePaginatePipeline({
+    matchStage: buildReceiverMatchStage(userID, {
+      isRead: false,
+      $nor: [
+        {
+          $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
         },
-        latestNotification: { $first: '$$ROOT' }, // Keep the latest notification in each group
-      },
+      ],
+    }),
+    groupId: {
+      type: '$type',
+      senderId: '$sender_id',
+      receiverId: '$receiverId',
     },
-    {
-      $replaceRoot: { newRoot: '$latestNotification' }, // Replace the grouped document with the latest notification
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'sender_id',
-        foreignField: '_id',
-        as: 'senderDetails',
-      },
-    },
-    {
-      $unwind: {
-        path: '$senderDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'sender_id',
-        foreignField: 'users_id',
-        as: 'userProfile',
-      },
-    },
-    {
-      $unwind: {
-        path: '$userProfile',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        createdAt: 1,
-        isRead: 1,
-        receiverId: 1,
-        type: 1,
-        message: 1,
-        userPostId: 1,
-        'sender_id._id': '$senderDetails._id',
-        'sender_id.firstName': '$senderDetails.firstName',
-        'sender_id.lastName': '$senderDetails.lastName',
-        'sender_id.profileDp': '$userProfile.profile_dp.imageUrl',
-      },
-    },
-    {
-      $sort: { createdAt: -1 }, // Sort again after grouping
-    },
-    {
-      $skip: skip, // Apply pagination
-    },
-    {
-      $limit: limit,
-    },
-  ];
+    skip,
+    limit,
+    afterDedupeBeforePaginationStages: [...buildSenderAndProfileLookupStages(), buildUserNotificationSummaryProjectStage()],
+  });
 
   // Execute the aggregation pipeline
-  const userNotifications = await notificationModel.aggregate(pipeline);
-
   // Count total distinct notifications for pagination metadata
-  const totalNotificationsPipeline: PipelineStage[] = [
-    {
-      $match: {
-        receiverId: new mongoose.Types.ObjectId(userID),
-        isRead: false,
-      },
-    },
-    {
-      $group: {
-        _id: {
-          type: '$type',
-          senderId: '$sender_id',
-          receiverId: '$receiverId',
-        },
-      },
-    },
-    {
-      $count: 'total',
-    },
-  ];
+  const totalNotificationsPipeline = buildUserNotificationTotalPipeline(userID);
 
-  const totalNotificationsResult = await notificationModel.aggregate(totalNotificationsPipeline);
-  const totalNotifications = totalNotificationsResult[0]?.total || 0;
-
-  const totalPages = Math.ceil(totalNotifications / limit);
-
-  return {
-    notifications: userNotifications,
-    currentPage: page,
-    totalPages,
-    totalNotifications,
-  };
+  return runPaginatedAggregation(pipeline, totalNotificationsPipeline, page, limit);
 };
 
 export const getUserNotificationCount = async (userID: string) => {
-  const pipeline: PipelineStage[] = [
-    {
-      $match: {
-        receiverId: new mongoose.Types.ObjectId(userID),
-        isRead: false,
-      },
-    },
-    {
-      $group: {
-        _id: {
-          type: '$type',
-          status: {
-            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$status', '$_id'],
-          },
-          senderId: {
-            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$sender_id', '$_id'],
-          },
-          receiverId: {
-            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$receiverId', '$_id'],
-          },
-          communityGroupId: {
-            $cond: [{ $eq: ['$type', 'GROUP_INVITE'] }, '$communityGroupId', '$_id'],
-          },
-        },
-      },
-    },
-    {
-      $count: 'unreadCount',
-    },
-  ];
+  const pipeline = buildUserNotificationCountPipeline(userID);
 
   const result = await notificationModel.aggregate(pipeline);
 
@@ -196,640 +111,55 @@ export const getUserNotificationCount = async (userID: string) => {
 };
 
 export const getUserNotificationMain = async (userID: string, page = 1, limit = 3) => {
-  const skip = (page - 1) * limit;
+  const skip = getPaginationSkip(page, limit);
 
-  const pipeline: PipelineStage[] = [
-    {
-      $match: {
-        receiverId: new mongoose.Types.ObjectId(userID),
-        // $nor: [
-        //   {
-        //     $and: [{ type: notificationRoleAccess.GROUP_INVITE }, { isRead: true }],
-        //   },
-        // ],
-      },
+  const pipeline: PipelineStage[] = buildDedupePaginatePipeline({
+    matchStage: buildReceiverMatchStage(userID),
+    groupId: {
+      type: '$type',
+      sender_id: '$sender_id',
+      receiverId: '$receiverId',
+      userPostId: '$userPostId',
+      parentCommentId: '$parentCommentId',
+      parentCommunityCommentId: '$parentCommunityCommentId',
+      communityPostId: '$communityPostId',
+      communityGroupId: '$communityGroupId',
     },
-    {
-      $sort: { createdAt: -1 },
+    groupAccumulators: {
+      createdAt: { $first: '$createdAt' },
     },
-    {
-      $group: {
-        _id: {
-          type: '$type',
-          sender_id: '$sender_id',
-          receiverId: '$receiverId',
-          userPostId: '$userPostId',
-          parentCommentId: '$parentCommentId',
-          parentCommunityCommentId: '$parentCommunityCommentId',
-          communityPostId: '$communityPostId',
-          communityGroupId: '$communityGroupId',
-        },
-        latestNotification: { $first: '$$ROOT' }, // Get the latest notification (sorted by createdAt)
-        createdAt: { $first: '$createdAt' }, // Keep track of the latest createdAt for the group
-      },
-    },
-    {
-      $replaceRoot: {
-        newRoot: '$latestNotification', // Replace the document with the latest notification in the group
-      },
-    },
-    {
-      $sort: { createdAt: -1 }, // Sort again after deduplication
-    },
-    {
-      $skip: skip,
-    },
-    {
-      $limit: limit,
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'sender_id',
-        foreignField: '_id',
-        as: 'senderDetails',
-      },
-    },
-    {
-      $unwind: {
-        path: '$senderDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'sender_id',
-        foreignField: 'users_id',
-        as: 'userProfile',
-      },
-    },
-    {
-      $unwind: {
-        path: '$userProfile',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: 'communities',
-        localField: 'communityId',
-        foreignField: '_id',
-        as: 'directCommunityDetails',
-      },
-    },
-    {
-      $unwind: {
-        path: '$directCommunityDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    {
-      $lookup: {
-        from: 'communitygroups',
-        localField: 'communityGroupId',
-        foreignField: '_id',
-        as: 'communityGroupDetails',
-      },
-    },
-    {
-      $unwind: {
-        path: '$communityGroupDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: 'communities',
-        localField: 'communityGroupDetails.communityId',
-        foreignField: '_id',
-        as: 'communityDetails',
-      },
-    },
-
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'likedBy.newFiveUsers',
-        foreignField: '_id',
-        as: 'likedUsersDetails',
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'likedBy.newFiveUsers',
-        foreignField: 'users_id',
-        as: 'likedUsersProfiles',
-      },
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'commentedBy.newFiveUsers._id',
-        foreignField: '_id',
-        as: 'commentedUsersDetails',
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'commentedBy.newFiveUsers._id',
-        foreignField: 'users_id',
-        as: 'commentedUsersProfiles',
-      },
-    },
-
-    {
-      $unwind: {
-        path: '$communityDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: 'userposts',
-        localField: 'userPostId',
-        foreignField: '_id',
-        as: 'userPostDetails',
-      },
-    },
-    {
-      $lookup: {
-        from: 'userpostcomments',
-        localField: 'userPostId',
-        foreignField: 'userPostId',
-        as: 'userPostComments',
-      },
-    },
-
-    {
-      $lookup: {
-        from: 'communityposts',
-        localField: 'communityPostId',
-        foreignField: '_id',
-        as: 'communityPostDetails',
-      },
-    },
-    {
-      $lookup: {
-        from: 'communitypostcomments',
-        localField: 'communityPostId',
-        foreignField: 'postId',
-        as: 'communityPostComments',
-      },
-    },
-
-    {
-      $unwind: {
-        path: '$userPostDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $unwind: {
-        path: '$communityPostDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    // start
-
-    {
-      $lookup: {
-        from: 'communitypostcomments',
-        localField: 'repliedBy.newFiveUsers.communityPostParentCommentId',
-        foreignField: '_id',
-        as: 'communityParentComments',
-      },
-    },
-    {
-      $lookup: {
-        from: 'communitypostcomments',
-        localField: 'communityParentComments.replies',
-        foreignField: '_id',
-        as: 'communityReplyComments',
-      },
-    },
-    {
-      $addFields: {
-        communityParentCommentReplies: {
-          $map: {
-            input: '$communityParentComments',
-            as: 'parent',
-            in: {
-              parentId: '$$parent._id',
-              totalReplies: {
-                $size: {
-                  $setDifference: [
-                    {
-                      $setUnion: [
-                        {
-                          $map: {
-                            input: {
-                              $filter: {
-                                input: '$communityReplyComments',
-                                as: 'reply',
-                                cond: { $in: ['$$reply._id', '$$parent.replies'] },
-                              },
-                            },
-                            as: 'replyDoc',
-                            in: '$$replyDoc.commenterId',
-                          },
-                        },
-                        [],
-                      ],
-                    },
-                    ['$$parent.commenterId'], // exclude self
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    //   end
-
-    // for reply comment user post
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'repliedBy.newFiveUsers._id',
-        foreignField: '_id',
-        as: 'repliedUsersDetails',
-      },
-    },
-    {
-      $lookup: {
-        from: 'userprofiles',
-        localField: 'repliedBy.newFiveUsers._id',
-        foreignField: 'users_id',
-        as: 'repliedUsersProfiles',
-      },
-    },
-
-    {
-      $lookup: {
-        from: 'userpostcomments',
-        localField: 'repliedBy.newFiveUsers.parentCommentId',
-        foreignField: '_id',
-        as: 'parentComments',
-      },
-    },
-    {
-      $lookup: {
-        from: 'userpostcomments',
-        localField: 'parentComments.replies',
-        foreignField: '_id',
-        as: 'replyComments',
-      },
-    },
-
-    {
-      $addFields: {
-        parentCommentReplies: {
-          $map: {
-            input: '$parentComments',
-            as: 'parent',
-            in: {
-              parentId: '$$parent._id',
-              totalReplies: {
-                $size: {
-                  $setDifference: [
-                    {
-                      $setUnion: [
-                        {
-                          $map: {
-                            input: {
-                              $filter: {
-                                input: '$replyComments',
-                                as: 'reply',
-                                cond: { $in: ['$$reply._id', '$$parent.replies'] },
-                              },
-                            },
-                            as: 'replyDoc',
-                            in: '$$replyDoc.commenterId',
-                          },
-                        },
-                        [],
-                      ],
-                    },
-                    ['$$parent.commenterId'],
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-
-    {
-      $match: {
-        $expr: {
-          $not: {
-            $and: [
-              { $eq: ['$type', 'REACTED_TO_POST'] },
-              { $eq: ['$likedBy.totalCount', 0] },
-              {
-                $or: [
-                  { $eq: [{ $size: { $ifNull: ['$likedBy.newFiveUsers', []] } }, 0] },
-                  { $not: ['$likedBy.newFiveUsers'] },
-                ],
-              },
-            ],
-          },
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        createdAt: 1,
-        isRead: 1,
-        receiverId: 1,
-        type: 1,
-        message: 1,
-        userPostId: 1,
-        communityPostId: 1,
-        communityPostCommentId: 1,
-        status: 1,
-        'sender_id._id': '$senderDetails._id',
-        'sender_id.firstName': '$senderDetails.firstName',
-        'sender_id.lastName': '$senderDetails.lastName',
-        'sender_id.profileDp': '$userProfile.profile_dp.imageUrl',
-        'communityGroupId._id': '$communityGroupDetails._id',
-        'communityGroupId.title': '$communityGroupDetails.title',
-        'communityGroupId.communityGroupLogoUrl': '$communityGroupDetails.communityGroupLogoUrl.imageUrl',
-        'communityGroupId.communityId': '$communityGroupDetails.communityId',
-        'communityDetails.name': '$communityDetails.name',
-        'directCommunityDetails._id': 1,
-        'directCommunityDetails.name': 1,
-        'directCommunityDetails.communityLogoUrl': 1,
-        parentCommentReplies: 1,
-        communityParentCommentReplies: 1,
-        'userPost.likeCount': {
-          $size: {
-            $filter: {
-              input: { $ifNull: ['$userPostDetails.likeCount', []] },
-              as: 'like',
-              cond: { $ne: ['$$like.userId', { $toString: '$userPostDetails.user_id' }] },
-            },
-          },
-        },
-        'communityPost.likeCount': {
-          $size: {
-            $filter: {
-              input: { $ifNull: ['$communityPostDetails.likeCount', []] },
-              as: 'like',
-              cond: { $ne: ['$$like.userId', { $toString: '$communityPostDetails.user_id' }] },
-            },
-          },
-        },
-        'likedBy.totalCount': 1,
-        'likedBy.newFiveUsers': {
-          $map: {
-            input: '$likedBy.newFiveUsers',
-            as: 'userId',
-            in: {
-              _id: '$$userId',
-              // Get user basic details
-              name: {
-                $let: {
-                  vars: {
-                    user: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$likedUsersDetails',
-                            as: 'u',
-                            cond: { $eq: ['$$u._id', '$$userId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: { $concat: ['$$user.firstName', ' ', '$$user.lastName'] },
-                },
-              },
-              // Get profile image
-              profileDp: {
-                $let: {
-                  vars: {
-                    profile: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$likedUsersProfiles',
-                            as: 'p',
-                            cond: { $eq: ['$$p.users_id', '$$userId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: '$$profile.profile_dp.imageUrl',
-                },
-              },
-            },
-          },
-        },
-        'commentedBy.totalCount': 1,
-
-        'userPost.totalComments': {
-          $size: {
-            $setUnion: [
-              {
-                $filter: {
-                  input: { $ifNull: ['$userPostComments.commenterId', []] },
-                  as: 'commenter',
-                  cond: { $ne: ['$$commenter', '$userPostDetails.user_id'] },
-                },
-              },
-              [],
-            ],
-          },
-        },
-        'communityPost.totalComments': {
-          $size: {
-            $setUnion: [
-              {
-                $filter: {
-                  input: { $ifNull: ['$communityPostComments.commenterId', []] },
-                  as: 'commenter',
-                  cond: { $ne: ['$$commenter', '$communityPostDetails.user_id'] },
-                },
-              },
-              [],
-            ],
-          },
-        },
-
-        'commentedBy.newFiveUsers': {
-          $map: {
-            input: '$commentedBy.newFiveUsers',
-            as: 'userEntry',
-            in: {
-              _id: '$$userEntry._id',
-              communityPostCommentId: '$$userEntry.communityPostCommentId',
-              postCommentId: '$$userEntry.postCommentId',
-              name: {
-                $let: {
-                  vars: {
-                    user: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$commentedUsersDetails',
-                            as: 'u',
-                            cond: { $eq: ['$$u._id', '$$userEntry._id'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: { $concat: ['$$user.firstName', ' ', '$$user.lastName'] },
-                },
-              },
-              profileDp: {
-                $let: {
-                  vars: {
-                    profile: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$commentedUsersProfiles',
-                            as: 'p',
-                            cond: { $eq: ['$$p.users_id', '$$userEntry._id'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: '$$profile.profile_dp.imageUrl',
-                },
-              },
-            },
-          },
-        },
-
-        'repliedBy.newFiveUsers': {
-          $map: {
-            input: '$repliedBy.newFiveUsers',
-            as: 'userEntry',
-            in: {
-              _id: '$$userEntry._id',
-              communityPostCommentId: '$$userEntry.communityPostCommentId',
-              postCommentId: '$$userEntry.postCommentId',
-              name: {
-                $let: {
-                  vars: {
-                    user: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$repliedUsersDetails',
-                            as: 'u',
-                            cond: { $eq: ['$$u._id', '$$userEntry._id'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: { $concat: ['$$user.firstName', ' ', '$$user.lastName'] },
-                },
-              },
-              profileDp: {
-                $let: {
-                  vars: {
-                    profile: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: '$repliedUsersProfiles',
-                            as: 'p',
-                            cond: { $eq: ['$$p.users_id', '$$userEntry._id'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: '$$profile.profile_dp.imageUrl',
-                },
-              },
-            },
-          },
-        },
-
-        // replyend
-      },
-    },
-  ];
+    skip,
+    limit,
+    afterPaginationStages: [
+      ...buildSenderAndProfileLookupStages(),
+      ...buildUserNotificationMainDetailLookupStages(),
+      buildReactedToPostWithLikesFilterStage(),
+      buildUserNotificationMainProjectStage(),
+    ],
+  });
 
   // Count total distinct notifications for pagination metadata
-  const totalNotificationsPipeline: PipelineStage[] = [
-    {
-      $match: {
-        receiverId: new mongoose.Types.ObjectId(userID),
-      },
-    },
-    {
-      $group: {
-        _id: {
-          type: '$type',
-          senderId: '$sender_id',
-          receiverId: '$receiverId',
-          userPostId: '$userPostId',
-          communityPostId: '$communityPostId',
-          communityGroupId: '$communityGroupId',
-        },
-      },
-    },
-    {
-      $count: 'total',
-    },
-  ];
+  const totalNotificationsPipeline = buildUserNotificationMainTotalPipeline(userID);
 
-  const totalNotificationsResult = await notificationModel.aggregate(totalNotificationsPipeline);
-  const totalNotifications = totalNotificationsResult[0]?.total || 0;
-
-  const userNotifications = await notificationModel.aggregate(pipeline);
-
-  const totalPages = Math.ceil(totalNotifications / limit);
-
-  return {
-    notifications: userNotifications,
-    currentPage: page,
-    totalPages,
-    totalNotifications,
-  };
+  return runPaginatedAggregation(pipeline, totalNotificationsPipeline, page, limit);
 };
 
-export const updateUserNotification = async (id: string, status: string = 'default') => {
+export const updateUserNotification = async (id: string, status: notificationStatus = notificationStatus.default) => {
   const userNotification = await notificationModel.findByIdAndUpdate(id, { isRead: true, status: status }, { new: true });
 
   return userNotification;
 };
 
-export const CreateNotification = async (notification: any) => {
+export const createNotification = async (notification: CreateNotificationPayload) => {
   try {
     return await notificationModel.create(notification);
-  } catch (error: any) {
-    console.error(error);
-    throw new Error(error.message);
+  } catch (error: unknown) {
+    throwApiError(error, { messagePrefix: 'Failed to create notification' });
   }
 };
 
 export const changeNotificationStatus = async (status: notificationStatus, notificationId: string) => {
-  const notification = await notificationModel.findById(new mongoose.Types.ObjectId(notificationId));
+  const notification = await notificationModel.findById(convertToObjectId(notificationId));
 
   if (!notification) {
     throw new ApiError(httpStatus.NOT_FOUND, 'notification not found!');
@@ -847,7 +177,9 @@ export const changeNotificationStatusForCommunityAdmin = async (
   adminIds: string[]
 ) => {
   const targetNotification = await notificationModel.findById(notificationId);
-  if (!targetNotification) throw new Error('Notification not found');
+  if (!targetNotification) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Notification not found');
+  }
 
   await notificationModel.updateMany(
     {
@@ -866,19 +198,19 @@ export const changeNotificationStatusForCommunityAdmin = async (
   return true;
 };
 
-export const DeleteNotification = async (filter: any) => {
+export const deleteNotification = async (filter: mongoose.FilterQuery<notificationInterface>) => {
   return await notificationModel.findOneAndDelete(filter);
 };
 
 export const markNotificationsAsRead = async (userID: string) => {
   try {
     const result = await notificationModel.updateMany(
-      { receiverId: new mongoose.Types.ObjectId(userID), isRead: false },
+      { receiverId: convertToObjectId(userID), isRead: false },
       { $set: { isRead: true } }
     );
     return result;
-  } catch (error: any) {
-    throw new Error(error.message);
+  } catch (error: unknown) {
+    throwApiError(error, { messagePrefix: 'Failed to mark notifications as read' });
   }
 };
 

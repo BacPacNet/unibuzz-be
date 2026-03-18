@@ -4,7 +4,7 @@ import { communityGroupModel, communityGroupService } from '.';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
 import { ChangeStatusBody, communityGroupInterface, CommunityGroupNotificationPayload, CommunityGroupWithNotification, status, UpdateJoinRequestBody } from './communityGroup.interface';
-import { notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
+import { CreateNotificationPayload, notificationRoleAccess, notificationStatus } from '../Notification/notification.interface';
 import { notificationService } from '../Notification';
 
 import { communityService } from '../community';
@@ -52,7 +52,7 @@ async function createNotificationEmitAndPush(
   notificationPayload: CommunityGroupNotificationPayload,
   pushPayloadOverrides?: Record<string, string | undefined>
 ): Promise<void> {
-  await notificationService.CreateNotification(notificationPayload);
+  await notificationService.createNotification(notificationPayload as unknown as CreateNotificationPayload);
   io.emit(`notification_${recipientId}`, { type: notificationPayload.type });
   const senderStr =
     typeof notificationPayload.sender_id === 'string'

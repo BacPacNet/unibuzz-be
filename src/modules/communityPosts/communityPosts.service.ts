@@ -12,7 +12,7 @@ import { UserProfile } from '../userProfile';
 import { BlockedUserEntry, FollowingEntry } from '../userProfile/userProfile.interface';
 import { communityGroupModel } from '../communityGroup';
 import { CommunityGroupTitleAdmin, NotificationWithPopulatedCommunityGroup, UserProfileBlockedUsers } from './communityPosts.interface';
-import { notificationRoleAccess } from '../Notification/notification.interface';
+import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import communityModel from '../community/community.model';
 import { convertToObjectId, getPaginationSkip, computeTotalPages, throwApiError } from '../../utils/common';
@@ -156,7 +156,7 @@ export const createCommunityPost = async (
         communityPostId: convertToObjectId(finalCreatedPost?._id?.toString()),
       };
 
-      const notification = await notificationService.CreateNotification(notifications);
+      const notification = await notificationService.createNotification(notifications);
       const res = (await notification.populate('communityGroupId')) as unknown as NotificationWithPopulatedCommunityGroup;
       const pushBody = res?.communityGroupId?.title
         ? POST_MESSAGES.LIVE_REQUEST(res.communityGroupId.title)
@@ -515,7 +515,7 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
       message: POST_MESSAGES.APPROVED,
     };
 
-    await notificationService.CreateNotification(notifications);
+    await notificationService.createNotification(notifications as unknown as CreateNotificationPayload);
     emitPostStatusNotification({
       socketReceiverId: authorIdStr,
       pushReceiverId: authorIdStr,
@@ -542,7 +542,7 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
       message: POST_MESSAGES.REJECTED,
     };
 
-    await notificationService.CreateNotification(notifications);
+    await notificationService.createNotification(notifications);
     emitPostStatusNotification({
       socketReceiverId: authorIdStr,
       pushReceiverId: authorIdStr,

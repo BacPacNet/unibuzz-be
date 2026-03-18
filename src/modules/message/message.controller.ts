@@ -1,5 +1,4 @@
-import { userIdExtend } from 'src/config/userIDType';
-
+import { userIdExtend } from '../../config/userIDType';
 import { Response } from 'express';
 import httpStatus from 'http-status';
 import { messageService } from '.';
