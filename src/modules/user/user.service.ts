@@ -25,6 +25,7 @@ import {
   DEFAULT_LIMIT,
   convertToObjectId,
 } from '../../utils/common';
+import config from '../../config/config';
 import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.service';
 
 /** Centralized user-related error messages and status for consistency */
@@ -525,6 +526,22 @@ export const getRewardsDetails = async (
   previousMonthRedeemed: boolean;
 }> => {
   const user = await getUserByIdOrThrow(userId);
+  const rawCommunityIds: string | undefined = config.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY;
+  const allowedCommunityIds = (() => {
+    if (!rawCommunityIds) return [];
+    try {
+      const parsed = JSON.parse(rawCommunityIds);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String).filter(Boolean);
+      }
+    } catch (_err) {
+      // Fallback to comma-separated values when env is not JSON.
+    }
+    return rawCommunityIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+  })();
 
   const now = new Date();
 
@@ -546,24 +563,47 @@ export const getRewardsDetails = async (
     isDeleted: { $ne: true },
   };
 
+  const getEligibleReferralCount = async (startDate: Date, endDate: Date): Promise<number> => {
+    if (!allowedCommunityIds.length) {
+      return 0;
+    }
+
+    const [result] = await User.aggregate<{ count: number }>([
+      {
+        $match: {
+          ...baseFilter,
+          createdAt: {
+            $gte: startDate,
+            $lt: endDate,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: UserProfile.collection.name,
+          localField: '_id',
+          foreignField: 'users_id',
+          as: 'profile',
+        },
+      },
+      { $unwind: '$profile' },
+      {
+        $match: {
+          'profile.email.communityId': { $in: allowedCommunityIds },
+        },
+      },
+      { $count: 'count' },
+    ]);
+
+    return result?.count ?? 0;
+  };
+
   const [thisMonthProgress, previousMonthProgress, previousMonthRedeemed] = await Promise.all([
     // ✅ This month (e.g. March 1 → April 1 UTC)
-    User.countDocuments({
-      ...baseFilter,
-      createdAt: {
-        $gte: startOfThisMonthUTC,
-        $lt: startOfNextMonthUTC,
-      },
-    }),
+    getEligibleReferralCount(startOfThisMonthUTC, startOfNextMonthUTC),
 
     // ✅ Previous month (e.g. Feb 1 → March 1 UTC)
-    User.countDocuments({
-      ...baseFilter,
-      createdAt: {
-        $gte: startOfPreviousMonthUTC,
-        $lt: startOfThisMonthUTC,
-      },
-    }),
+    getEligibleReferralCount(startOfPreviousMonthUTC, startOfThisMonthUTC),
 
     rewardRedemptionService.hasRedeemedRewardForMonth(userId, startOfPreviousMonthUTC),
   ]);
