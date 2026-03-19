@@ -1,11 +1,9 @@
 import mongoose from 'mongoose';
 import universityModal from './university.model';
-import { ApiError } from '../errors';
-import httpStatus from 'http-status';
+import { UniversityFilter } from './university.interface';
+import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
 
-export const createUniversity = async (university: any) => {
-  return await universityModal.create(university);
-};
+
 
 export const getUniversityById = async (university_name: string) => {
   return await universityModal.findOne({ name: university_name });
@@ -15,22 +13,8 @@ export const getUniversityByRealId = async (id: string) => {
   return await universityModal.findById(new mongoose.Types.ObjectId(id));
 };
 
-export const updateUniversity = async (id: mongoose.Types.ObjectId, university: any) => {
-  let universityToUpadate;
 
-  universityToUpadate = await universityModal.findById(id);
 
-  if (!universityToUpadate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'University not found!');
-  }
-  Object.assign(universityToUpadate, university);
-  await universityToUpadate.save();
-  return universityToUpadate;
-};
-
-export const deleteUniversity = async (id: mongoose.Types.ObjectId) => {
-  return await universityModal.findByIdAndDelete(id);
-};
 
 export const getAllUniversity = async (
   page: number = 1,
@@ -42,54 +26,34 @@ export const getAllUniversity = async (
   type: string = ''
 ) => {
   const startIndex = (page - 1) * limit;
+  const normalizedName = name.trim();
 
-  const searchConditions: any[] = [];
+  const searchConditions: UniversityFilter[] = [];
 
   if (city) {
-    searchConditions.push({ city: { $regex: city, $options: 'i' } });
+    searchConditions.push({ city: { $regex: escapeRegex(city), $options: 'i' } });
   }
   if (country) {
-    searchConditions.push({ country: { $regex: country, $options: 'i' } });
+    searchConditions.push({ country: { $regex: escapeRegex(country), $options: 'i' } });
   }
   if (region) {
-    searchConditions.push({ continent: { $regex: region, $options: 'i' } });
+    searchConditions.push({ continent: { $regex: escapeRegex(region), $options: 'i' } });
   }
   if (type) {
-    searchConditions.push({ type: { $regex: type, $options: 'i' } });
+    searchConditions.push({ type: { $regex: escapeRegex(type), $options: 'i' } });
   }
-  if (name) {
+  if (normalizedName) {
     searchConditions.push({
-      name: { $regex: name, $options: 'i' },
+      name: { $regex: escapeRegex(normalizedName), $options: 'i' },
     });
   }
 
   const matchStage = searchConditions.length > 0 ? { $match: { $and: searchConditions } } : { $match: {} };
 
-  const aggregation: any = [matchStage];
+  const aggregation: mongoose.PipelineStage[] = [matchStage];
 
-  if (name) {
-    aggregation.push(
-      {
-        $addFields: {
-          nameMatchRank: {
-            $switch: {
-              branches: [
-                { case: { $eq: [{ $toLower: '$name' }, name.toLowerCase()] }, then: 0 },
-                { case: { $regexMatch: { input: '$name', regex: `^${name}`, options: 'i' } }, then: 1 },
-                { case: { $regexMatch: { input: '$name', regex: name, options: 'i' } }, then: 2 },
-              ],
-              default: 3,
-            },
-          },
-        },
-      },
-      { $sort: { nameMatchRank: 1, name: 1 } },
-      {
-        $project: {
-          nameMatchRank: 0,
-        },
-      }
-    );
+  if (normalizedName) {
+    aggregation.push(...buildNameMatchRankingStages(normalizedName));
   }
 
   aggregation.push({ $skip: startIndex }, { $limit: limit });
@@ -116,62 +80,16 @@ export const searchUniversityByQuery = async (
   limit: number = 10
 ) => {
   const skip = (page - 1) * limit;
+  const normalizedSearchTerm = searchTerm.trim();
 
-  const aggregation: any[] = [];
+  const aggregation: mongoose.PipelineStage[] = [];
 
-  if (searchTerm && searchTerm.trim() !== '') {
+  if (normalizedSearchTerm) {
     aggregation.push({
-      $match: {
-        $or: [
-          { name: { $regex: searchTerm, $options: 'i' } },
-          { country: { $regex: searchTerm, $options: 'i' } },
-          { type: { $regex: searchTerm, $options: 'i' } },
-        ],
-      },
+      $match: buildSearchTermOrFilter(normalizedSearchTerm),
     });
 
-    aggregation.push({
-      $addFields: {
-        nameMatchRank: {
-          $switch: {
-            branches: [
-              {
-                case: {
-                  $eq: [{ $toLower: "$name" }, searchTerm.toLowerCase()],
-                },
-                then: 0,
-              },
-              {
-                case: {
-                  $regexMatch: {
-                    input: "$name",
-                    regex: `^${searchTerm}`,
-                    options: "i",
-                  },
-                },
-                then: 1, 
-              },
-              {
-                case: {
-                  $regexMatch: {
-                    input: "$name",
-                    regex: searchTerm,
-                    options: "i",
-                  },
-                },
-                then: 2,
-              },
-            ],
-            default: 3,
-          },
-        },
-      },
-    });
-
-    aggregation.push({ $sort: { nameMatchRank: 1, name: 1 } });
-    aggregation.push({
-      $project: { nameMatchRank: 0 },
-    });
+    aggregation.push(...buildNameMatchRankingStages(normalizedSearchTerm));
   } else {
     aggregation.push({ $match: {} });
   }
@@ -183,14 +101,8 @@ export const searchUniversityByQuery = async (
     .option({ allowDiskUse: true });
 
   const totalCount = await universityModal.countDocuments(
-    searchTerm && searchTerm.trim() !== ""
-      ? {
-          $or: [
-            { name: { $regex: searchTerm, $options: "i" } },
-            { country: { $regex: searchTerm, $options: "i" } },
-            { type: { $regex: searchTerm, $options: "i" } },
-          ],
-        }
+    normalizedSearchTerm
+      ? buildSearchTermOrFilter(normalizedSearchTerm)
       : {}
   );
 

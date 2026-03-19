@@ -7,7 +7,7 @@ import { universityService } from '../university';
 import { userIdExtend } from '../../config/userIDType';
 import { CreateCommunityBody, GetCommunityUsersOptions, communityInterface } from './community.interface';
 import catchAsync from '../utils/catchAsync';
-import { IUniversity } from '../university/university.model';
+import { IUniversity } from '../university/university.interface';
 
 
 

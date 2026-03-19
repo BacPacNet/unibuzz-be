@@ -21,9 +21,6 @@ import { SelectedUserItem } from '../communityGroup/communityGroup.interface';
 
 
 
-
-
-
 const runPaginatedAggregation = async (
   listPipeline: PipelineStage[],
   countPipeline: PipelineStage[],

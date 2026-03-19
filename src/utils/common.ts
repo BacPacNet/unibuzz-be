@@ -85,6 +85,13 @@ export function parseUserIdOrThrow(userId: unknown): mongoose.Types.ObjectId {
   return new mongoose.Types.ObjectId(userId);
 }
 
+export function parseUniversityIdOrThrow(id: unknown): mongoose.Types.ObjectId {
+  if (typeof id !== 'string' || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid university ID');
+  }
+  return new mongoose.Types.ObjectId(id);
+}
+
 
 
 
