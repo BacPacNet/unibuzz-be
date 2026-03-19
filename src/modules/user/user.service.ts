@@ -26,6 +26,8 @@ import {
   convertToObjectId,
 } from '../../utils/common';
 import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.service';
+import { universityVerificationEmailModal } from '../universityVerificationEmail';
+import { UniversityVerificationEmailStatus } from '../universityVerificationEmail/universityVerificationEmail.interface';
 
 /** Centralized user-related error messages and status for consistency */
 const USER_ERROR_MESSAGES = {
@@ -299,9 +301,12 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
 };
 
 export const userEmailAndUserNameAvailability = async (email: string, userName: string) => {
-  const [userEmail, userNameAvailable] = await Promise.all([User.findOne({ email }), User.findOne({ userName })]);
+  const [userEmail, userNameAvailable,universityVerificationEmail] = await Promise.all([User.findOne({ email }), User.findOne({ userName }),universityVerificationEmailModal.findOne({ email })]);
 
   if (userEmail) {
+    throw new ApiError(httpStatus.CONFLICT, USER_ERROR_MESSAGES.EMAIL_ALREADY_TAKEN);
+  }
+  if (universityVerificationEmail?.status === UniversityVerificationEmailStatus.COMPLETE) {
     throw new ApiError(httpStatus.CONFLICT, USER_ERROR_MESSAGES.EMAIL_ALREADY_TAKEN);
   }
 
