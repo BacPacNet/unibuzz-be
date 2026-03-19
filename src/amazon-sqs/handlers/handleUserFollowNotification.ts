@@ -26,7 +26,7 @@ export const handleUserFollowNotification = async (job: any) => {
       message: 'Started following you',
     };
 
-    const notification = await notificationService.CreateNotification(newNotification);
+    const notification = await notificationService.createNotification(newNotification);
 
     const res: any = await notification.populate('sender_id');
 
