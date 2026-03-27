@@ -5,22 +5,46 @@ import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
 import { UniversityVerificationEmailStatus } from './universityVerificationEmail.interface';
 
-export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
-  const splitedEmail = email.split(".");
-  const finalDomain = `${splitedEmail[splitedEmail?.length - 2]}.${splitedEmail[splitedEmail?.length - 1]}`;
+const extractDomainFromEmail = (email: string) => email.split('@')[1]?.toLowerCase().trim() || '';
 
-  const finalDomainWithoutAt = finalDomain.includes('@') ? finalDomain.split('@')[1] : finalDomain;
+const isDomainMatch = (emailDomain: string, universityDomain: string) => {
+  const normalizedEmailDomain = emailDomain.toLowerCase().trim();
+  const normalizedUniversityDomain = universityDomain.toLowerCase().trim().replace(/^@/, '');
+
+  if (!normalizedEmailDomain || !normalizedUniversityDomain) {
+    return false;
+  }
+
+  return (
+    normalizedEmailDomain === normalizedUniversityDomain ||
+    normalizedEmailDomain.endsWith(`.${normalizedUniversityDomain}`) ||
+    normalizedUniversityDomain.endsWith(`.${normalizedEmailDomain}`)
+  );
+};
+
+const hasUniversityDomainMatch = (emailDomain: string, universityDomains: string[]) => {
+  if (!emailDomain) {
+    return false;
+  }
+
+  return universityDomains.some((domain: string) => isDomainMatch(emailDomain, domain));
+};
+
+export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
+  const emailDomain = extractDomainFromEmail(email);
 
   const university = await universityModal.findOne({  _id: universityId })
 
 
-  if (!finalDomainWithoutAt) {
+  if (!emailDomain) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid email domain.');
   }
 
   const universityDomains = university?.domains || [];
 
-  if (!universityDomains?.includes(finalDomainWithoutAt)) {
+  const hasMatchedDomain = hasUniversityDomainMatch(emailDomain, universityDomains);
+
+  if (!hasMatchedDomain) {
     throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
   }
   const data = {
@@ -96,10 +120,11 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
 };
 
 export const universityEmailDomainCheck = async (email: string, universityId: string) => {
-  const domain = email.split('@')[1];
-  const university = await universityModal.findOne({ domains: domain, _id: universityId });
+  const emailDomain = extractDomainFromEmail(email);
+  const university = await universityModal.findOne({ _id: universityId });
   const universityVerificationEmail = await universityVerificationEmailModal.findOne({ email });
-  if (!university) {
+  const hasMatchedDomain = hasUniversityDomainMatch(emailDomain, university?.domains || []);
+  if (!university || !hasMatchedDomain) {
     return false;
   }
   if (universityVerificationEmail?.status === UniversityVerificationEmailStatus.COMPLETE) {
