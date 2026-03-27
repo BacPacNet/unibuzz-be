@@ -8,8 +8,11 @@ import { UniversityVerificationEmailStatus } from './universityVerificationEmail
 export const createUniversityEmailVerificationOtp = async (email: string, universityId: string) => {
   const splitedEmail = email.split(".");
   const finalDomain = `${splitedEmail[splitedEmail?.length - 2]}.${splitedEmail[splitedEmail?.length - 1]}`;
+
   const finalDomainWithoutAt = finalDomain.includes('@') ? finalDomain.split('@')[1] : finalDomain;
+
   const university = await universityModal.findOne({  _id: universityId })
+
 
   if (!finalDomainWithoutAt) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid email domain.');

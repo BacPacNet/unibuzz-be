@@ -170,11 +170,16 @@ export const getRewards = catchAsync(async (req: userIdExtend, res: Response): P
 
   res.status(httpStatus.OK).json({
     referCode: result.referCode,
+    totalInvites: result.totalInvites,
+    totalEarning: result.totalEarning,
     thisMonthProgress: result.thisMonthProgress,
     previousMonthProgress: result.previousMonthProgress,
     thisMonthReward: result.thisMonthReward,
     previousMonthReward: result.previousMonthReward,
-    previousMonthRedeemed: result.previousMonthRedeemed,
+    thisMonthLeftoverInvites: result.thisMonthLeftoverInvites,
+    previousMonthLeftoverInvites: result.previousMonthLeftoverInvites,
+    currentUPI: result.currentUPI
+    // previousMonthRedeemed: result.previousMonthmoRedeemed,
   });
 });
 

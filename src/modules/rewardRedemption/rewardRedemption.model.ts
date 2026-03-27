@@ -1,5 +1,9 @@
 import { Schema, model } from 'mongoose';
-import { IRewardRedemption } from './rewardRedemption.interface';
+import {
+  IRewardRedemption,
+  RewardRedemptionStatus,
+  REWARD_REDEMPTION_STATUS_VALUES,
+} from './rewardRedemption.interface';
 
 const rewardRedemptionSchema = new Schema<IRewardRedemption>(
   {
@@ -9,9 +13,8 @@ const rewardRedemptionSchema = new Schema<IRewardRedemption>(
       required: true,
       index: true,
     },
-    awsEmail: {
+    upiId: {
       type: String,
-      required: true,
       trim: true,
     },
     rewardMonth: {
@@ -22,16 +25,28 @@ const rewardRedemptionSchema = new Schema<IRewardRedemption>(
       type: Number,
       required: true,
     },
+    totalInvites: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    leftoverInvites: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
     status: {
       type: String,
-      enum: ['pending', 'completed'],
+      enum: REWARD_REDEMPTION_STATUS_VALUES,
       required: true,
-      default: 'pending',
+      default: RewardRedemptionStatus.Pending,
       index: true,
     },
   },
   { timestamps: true }
 );
+
+rewardRedemptionSchema.index({ userId: 1, rewardMonth: 1 }, { unique: true });
 
 const RewardRedemptionModel = model<IRewardRedemption>(
   'rewardRedemption',
