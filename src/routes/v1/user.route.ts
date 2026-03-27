@@ -53,8 +53,27 @@ router
   .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getRewards);
 
 router
-  .route('/rewards/request')
-  .post(userIdAuth, validate(rewardRedemptionValidation.createPreviousMonthRewardRequest), rewardRedemptionController.createPreviousMonthRewardRequest);
+  .route('/rewards/docs')
+  .get(
+    validate(rewardRedemptionValidation.getAllRewardRedemptions),
+    rewardRedemptionController.getAllRewardRedemptions
+  );
+
+
+router
+  .route('/rewards/latest/upi-id')
+  .put(
+    userIdAuth,
+    validate(rewardRedemptionValidation.updateLatestRewardRedemptionUpiId),
+    rewardRedemptionController.updateLatestRewardRedemptionUpiId
+  );
+
+router
+  .route('/rewards/:redemptionId/complete')
+  .put(
+    validate(rewardRedemptionValidation.markRewardRedemptionCompleted),
+    rewardRedemptionController.markRewardRedemptionCompleted
+  );
 
 
 router

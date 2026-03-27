@@ -27,6 +27,7 @@ import {
 } from '../../utils/common';
 import config from '../../config/config';
 import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.service';
+import { RewardRedemptionStatus } from '../rewardRedemption/rewardRedemption.interface';
 import { universityVerificationEmailModal } from '../universityVerificationEmail';
 import { UniversityVerificationEmailStatus } from '../universityVerificationEmail/universityVerificationEmail.interface';
 
@@ -474,42 +475,51 @@ export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, passwo
 
 
 
-// function calculateReward(invites: number): number {
-//   if (invites <= 0) return 0;
 
-//   if (invites <= 10) {
-//     return invites * 10;
-//   }
+type RewardProgress = {
+  reward: number;
+  leftoverInvites: number;
+  rewardedInvites: number;
+};
 
-//   if (invites <= 15) {
-//     return invites * 13.33;
-//   }
+function startOfUtcMonthAfter(rewardMonth: Date): Date {
+  return new Date(Date.UTC(rewardMonth.getUTCFullYear(), rewardMonth.getUTCMonth() + 1, 1));
+}
 
-//   if (invites <= 20) {
-//     return invites * 20;
-//   }
+function calculateRewardProgress(totalInvites: number): RewardProgress {
+  if (totalInvites < 10) {
+    return {
+      reward: 0,
+      leftoverInvites: totalInvites,
+      rewardedInvites: 0,
+    };
+  }
 
-//   return invites * 20;
-// }
+  if (totalInvites < 15) {
+    return {
+      reward: 100,
+      leftoverInvites: totalInvites - 10,
+      rewardedInvites: 10,
+    };
+  }
 
+  if (totalInvites < 20) {
+    return {
+      reward: 200,
+      leftoverInvites: totalInvites - 15,
+      rewardedInvites: 15,
+    };
+  }
 
-function calculateReward(invites: number): number {
-  if (invites < 10) return 0;
-
-  if (invites < 15) return 100;
-
-  if (invites < 20) return 200;
-
-
-  let reward = 400;
-
-  const extraInvites = invites - 20;
-
+  const extraInvites = totalInvites - 20;
   const extraBlocks = Math.floor(extraInvites / 5);
+  const rewardedInvites = 20 + extraBlocks * 5;
 
-  reward += extraBlocks * 100;
-
-  return reward;
+  return {
+    reward: 400 + extraBlocks * 100,
+    leftoverInvites: totalInvites - rewardedInvites,
+    rewardedInvites,
+  };
 }
 
 
@@ -524,51 +534,60 @@ export const getRewardsDetails = async (
   userId: mongoose.Types.ObjectId,
 ): Promise<{
   referCode: string | undefined;
+  totalInvites: number;
+  totalEarning: number;
   thisMonthProgress: number;
   previousMonthProgress: number;
   thisMonthReward: number;
   previousMonthReward: number;
+  thisMonthLeftoverInvites: number;
+  previousMonthLeftoverInvites: number;
+  previousMonthTotalInvites: number;
   previousMonthRedeemed: boolean;
+  currentUPI: string | null;
 }> => {
-  const user = await getUserByIdOrThrow(userId);
-  const rawCommunityIds: string | undefined = config.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY;
-  const allowedCommunityIds = (() => {
-    if (!rawCommunityIds) return [];
+  const parseAllowedCommunityIds = (rawValue: string | undefined): string[] => {
+    if (!rawValue) return [];
+
     try {
-      const parsed = JSON.parse(rawCommunityIds);
+      const parsed = JSON.parse(rawValue);
       if (Array.isArray(parsed)) {
         return parsed.map(String).filter(Boolean);
       }
     } catch (_err) {
       // Fallback to comma-separated values when env is not JSON.
     }
-    return rawCommunityIds
+
+    return rawValue
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean);
-  })();
+  };
 
-  const now = new Date();
+  const getUtcMonthBoundaries = (baseDate: Date) => {
+    const startOfThisMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), 1));
+    const startOfNextMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth() + 1, 1));
+    const startOfPreviousMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth() - 1, 1));
 
-  // ✅ UTC month boundaries
-  const startOfThisMonthUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-  );
+    return {
+      startOfThisMonth,
+      startOfNextMonth,
+      startOfPreviousMonth,
+    };
+  };
 
-  const startOfNextMonthUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
-  );
+  const user = await getUserByIdOrThrow(userId);
+  const allowedCommunityIds = parseAllowedCommunityIds(config.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY);
+  const { startOfThisMonth, startOfNextMonth, startOfPreviousMonth } = getUtcMonthBoundaries(new Date());
+  // const { startOfThisMonth, startOfPreviousMonth } = getUtcMonthBoundaries(new Date());
 
-  const startOfPreviousMonthUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
-  );
 
   const baseFilter = {
     referredBy: userId,
     isDeleted: { $ne: true },
   };
 
-  const getEligibleReferralCount = async (startDate: Date, endDate: Date): Promise<number> => {
+  const getEligibleReferralCount = async (startDate: Date, endExclusive: Date): Promise<number> => {
     if (!allowedCommunityIds.length) {
       return 0;
     }
@@ -579,7 +598,7 @@ export const getRewardsDetails = async (
           ...baseFilter,
           createdAt: {
             $gte: startDate,
-            $lt: endDate,
+            $lt: endExclusive,
           },
         },
       },
@@ -603,25 +622,84 @@ export const getRewardsDetails = async (
     return result?.count ?? 0;
   };
 
-  const [thisMonthProgress, previousMonthProgress, previousMonthRedeemed] = await Promise.all([
-    // ✅ This month (e.g. March 1 → April 1 UTC)
-    getEligibleReferralCount(startOfThisMonthUTC, startOfNextMonthUTC),
+  const [thisMonthNewReferrals, previousMonthRedemption, anchorBeforePreviousMonth] =
+    await Promise.all([
+      getEligibleReferralCount(startOfThisMonth, startOfNextMonth),
+      rewardRedemptionService.getRewardRedemptionForMonth(userId, startOfPreviousMonth),
+      rewardRedemptionService.getLatestRewardRedemptionBeforeMonth(userId, startOfPreviousMonth),
+    ]);
+    
 
-    // ✅ Previous month (e.g. Feb 1 → March 1 UTC)
-    getEligibleReferralCount(startOfPreviousMonthUTC, startOfThisMonthUTC),
+  const previousMonthCountStart = anchorBeforePreviousMonth
+    ? startOfUtcMonthAfter(anchorBeforePreviousMonth.rewardMonth)
+    : new Date(0);
 
-    rewardRedemptionService.hasRedeemedRewardForMonth(userId, startOfPreviousMonthUTC),
-  ]);
+  const previousMonthReferralsAfterAnchor = await getEligibleReferralCount(
+    previousMonthCountStart,
+    startOfThisMonth
+  );
 
-  const thisMonthReward = calculateReward(thisMonthProgress);
-  const previousMonthReward = calculateReward(previousMonthProgress);
+
+
+  const previousMonthCarryFromAnchor = anchorBeforePreviousMonth?.totalInvites ?? 0;
+  const previousMonthComputedTotalInvites = previousMonthCarryFromAnchor + previousMonthReferralsAfterAnchor;
+  const previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+
+  // If no row exists for previous month, create it as processing (closed month — not pending).
+  const ensuredPreviousMonthRedemption =
+    previousMonthRedemption ??
+    (await rewardRedemptionService.upsertRewardRedemptionForMonth({
+      userId,
+      rewardMonth: startOfPreviousMonth,
+      status: RewardRedemptionStatus.Processing,
+      amount: previousMonthComputed.reward || 0,
+      totalInvites: previousMonthComputedTotalInvites,
+      leftoverInvites: previousMonthComputed.leftoverInvites,
+    }));
+
+  const isPreviousMonthFinalized =
+    ensuredPreviousMonthRedemption.status === RewardRedemptionStatus.Processing ||
+    ensuredPreviousMonthRedemption.status === RewardRedemptionStatus.Completed;
+
+  // Carry-over to next month must follow tier math remainder from `calculateRewardProgress()`:
+  // - totalInvites < 10 => carry all
+  // - totalInvites = 10 => carry 0
+  // - totalInvites = 13 => carry 3 (10 processed)
+  // This is independent of redemption `status`; if the redemption doc exists, it is the source of truth.
+  const previousRedemptionTotalInvites =
+    ensuredPreviousMonthRedemption.totalInvites ?? previousMonthComputedTotalInvites;
+  const previousRedemptionProgress = calculateRewardProgress(previousRedemptionTotalInvites);
+  const carryIntoThisMonth = previousRedemptionProgress.leftoverInvites;
+
+  const thisMonthProgress = carryIntoThisMonth + thisMonthNewReferrals;
+  const thisMonthCalculated = calculateRewardProgress(thisMonthProgress);
+  const allTimeInvites = await getEligibleReferralCount(new Date(0), new Date());
+  const allTimeCalculated = calculateRewardProgress(allTimeInvites);
+
+  const previousMonthRedeemed = !!ensuredPreviousMonthRedemption;
+
+  const previousMonthProgress = isPreviousMonthFinalized
+    ? (ensuredPreviousMonthRedemption.totalInvites ?? previousMonthComputedTotalInvites)
+    : previousMonthComputedTotalInvites;
+  const previousMonthReward = isPreviousMonthFinalized
+    ? (ensuredPreviousMonthRedemption.amount ?? previousMonthComputed.reward)
+    : previousMonthComputed.reward;
+  const previousMonthLeftoverInvites = isPreviousMonthFinalized
+    ? (ensuredPreviousMonthRedemption.leftoverInvites ?? previousMonthComputed.leftoverInvites)
+    : previousMonthComputed.leftoverInvites;
 
   return {
     referCode: user.referCode,
+    totalInvites: allTimeCalculated.rewardedInvites,
+    totalEarning: allTimeCalculated.reward || 0,
     thisMonthProgress,
     previousMonthProgress,
-    thisMonthReward: thisMonthReward || 0,
+    thisMonthReward: thisMonthCalculated.reward || 0,
     previousMonthReward: previousMonthReward || 0,
+    thisMonthLeftoverInvites: thisMonthCalculated.leftoverInvites,
+    previousMonthLeftoverInvites,
+    previousMonthTotalInvites: previousMonthProgress,
     previousMonthRedeemed,
+    currentUPI:ensuredPreviousMonthRedemption?.upiId || null,
   };
 };

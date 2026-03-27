@@ -1,15 +1,23 @@
 import { Schema } from 'mongoose';
 
-export type RewardRedemptionStatus = 'pending' | 'completed';
+export enum RewardRedemptionStatus {
+  Pending = 'pending',
+  Processing = 'processing',
+  Completed = 'completed',
+  Failed = 'failed',
+}
+
+export const REWARD_REDEMPTION_STATUS_VALUES = Object.values(RewardRedemptionStatus);
 
 export interface IRewardRedemption {
   userId: Schema.Types.ObjectId;
-  awsEmail: string;
+  upiId?: string;
   /**
    * Month the reward corresponds to, normalized to the first day of the month in UTC.
    */
   rewardMonth: Date;
   status: RewardRedemptionStatus;
   amount: number;
+  totalInvites: number;
+  leftoverInvites: number;
 }
-
