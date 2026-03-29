@@ -1,26 +1,94 @@
-import mongoose, { Types } from 'mongoose';
+import mongoose from 'mongoose';
 import { communityPostsInterface } from './communityPosts.interface';
-import CommunityPostModel from './communityPosts.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { communityPostsModel } from '.';
 import {
-  communityPostFilterType,
   communityPostStatus,
   communityPostUpdateStatus,
   CommunityType,
 } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
+import { BlockedUserEntry, FollowingEntry } from '../userProfile/userProfile.interface';
 import { communityGroupModel } from '../communityGroup';
-import { notificationRoleAccess } from '../Notification/notification.interface';
+import { CommunityGroupTitleAdmin, NotificationWithPopulatedCommunityGroup, UserProfileBlockedUsers } from './communityPosts.interface';
+import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
 import { NotificationIdentifier } from '../../bullmq/Notification/NotificationEnums';
 import communityModel from '../community/community.model';
-import { convertToObjectId } from '../../utils/common';
+import { convertToObjectId, getPaginationSkip, computeTotalPages, throwApiError } from '../../utils/common';
+import { withTransaction } from '../utils';
 import PostRelationship from '../userPost/postRelationship.model';
 import { notificationService } from '../Notification';
 import { io } from '../../index';
 import { sendPushNotification } from '../pushNotification/pushNotification.service';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import {
+  buildUserLookupStages,
+  buildUserProfileLookupStages,
+  buildCommunitiesEnrichmentStages,
+  buildCommentsLookupStages,
+  buildPostListProjectStage,
+  buildSinglePostPipeline,
+  buildGroupPostsMatchStage,
+} from './communityPosts.pipeline';
+
+
+/** App name used in push notifications */
+const PUSH_APP_NAME = 'Unibuzz';
+
+/** Notification messages for post status */
+const POST_MESSAGES = {
+  PENDING_APPROVAL: 'Your post is pending for approval',
+  APPROVED: 'Your post is approved',
+  REJECTED: 'Your post is rejected',
+  LIVE_REQUEST: (groupTitle: string) => `${groupTitle} has requested a live status for their post`,
+} as const;
+
+
+
+/**
+ * Resolves initial postStatus when creating a community post.
+ * Official groups: SUCCESS if live, PENDING if not. Non-official: DEFAULT.
+ */
+function getInitialPostStatus(isOfficialGroup: boolean, isPostLive: boolean): string {
+  if (!isOfficialGroup) return communityPostStatus.DEFAULT;
+  return isPostLive ? communityPostStatus.SUCCESS : communityPostStatus.PENDING;
+}
+
+/**
+ * Returns ObjectIds of users blocked by the given user. Fetches profile when only blocked list is needed.
+ * @param requireProfile - when true, throws if user profile is not found; when false, returns [].
+ */
+export async function getBlockedUserIdsForUser(
+  userId: string,
+  options?: { requireProfile?: boolean }
+): Promise<mongoose.Types.ObjectId[]> {
+  if (!userId) return [];
+  const profile = (await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean()) as UserProfileBlockedUsers;
+  if (!profile && options?.requireProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+  return (profile?.blockedUsers || []).map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString()));
+}
+
+/** Builds array of ObjectIds from a profile's blockedUsers (for use when profile is already loaded). */
+export function getBlockedUserIdsFromProfile(blockedUsers?: BlockedUserEntry[] | null): mongoose.Types.ObjectId[] {
+  return (blockedUsers || []).map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString()));
+}
+
+/**
+ * Emits socket notification and sends push notification for post status updates.
+ * Caller is responsible for creating the notification document first when needed.
+ */
+function emitPostStatusNotification(params: {
+  socketReceiverId: string;
+  pushReceiverId: string;
+  pushTitle: string;
+  pushBody: string;
+  pushPayload: Record<string, unknown>;
+  socketEventType: string;
+}): void {
+  io.emit(`notification_${params.socketReceiverId}`, { type: params.socketEventType });
+  sendPushNotification(params.pushReceiverId, params.pushTitle, params.pushBody, params.pushPayload);
+}
 
 export const createCommunityPost = async (
   post: communityPostsInterface,
@@ -32,45 +100,38 @@ export const createCommunityPost = async (
 
   const community = await communityModel.findOne({ _id: communityId }, 'name');
   if (!community) {
-    throw new Error('Community not found'); // Or handle this error appropriately
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
   const communityName = community.name;
-  let communityGroup: any;
+  let communityGroup: (mongoose.Document & CommunityGroupTitleAdmin) | null | undefined;
   if (communityGroupId) {
     communityGroup = await communityGroupModel.findOne({ _id: communityGroupId }, 'title adminUserId');
     if (!communityGroup) {
-      throw new Error('Community Group not found'); // Or handle this error appropriately
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
   }
   const postData = { ...post, user_id: userId };
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const createdPost: mongoose.HydratedDocument<communityPostsInterface>[] = await CommunityPostModel.create(
+  return withTransaction(async (session) => {
+    const createdPost: mongoose.HydratedDocument<communityPostsInterface>[] = await communityPostsModel.create(
       [
         {
           ...postData,
           communityName,
           communityGroupName: communityGroup?.title,
           isPostLive,
-          postStatus: isOfficialGroup
-            ? isPostLive
-              ? communityPostStatus.SUCCESS
-              : communityPostStatus.PENDING
-            : communityPostStatus.DEFAULT,
+          postStatus: getInitialPostStatus(isOfficialGroup, isPostLive),
         },
       ],
       { session }
     );
 
     if (!createdPost || createdPost.length === 0) {
-      throw new Error('Failed to create community post or post not found after creation.');
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to create community post or post not found after creation.');
     }
 
     const finalCreatedPost = createdPost[0]!;
 
-    // Create a record in PostRelationship
     await PostRelationship.create(
       [
         {
@@ -84,76 +145,64 @@ export const createCommunityPost = async (
       { session }
     );
 
-    if (!isPostLive) {
+    if (!isPostLive && communityGroup) {
+      const adminUserIdStr = communityGroup.adminUserId?.toString() ?? '';
       const notifications = {
         sender_id: convertToObjectId(userId?.toString()),
-        receiverId: communityGroup?.adminUserId?.toString(),
+        receiverId: adminUserIdStr,
         communityGroupId: convertToObjectId(communityGroupId?.toString()),
         type: notificationRoleAccess.community_post_live_request_notification,
-        message: 'Your post is pending for approval',
+        message: POST_MESSAGES.PENDING_APPROVAL,
         communityPostId: convertToObjectId(finalCreatedPost?._id?.toString()),
       };
 
-      // const notifications = {
-      //   sender_id: senderObjectId,
-      //   receiverId: receiverObjectId,
-      //   communityGroupId: groupObjectId,
-      //   type: notificationRoleAccess.community_post_live_request_notification,
-      //   message: message,
-      //   communityPostId: postObjectId,
-      // };
+      const notification = await notificationService.createNotification(notifications);
+      const res = (await notification.populate('communityGroupId')) as unknown as NotificationWithPopulatedCommunityGroup;
+      const pushBody = res?.communityGroupId?.title
+        ? POST_MESSAGES.LIVE_REQUEST(res.communityGroupId.title)
+        : POST_MESSAGES.PENDING_APPROVAL;
 
-      const notification = await notificationService.CreateNotification(notifications);
-
-      const res: any = await notification.populate('communityGroupId');
-
-      io.emit(`notification_${communityGroup?.adminUserId?.toString()}`, {
-        type: notificationRoleAccess.community_post_live_request_notification,
-      });
-
-      sendPushNotification(
-        communityGroup?.adminUserId?.toString(),
-        'Unibuzz',
-        res?.communityGroupId?.title + ' has requested an live status for his post',
-        {
+      emitPostStatusNotification({
+        socketReceiverId: adminUserIdStr,
+        pushReceiverId: adminUserIdStr,
+        pushTitle: PUSH_APP_NAME,
+        pushBody,
+        pushPayload: {
           sender_id: userId.toString(),
-          receiverId: communityGroup?.adminUserId?.toString(),
+          receiverId: adminUserIdStr,
           communityGroupId: communityGroupId?.toString(),
           communityId: communityId?.toString(),
           type: notificationRoleAccess.community_post_live_request_notification,
-        }
-      );
-
-      // await notificationQueue.add(NotificationIdentifier.community_post_live_request_notification, notifications);
+        },
+        socketEventType: notificationRoleAccess.community_post_live_request_notification,
+      });
     }
 
-    await session.commitTransaction();
-
     return finalCreatedPost;
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    session.endSession();
-  }
+  });
 };
 
 export const likeUnlike = async (id: string, userId: string) => {
   const post = await communityPostsModel.findById(id);
 
-  if (!post?.likeCount.some((x) => x.userId === userId)) {
+  if (!post) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
+  }
+
+  const hasLiked = post.likeCount.some((x) => x.userId === userId);
+
+  if (!hasLiked) {
     const notifications = {
       sender_id: userId,
-      receiverId: post?.user_id,
-      communityPostId: post?._id,
+      receiverId: post.user_id,
+      communityPostId: post._id,
       type: notificationRoleAccess.REACTED_TO_COMMUNITY_POST,
       message: 'Reacted to your Community Post.',
     };
-    if (userId !== String(post?.user_id)) {
+    if (userId !== String(post.user_id)) {
       await queueSQSNotification(notifications);
     }
-
-    await post?.updateOne({ $push: { likeCount: { userId } } });
+    await post.updateOne({ $push: { likeCount: { userId } } });
   } else {
     await post.updateOne({ $pull: { likeCount: { userId } } });
   }
@@ -163,37 +212,25 @@ export const likeUnlike = async (id: string, userId: string) => {
 };
 
 export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community: communityPostsInterface) => {
-  let communityToUpadate;
+  const communityToUpdate = await communityPostsModel.findById(id);
 
-  communityToUpadate = await communityPostsModel.findById(id);
-
-  if (!communityToUpadate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'community not found!');
+  if (!communityToUpdate) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
-  Object.assign(communityToUpadate, {
+  Object.assign(communityToUpdate, {
     content: community.content,
     communityPostsType: community.communityPostsType,
   });
-  await communityToUpadate.save();
-  return communityToUpadate;
+  await communityToUpdate.save();
+  return communityToUpdate;
 };
 
 export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    // Delete the community post
+  return withTransaction(async (session) => {
     const result = await communityPostsModel.findByIdAndDelete(id, { session });
-    // Delete the relationship entry
     await PostRelationship.deleteMany({ communityPostId: id }, { session });
-    await session.commitTransaction();
     return result;
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    session.endSession();
-  }
+  });
 };
 
 export const getCommunityPostsByCommunityId = async (
@@ -203,255 +240,22 @@ export const getCommunityPostsByCommunityId = async (
   userId: string = ''
 ) => {
   try {
-    const communityObjectId = new Types.ObjectId(communityId);
+    const communityObjectId = convertToObjectId(communityId);
+    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
 
-    const userProfile: any = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
-
-    if (!userProfile) throw new Error('User profile not found');
-
-    const myBlockedUserIds = (userProfile.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
-
-    const finalPost = await CommunityPostModel.aggregate([
-      {
-        $match: {
-          communityId: communityObjectId,
-          communityGroupId: null,
-        },
-      },
-      {
-        $sort: {
-          createdAt: -1, // latest first
-        },
-      },
-      {
-        $skip: (page - 1) * limit,
-      },
-      {
-        $limit: limit,
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      {
-        $unwind: '$user',
-      },
-      {
-        $lookup: {
-          from: 'userprofiles',
-          localField: 'user._id',
-          foreignField: 'users_id',
-          as: 'userProfile',
-        },
-      },
-      {
-        $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true },
-      },
-      //   start
-      {
-        $lookup: {
-          from: 'communities',
-          localField: 'userProfile.communities.communityId',
-          foreignField: '_id',
-          as: 'userProfile.communitiesData',
-        },
-      },
-      {
-        $addFields: {
-          'userProfile.communities': {
-            $map: {
-              input: { $ifNull: ['$userProfile.communities', []] },
-              as: 'comm',
-              in: {
-                $let: {
-                  vars: {
-                    populated: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: { $ifNull: ['$userProfile.communitiesData', []] },
-                            as: 'pop',
-                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: {
-                    _id: '$$populated._id',
-                    name: '$$populated.name',
-                    logo: '$$populated.communityLogoUrl.imageUrl',
-
-                    isVerifiedMember: {
-                      $cond: [
-                        {
-                          $gt: [
-                            {
-                              $size: {
-                                $filter: {
-                                  input: { $ifNull: ['$$populated.users', []] },
-                                  as: 'usr',
-                                  cond: {
-                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
-                                  },
-                                },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                    isCommunityAdmin: {
-                      $cond: [
-                        {
-                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-
-      {
-        $project: {
-          'userProfile.communitiesData': 0,
-        },
-      },
-      //   end
-      //   {
-      //     $lookup: {
-      //       from: 'communitypostcomments',
-      //       let: { postId: '$_id' },
-      //       pipeline: [
-      //         {
-      //           $match: {
-      //             $expr: { $eq: ['$postId', '$$postId'] },
-      //           },
-      //         },
-      //         { $project: { _id: 1 } },
-      //       ],
-      //       as: 'allComments',
-      //     },
-      //   },
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          let: { postId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$postId', '$$postId'] },
-              },
-            },
-            {
-              $lookup: {
-                from: 'users',
-                localField: 'commenterId',
-                foreignField: '_id',
-                as: 'commenter',
-              },
-            },
-            { $unwind: '$commenter' },
-            {
-              $match: {
-                'commenter.isDeleted': { $ne: true },
-              },
-            },
-            {
-              $lookup: {
-                from: 'userprofiles',
-                localField: 'commenter._id',
-                foreignField: 'users_id',
-                as: 'commenterProfile',
-              },
-            },
-            {
-              $unwind: {
-                path: '$commenterProfile',
-                preserveNullAndEmptyArrays: true,
-              },
-            },
-            {
-              $match: {
-                'commenterProfile.blockedUsers': {
-                  $not: {
-                    $elemMatch: {
-                      userId: new mongoose.Types.ObjectId(userId),
-                    },
-                  },
-                },
-              },
-            },
-            {
-              $match: {
-                'commenter._id': {
-                  $nin: myBlockedUserIds,
-                },
-              },
-            },
-
-            { $project: { _id: 1 } },
-          ],
-          as: 'allComments',
-        },
-      },
-      {
-        $addFields: {
-          commentCount: { $size: '$allComments' },
-        },
-      },
-
-      {
-        $project: {
-          _id: 1,
-          content: 1,
-          createdAt: 1,
-          imageUrl: 1,
-          likeCount: 1,
-          commentCount: 1,
-          communityGroupId: 1,
-          communityId: 1,
-          communityPostsType: 1,
-          isPostVerified: 1,
-          communityName: 1,
-          communityGroupName: 1,
-          user: {
-            _id: 1,
-            firstName: 1,
-            lastName: 1,
-          },
-          userProfile: {
-            profile_dp: 1,
-            university_name: 1,
-            study_year: 1,
-            degree: 1,
-            major: 1,
-            affiliation: 1,
-            occupation: 1,
-            role: 1,
-            isCommunityAdmin: 1,
-            adminCommunityId: 1,
-            communities: 1,
-          },
-        },
-      },
+    const finalPost = await communityPostsModel.aggregate([
+      { $match: { communityId: communityObjectId, communityGroupId: null } },
+      { $sort: { createdAt: -1 } },
+      { $skip: getPaginationSkip(page, limit) },
+      { $limit: limit },
+      ...buildUserLookupStages(),
+      ...buildUserProfileLookupStages(true),
+      ...buildCommunitiesEnrichmentStages('userProfile'),
+      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+      buildPostListProjectStage(),
     ]);
 
-    const total = await CommunityPostModel.countDocuments({
+    const total = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: null,
     });
@@ -460,10 +264,10 @@ export const getCommunityPostsByCommunityId = async (
       finalPost,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages: computeTotalPages(total, limit),
     };
-  } catch (error: any) {
-    throw new Error(`Failed to get community posts: ${error.message}`);
+  } catch (error: unknown) {
+    throwApiError(error, { messagePrefix: 'Failed to get community posts' });
   }
 };
 
@@ -480,260 +284,38 @@ export const getCommunityGroupPostsByCommunityId = async (
     const communityObjectId = convertToObjectId(communityId);
     const communityGroupObjectId = convertToObjectId(communityGroupId);
     const userObjectId = convertToObjectId(userId);
+    const myBlockedUserIds = await getBlockedUserIdsForUser(userId);
 
-    const myProfile = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
-
-    const myBlockedUserIds = (myProfile?.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
-
-    const finalPost = await CommunityPostModel.aggregate([
-      {
-        $match: {
-          communityId: communityObjectId,
-          communityGroupId: communityGroupObjectId,
-
-          ...(filterPostBy === communityPostFilterType.PENDING_POSTS
-            ? {
-                isPostLive: false,
-                ...(isAdminOfCommunityGroup ? {} : { user_id: userObjectId }),
-              }
-            : filterPostBy === communityPostFilterType.MY_POSTS
-            ? { isPostLive: true, user_id: userObjectId }
-            : filterPostBy === ''
-            ? { isPostLive: true }
-            : {}),
-
-          ...(isAdminOfCommunityGroup && filterPostBy === communityPostFilterType.PENDING_POSTS
-            ? { postStatus: { $in: [communityPostStatus.PENDING] } }
-            : {}),
-        },
-      },
+    const finalPost = await communityPostsModel.aggregate([
+      buildGroupPostsMatchStage({
+        communityObjectId,
+        communityGroupObjectId,
+        filterPostBy,
+        isAdminOfCommunityGroup,
+        userObjectId,
+      }),
       { $sort: { createdAt: -1 } },
-      { $skip: (page - 1) * limit },
+      { $skip: getPaginationSkip(page, limit) },
       { $limit: limit },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      { $match: { 'user.isDeleted': { $ne: true } } },
-      {
-        $lookup: {
-          from: 'userprofiles',
-          localField: 'user._id',
-          foreignField: 'users_id',
-          as: 'userProfile',
-        },
-      },
-      { $unwind: { path: '$userProfile', preserveNullAndEmptyArrays: true } },
-      //   start
-      {
-        $lookup: {
-          from: 'communities',
-          localField: 'userProfile.communities.communityId',
-          foreignField: '_id',
-          as: 'userProfile.communitiesData',
-        },
-      },
-      {
-        $addFields: {
-          'userProfile.communities': {
-            $map: {
-              input: { $ifNull: ['$userProfile.communities', []] },
-              as: 'comm',
-              in: {
-                $let: {
-                  vars: {
-                    populated: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: { $ifNull: ['$userProfile.communitiesData', []] },
-                            as: 'pop',
-                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: {
-                    _id: '$$populated._id',
-                    name: '$$populated.name',
-                    logo: '$$populated.communityLogoUrl.imageUrl',
-                    isVerifiedMember: {
-                      $cond: [
-                        {
-                          $gt: [
-                            {
-                              $size: {
-                                $filter: {
-                                  input: { $ifNull: ['$$populated.users', []] },
-                                  as: 'usr',
-                                  cond: {
-                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
-                                  },
-                                },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                    isCommunityAdmin: {
-                      $cond: [
-                        {
-                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      {
-        $project: {
-          'userProfile.communitiesData': 0,
-        },
-      },
-      //   end
+      ...buildUserLookupStages({ matchUserNotDeleted: true }),
+      ...buildUserProfileLookupStages(true),
+      ...buildCommunitiesEnrichmentStages('userProfile'),
       {
         $match: {
-          'userProfile.blockedUsers.userId': {
-            $ne: new mongoose.Types.ObjectId(userId),
-          },
+          'userProfile.blockedUsers.userId': { $ne: convertToObjectId(userId) },
         },
       },
-      {
-        $match: {
-          'user._id': {
-            $nin: myBlockedUserIds,
-          },
-        },
-      },
-      //
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          let: { postId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$postId', '$$postId'] },
-              },
-            },
-            {
-              $lookup: {
-                from: 'users',
-                localField: 'commenterId',
-                foreignField: '_id',
-                as: 'commenter',
-              },
-            },
-            { $unwind: '$commenter' },
-            {
-              $match: {
-                'commenter.isDeleted': { $ne: true },
-              },
-            },
-            {
-              $lookup: {
-                from: 'userprofiles',
-                localField: 'commenter._id',
-                foreignField: 'users_id',
-                as: 'commenterProfile',
-              },
-            },
-            {
-              $unwind: {
-                path: '$commenterProfile',
-                preserveNullAndEmptyArrays: true,
-              },
-            },
-            {
-              $match: {
-                'commenterProfile.blockedUsers': {
-                  $not: {
-                    $elemMatch: {
-                      userId: new mongoose.Types.ObjectId(userId),
-                    },
-                  },
-                },
-              },
-            },
-            {
-              $match: {
-                'commenter._id': {
-                  $nin: myBlockedUserIds,
-                },
-              },
-            },
-
-            { $project: { _id: 1 } },
-          ],
-          as: 'allComments',
-        },
-      },
-      {
-        $addFields: {
-          commentCount: { $size: '$allComments' },
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          content: 1,
-          createdAt: 1,
-          imageUrl: 1,
-          likeCount: 1,
-          commentCount: 1,
-          communityGroupId: 1,
-          communityId: 1,
-          communityPostsType: 1,
-          isPostVerified: 1,
-          communityName: 1,
-          communityGroupName: 1,
-          isPostLive: 1,
-          postStatus: 1,
-          user: {
-            _id: 1,
-            firstName: 1,
-            lastName: 1,
-          },
-          userProfile: {
-            profile_dp: 1,
-            university_name: 1,
-            study_year: 1,
-            degree: 1,
-            major: 1,
-            affiliation: 1,
-            occupation: 1,
-            role: 1,
-            isCommunityAdmin: 1,
-            adminCommunityId: 1,
-            communities: 1,
-          },
-        },
-      },
+      { $match: { 'user._id': { $nin: myBlockedUserIds } } },
+      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+      buildPostListProjectStage({ includeIsPostLive: true, includePostStatus: true }),
     ]);
 
-    const total = await CommunityPostModel.countDocuments({
+    const total = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
     });
 
-    const pendingTotal = await CommunityPostModel.countDocuments({
+    const pendingTotal = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
       communityGroupId: communityGroupObjectId,
       isPostLive: false,
@@ -745,16 +327,16 @@ export const getCommunityGroupPostsByCommunityId = async (
       finalPost,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages: computeTotalPages(total, limit),
       pendingTotal,
     };
-  } catch (error: any) {
-    throw new Error(`Failed to get community posts: ${error.message}`);
+  } catch (error: unknown) {
+    throwApiError(error, { messagePrefix: 'Failed to get community posts' });
   }
 };
 
 export const getAllCommunityPost = async (
-  FollowinguserIds: mongoose.Schema.Types.ObjectId[] = [],
+  FollowinguserIds: mongoose.Types.ObjectId[] = [],
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
@@ -762,25 +344,20 @@ export const getAllCommunityPost = async (
   userId: string = ''
 ) => {
   try {
-    const userProfile: any = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
+    const FollowingIds = FollowinguserIds.map((id: mongoose.Types.ObjectId) => convertToObjectId(id.toString()));
 
-    if (!userProfile) throw new Error('User profile not found');
-
-    const myBlockedUserIds = (userProfile.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
-
-    const FollowingIds = FollowinguserIds.map((id) => new mongoose.Types.ObjectId(id as any));
-
-    const matchConditions: any[] = [];
+    const matchConditions: mongoose.FilterQuery<communityPostsInterface>[] = [];
 
     if (!communityGroupId) {
       matchConditions.push(
         {
-          communityId: new mongoose.Types.ObjectId(communityId),
+          communityId: convertToObjectId(communityId),
           communityPostsType: CommunityType.PUBLIC,
           communityGroupId: { $exists: false },
         },
         {
-          communityId: new mongoose.Types.ObjectId(communityId),
+          communityId: convertToObjectId(communityId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
           user_id: { $in: FollowingIds },
           communityGroupId: { $exists: false },
@@ -789,13 +366,13 @@ export const getAllCommunityPost = async (
     } else {
       matchConditions.push(
         {
-          communityId: new mongoose.Types.ObjectId(communityId),
-          communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityId: convertToObjectId(communityId),
+          communityGroupId: convertToObjectId(communityGroupId),
           communityPostsType: CommunityType.PUBLIC,
         },
         {
-          communityId: new mongoose.Types.ObjectId(communityId),
-          communityGroupId: new mongoose.Types.ObjectId(communityGroupId),
+          communityId: convertToObjectId(communityId),
+          communityGroupId: convertToObjectId(communityGroupId),
           communityPostsType: CommunityType.FOLLOWER_ONLY,
           user_id: { $in: FollowingIds },
         }
@@ -804,42 +381,19 @@ export const getAllCommunityPost = async (
 
     const matchStage = { $or: matchConditions };
 
-    const totalPost = await CommunityPostModel.countDocuments(matchStage);
-    const totalPages = Math.ceil(totalPost / limit);
-    const skip = (page - 1) * limit;
+    const totalPost = await communityPostsModel.countDocuments(matchStage);
+    const totalPages = computeTotalPages(totalPost, limit);
+    const skip = getPaginationSkip(page, limit);
 
     const finalPost =
-      (await CommunityPostModel.aggregate([
+      (await communityPostsModel.aggregate([
         { $match: matchStage },
         { $sort: { createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
-
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'user_id',
-            foreignField: '_id',
-            as: 'user',
-          },
-        },
-        { $unwind: '$user' },
-
-        {
-          $lookup: {
-            from: 'userprofiles',
-            localField: 'user._id',
-            foreignField: 'users_id',
-            as: 'userProfile',
-          },
-        },
-        {
-          $unwind: {
-            path: '$userProfile',
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-
+        ...buildUserLookupStages(),
+        ...buildUserProfileLookupStages(true),
+        ...buildCommunitiesEnrichmentStages('userProfile'),
         {
           $match: {
             'user._id': { $nin: myBlockedUserIds },
@@ -848,131 +402,21 @@ export const getAllCommunityPost = async (
               {
                 'userProfile.blockedUsers': {
                   $not: {
-                    $elemMatch: {
-                      userId: new mongoose.Types.ObjectId(userId),
-                    },
+                    $elemMatch: { userId: convertToObjectId(userId) },
                   },
                 },
               },
             ],
           },
         },
-
-        {
-          $lookup: {
-            from: 'communitypostcomments',
-            let: { postId: '$_id' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $eq: ['$postId', '$$postId'] },
-                },
-              },
-
-              {
-                $lookup: {
-                  from: 'users',
-                  localField: 'commenterId',
-                  foreignField: '_id',
-                  as: 'commenter',
-                },
-              },
-              {
-                $unwind: {
-                  path: '$commenter',
-                  preserveNullAndEmptyArrays: false,
-                },
-              },
-
-              {
-                $match: {
-                  'commenter.isDeleted': { $ne: true },
-                },
-              },
-
-              {
-                $lookup: {
-                  from: 'userprofiles',
-                  localField: 'commenter._id',
-                  foreignField: 'users_id',
-                  as: 'commenterProfile',
-                },
-              },
-              {
-                $unwind: {
-                  path: '$commenterProfile',
-                  preserveNullAndEmptyArrays: false,
-                },
-              },
-
-              {
-                $match: {
-                  $or: [
-                    { commenterProfile: { $eq: null } },
-                    {
-                      'commenterProfile.blockedUsers': {
-                        $not: {
-                          $elemMatch: {
-                            userId: new mongoose.Types.ObjectId(userId),
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              },
-
-              {
-                $match: {
-                  'commenter._id': { $nin: myBlockedUserIds },
-                },
-              },
-
-              { $project: { _id: 1 } },
-            ],
-            as: 'allComments',
-          },
-        },
-
-        {
-          $addFields: {
-            commentCount: { $size: '$allComments' },
-          },
-        },
-
-        {
-          $project: {
-            _id: 1,
-            content: 1,
-            createdAt: 1,
-            imageUrl: 1,
-            likeCount: 1,
-            commentCount: 1,
-            communityGroupId: 1,
-            communityId: 1,
-            communityPostsType: 1,
-            isPostVerified: 1,
-            communityName: 1,
-            communityGroupName: 1,
-            user: {
-              _id: 1,
-              firstName: 1,
-              lastName: 1,
-            },
-            userProfile: {
-              profile_dp: 1,
-              university_name: 1,
-              study_year: 1,
-              degree: 1,
-              major: 1,
-              affiliation: 1,
-              occupation: 1,
-              role: 1,
-              isCommunityAdmin: 1,
-              adminCommunityId: 1,
-            },
-          },
-        },
+        ...buildCommentsLookupStages({
+          myBlockedUserIds,
+          userId,
+          commenterProfilePreserveNull: false,
+          commenterUnwindPreserveNull: false,
+          blockedMatchWithOrNull: true,
+        }),
+        buildPostListProjectStage(),
       ]).exec()) || [];
 
     return {
@@ -982,30 +426,33 @@ export const getAllCommunityPost = async (
       totalPost,
     };
   } catch (error) {
-    throw new Error('Failed to get community posts');
+    throwApiError(error, { messagePrefix: 'Failed to get community posts' });
   }
 };
 
 export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
-    const userProfile: any = await UserProfile.findOne({ users_id: myUserId })
+    const userProfile = (await UserProfile.findOne({ users_id: myUserId })
       .select('following communities blockedUsers')
-      .lean();
-    if (!userProfile) throw new Error('User profile not found');
+      .lean()) as UserProfileBlockedUsers & {
+      following?: FollowingEntry[];
+      communities?: mongoose.Types.ObjectId[];
+    };
+    if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
-    const myBlockedUserIds = (userProfile?.blockedUsers || []).map((b: any) => new mongoose.Types.ObjectId(b.userId));
+    const myBlockedUserIds = getBlockedUserIdsFromProfile(userProfile?.blockedUsers);
 
     const followingIds =
-      userProfile?.following.map((user: { userId: mongoose.Types.ObjectId; isBlock: boolean }) => user.userId.toString()) ||
+      userProfile?.following?.map((user: FollowingEntry) => user.userId.toString()) ||
       [];
-    const followingObjectIds = followingIds.map((id: string) => new mongoose.Types.ObjectId(id));
-    const userId = new mongoose.Types.ObjectId(myUserId);
-    const postIdToGet = new mongoose.Types.ObjectId(postId);
+    const followingObjectIds = followingIds.map((id: string) => convertToObjectId(id));
+    const userId = convertToObjectId(myUserId);
+    const postIdToGet = convertToObjectId(postId);
 
     const allCommunityIds = userProfile?.communities;
 
     const post = await communityPostsModel.findOne({ _id: postIdToGet });
-    if (!post) throw new Error('Post not found');
+    if (!post) throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
 
     let isCommunityGroupMember = false;
     if (post.communityGroupId) {
@@ -1015,299 +462,23 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
       });
       isCommunityGroupMember = !!communityGroup;
 
-      if (!communityGroup) throw new Error('you are not a member');
+      if (!communityGroup) throw new ApiError(httpStatus.FORBIDDEN, 'You are not a member');
     }
 
-    const pipeline = [
-      { $match: { _id: postIdToGet } },
-      {
-        $lookup: {
-          from: 'communitygroups',
-          localField: 'communityGroupId',
-          foreignField: '_id',
-          as: 'group',
-        },
-      },
-      { $unwind: { path: '$group', preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'group.adminUserId',
-          foreignField: '_id',
-          as: 'groupAdmin',
-        },
-      },
-      { $unwind: { path: '$groupAdmin', preserveNullAndEmptyArrays: true } },
-      {
-        $match: {
-          $or: [{ communityGroupId: { $exists: false } }, { 'groupAdmin.isDeleted': { $ne: true } }],
-        },
-      },
-      //   //   end
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      { $match: { 'user.isDeleted': { $ne: true } } },
-      {
-        $lookup: {
-          from: 'userprofiles',
-          localField: 'user._id',
-          foreignField: 'users_id',
-          as: 'profile',
-        },
-      },
-      { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
-      {
-        $match: {
-          'profile.blockedUsers': {
-            $not: {
-              $elemMatch: {
-                userId: new mongoose.Types.ObjectId(myUserId),
-              },
-            },
-          },
-        },
-      },
-      {
-        $match: {
-          'user._id': {
-            $nin: myBlockedUserIds,
-          },
-        },
-      },
-      // start
-      {
-        $lookup: {
-          from: 'communities',
-          localField: 'profile.communities.communityId',
-          foreignField: '_id',
-          as: 'profile.communitiesData',
-        },
-      },
-      {
-        $addFields: {
-          'profile.communities': {
-            $map: {
-              input: { $ifNull: ['$profile.communities', []] },
-              as: 'comm',
-              in: {
-                $let: {
-                  vars: {
-                    populated: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: { $ifNull: ['$profile.communitiesData', []] },
-                            as: 'pop',
-                            cond: { $eq: ['$$pop._id', '$$comm.communityId'] },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: {
-                    _id: '$$populated._id',
-                    name: '$$populated.name',
-                    logo: '$$populated.communityLogoUrl.imageUrl',
-                    isVerifiedMember: {
-                      $cond: [
-                        {
-                          $gt: [
-                            {
-                              $size: {
-                                $filter: {
-                                  input: { $ifNull: ['$$populated.users', []] },
-                                  as: 'usr',
-                                  cond: {
-                                    $and: [{ $eq: ['$$usr._id', '$user._id'] }, { $eq: ['$$usr.isVerified', true] }],
-                                  },
-                                },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                    isCommunityAdmin: {
-                      $cond: [
-                        {
-                          $in: ['$user._id', { $ifNull: ['$$populated.adminId', []] }],
-                        },
-                        true,
-                        false,
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      {
-        $project: {
-          'profile.communitiesData': 0,
-        },
-      },
-
-      {
-        $lookup: {
-          from: 'communitypostcomments',
-          let: { postId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$postId', '$$postId'] },
-              },
-            },
-            {
-              $lookup: {
-                from: 'users',
-                localField: 'commenterId',
-                foreignField: '_id',
-                as: 'commenter',
-              },
-            },
-            { $unwind: '$commenter' },
-            {
-              $match: {
-                'commenter.isDeleted': { $ne: true },
-              },
-            },
-            {
-              $lookup: {
-                from: 'userprofiles',
-                localField: 'commenter._id',
-                foreignField: 'users_id',
-                as: 'commenterProfile',
-              },
-            },
-            {
-              $unwind: {
-                path: '$commenterProfile',
-                preserveNullAndEmptyArrays: true,
-              },
-            },
-
-            ...(myUserId
-              ? [
-                  {
-                    $match: {
-                      'commenterProfile.blockedUsers': {
-                        $not: {
-                          $elemMatch: {
-                            userId: new mongoose.Types.ObjectId(myUserId),
-                          },
-                        },
-                      },
-                    },
-                  },
-                ]
-              : []),
-
-            ...(myBlockedUserIds.length
-              ? [
-                  {
-                    $match: {
-                      'commenter._id': { $nin: myBlockedUserIds },
-                    },
-                  },
-                ]
-              : []),
-            { $project: { _id: 1 } },
-          ],
-          as: 'allComments',
-        },
-      },
-      {
-        $addFields: {
-          commentCount: { $size: '$allComments' },
-        },
-      },
-
-      {
-        $addFields: {
-          isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
-          isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
-
-          isCommunityMember: {
-            $or: [
-              { $eq: ['$user_id', userId] },
-              { $in: ['$communityId', allCommunityIds] },
-              { $literal: isCommunityGroupMember },
-            ],
-          },
-
-          isFollowing: {
-            $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
-          },
-        },
-      },
-
-      {
-        $match: {
-          $or: [
-            { isPublic: true },
-            {
-              isFollowerOnly: true,
-              isCommunityMember: true,
-              isFollowing: true,
-            },
-          ],
-        },
-      },
-
-      {
-        $project: {
-          _id: 1,
-          user_id: 1,
-          communityId: 1,
-          communityPostsType: 1,
-          content: 1,
-          imageUrl: 1,
-          likeCount: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          communityName: 1,
-          communityGroupName: 1,
-          isPostVerified: 1,
-          user: {
-            firstName: '$user.firstName',
-            lastName: '$user.lastName',
-          },
-          //   profile: '$profile',
-          profile: {
-            profile_dp: 1,
-            university_name: 1,
-            study_year: 1,
-            degree: 1,
-            major: 1,
-            affiliation: 1,
-            occupation: 1,
-            role: 1,
-            isCommunityAdmin: 1,
-            adminCommunityId: 1,
-            communities: 1,
-          },
-          commentCount: 1,
-        },
-      },
-    ];
+    const pipeline = buildSinglePostPipeline({
+      postIdToGet,
+      myBlockedUserIds,
+      myUserId,
+      userId,
+      followingObjectIds,
+      ...(allCommunityIds !== undefined && { allCommunityIds }),
+      isCommunityGroupMember,
+    });
 
     return await communityPostsModel.aggregate(pipeline);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching user posts:', error);
-    throw new Error(error.message);
+    throwApiError(error);
   }
 };
 
@@ -1320,68 +491,72 @@ export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId,
   });
 
   if (!communityToUpdate) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found!');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
 
   if (communityToUpdate.communityGroupId.adminUserId.toString() !== userId.toString()) {
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to update this post');
   }
 
+  const authorIdStr = communityToUpdate.user_id?.toString() ?? '';
+  const adminUserIdStr = communityToUpdate.communityGroupId?.adminUserId?.toString() ?? '';
+  const communityGroupIdStr = communityToUpdate.communityGroupId?._id?.toString() ?? '';
+  const communityIdStr = communityToUpdate.communityId?.toString() ?? '';
+
   if (status === communityPostUpdateStatus.LIVE) {
     communityToUpdate.isPostLive = true;
     communityToUpdate.postStatus = communityPostStatus.SUCCESS;
     const notifications = {
-      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
-      receiverId: convertToObjectId(communityToUpdate.user_id?.toString()),
-      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
+      sender_id: convertToObjectId(adminUserIdStr),
+      receiverId: convertToObjectId(authorIdStr),
+      communityGroupId: communityGroupIdStr,
       type: NotificationIdentifier.community_post_accepted_notification,
-      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
-      message: 'Your post is approved',
+      communityPostId: convertToObjectId(communityToUpdate._id?.toString()),
+      message: POST_MESSAGES.APPROVED,
     };
 
-    await notificationService.CreateNotification(notifications);
-
-    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
-      type: notificationRoleAccess.community_post_accepted_notification,
+    await notificationService.createNotification(notifications as unknown as CreateNotificationPayload);
+    emitPostStatusNotification({
+      socketReceiverId: authorIdStr,
+      pushReceiverId: authorIdStr,
+      pushTitle: PUSH_APP_NAME,
+      pushBody: POST_MESSAGES.APPROVED,
+      pushPayload: {
+        sender_id: adminUserIdStr,
+        receiverId: authorIdStr,
+        type: notificationRoleAccess.community_post_accepted_notification,
+        communityGroupId: communityGroupIdStr,
+        communityId: communityIdStr,
+      },
+      socketEventType: notificationRoleAccess.community_post_accepted_notification,
     });
-
-    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
-      receiverId: communityToUpdate.user_id?.toString(),
-      type: notificationRoleAccess.community_post_accepted_notification,
-      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      communityId: communityToUpdate?.communityId?.toString(),
-    });
-
-    // await notificationQueue.add(NotificationIdentifier.community_post_accepted_notification, notifications);
   } else {
     communityToUpdate.isPostLive = false;
     communityToUpdate.postStatus = communityPostStatus.REJECTED;
-
     const notifications = {
-      sender_id: convertToObjectId(communityToUpdate?.communityGroupId?.adminUserId?.toString()),
-      receiverId: communityToUpdate.user_id?.toString(),
-      communityPostId: convertToObjectId(communityToUpdate?._id?.toString()),
-      communityGroupId: convertToObjectId(communityToUpdate?.communityGroupId?._id?.toString()),
+      sender_id: convertToObjectId(adminUserIdStr),
+      receiverId: authorIdStr,
+      communityPostId: convertToObjectId(communityToUpdate._id?.toString()),
+      communityGroupId: convertToObjectId(communityToUpdate.communityGroupId?._id?.toString()),
       type: notificationRoleAccess.community_post_rejected_notification,
-      message: 'Your post is rejected',
+      message: POST_MESSAGES.REJECTED,
     };
 
-    await notificationService.CreateNotification(notifications);
-
-    io.emit(`notification_${communityToUpdate.user_id?.toString()}`, {
-      type: notificationRoleAccess.community_post_rejected_notification,
+    await notificationService.createNotification(notifications);
+    emitPostStatusNotification({
+      socketReceiverId: authorIdStr,
+      pushReceiverId: authorIdStr,
+      pushTitle: PUSH_APP_NAME,
+      pushBody: POST_MESSAGES.REJECTED,
+      pushPayload: {
+        sender_id: adminUserIdStr,
+        receiverId: authorIdStr,
+        type: notificationRoleAccess.community_post_rejected_notification,
+        communityGroupId: communityGroupIdStr,
+        communityId: communityIdStr,
+      },
+      socketEventType: notificationRoleAccess.community_post_rejected_notification,
     });
-
-    sendPushNotification(communityToUpdate.user_id?.toString(), 'Unibuzz', notifications?.message, {
-      sender_id: communityToUpdate?.communityGroupId?.adminUserId?.toString(),
-      receiverId: communityToUpdate.user_id?.toString(),
-      type: notificationRoleAccess.community_post_rejected_notification,
-      communityGroupId: communityToUpdate?.communityGroupId?._id?.toString(),
-      communityId: communityToUpdate?.communityId?.toString(),
-    });
-
-    // await notificationQueue.add(NotificationIdentifier.community_post_rejected_notification, notifications);
   }
 
   await communityToUpdate.save();

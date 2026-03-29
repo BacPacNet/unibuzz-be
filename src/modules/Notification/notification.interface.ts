@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { PipelineStage } from 'mongoose';
 
 export const notificationRoleAccess = {
   GROUP_INVITE: 'GROUP_INVITE',
@@ -52,8 +52,8 @@ interface CommentedBy {
 
 interface notificationInterface {
   notificationQueueId: string;
-  sender_id: mongoose.Types.ObjectId;
-  receiverId: mongoose.Types.ObjectId;
+  sender_id: mongoose.Types.ObjectId | string;
+  receiverId: mongoose.Types.ObjectId | string;
   communityGroupId: mongoose.Types.ObjectId;
   communityId: mongoose.Types.ObjectId;
   communityPostId: mongoose.Types.ObjectId;
@@ -74,4 +74,16 @@ interface notificationInterface {
   parentCommunityCommentId: mongoose.Types.ObjectId;
 }
 
-export { notificationInterface };
+
+type CreateNotificationPayload = Partial<notificationInterface>;
+
+type BuildDedupePaginatePipelineOptions = {
+  matchStage: PipelineStage;
+  groupId: Record<string, any>;
+  groupAccumulators?: Record<string, any>;
+  skip: number;
+  limit: number;
+  afterDedupeBeforePaginationStages?: PipelineStage[];
+  afterPaginationStages?: PipelineStage[];
+};
+export { notificationInterface, CreateNotificationPayload, BuildDedupePaginatePipelineOptions };

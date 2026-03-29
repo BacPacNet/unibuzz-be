@@ -1,96 +1,73 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import httpStatus from 'http-status';
 import { notificationModel, notificationService } from '.';
 import { communityGroupService } from '../communityGroup';
 import { notificationStatus } from './notification.interface';
-import { convertToObjectId } from '../../utils/common';
+import { convertToObjectId, parsePagination, requireAuthenticatedUserIdOrThrow } from '../../utils/common';
+import catchAsync from '../utils/catchAsync';
+import { userIdExtend } from '../../config/userIDType';
+import { ApiError } from '../errors';
 
-interface extendedRequest extends Request {
-  userId?: string;
-}
 
-export const getGroupNotification = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
-  const { page, limit } = req.query;
-  try {
-    if (userID) {
-      const notification = await notificationService.getUserNotification(userID, Number(page), Number(limit));
-      return res.status(200).json(notification);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-export const getUserNotification = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
-  const { page, limit } = req.query;
 
-  try {
-    if (userID) {
-      const notification = await notificationService.getUserNotificationMain(userID, Number(page), Number(limit));
-      return res.status(200).json(notification);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-export const markUserNotificationsAsRead = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
+export const getGroupNotification = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+  const { page, limit } = parsePagination(req.query);
 
-  try {
-    if (userID) {
-      const notification = await notificationService.markNotificationsAsRead(userID);
-      return res.status(200).json(notification);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  const notification = await notificationService.getUserNotification(userID, page, limit);
+  return res.status(httpStatus.OK).json(notification);
+});
 
-export const getUserNotificationTotalCount = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
+export const getUserNotification = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+  const { page, limit } = parsePagination(req.query);
 
-  try {
-    if (userID) {
-      const notification = await notificationService.getUserNotificationCount(userID);
-      return res.status(200).json(notification);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  const notification = await notificationService.getUserNotificationMain(userID, page, limit);
+  return res.status(httpStatus.OK).json(notification);
+});
 
-export const updateGroupNotification = async (req: extendedRequest, res: Response) => {
+export const markUserNotificationsAsRead = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+
+  const notification = await notificationService.markNotificationsAsRead(userID);
+  return res.status(httpStatus.OK).json(notification);
+});
+
+export const getUserNotificationTotalCount = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+
+  const notification = await notificationService.getUserNotificationCount(userID);
+  return res.status(httpStatus.OK).json(notification);
+});
+
+export const updateGroupNotification = catchAsync(async (req: userIdExtend, res: Response) => {
   const { id } = req.body;
 
-  try {
-    if (id) {
-      const notification = await notificationService.updateUserNotification(id, notificationStatus.default);
-
-      return res.status(200).json({ notification });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!id) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Notification ID is required');
   }
-};
 
-export const JoinGroup = async (req: extendedRequest, res: Response) => {
-  const userID = req.userId;
+  const notification = await notificationService.updateUserNotification(id, notificationStatus.default);
+  return res.status(httpStatus.OK).json({ notification });
+});
+
+export const JoinGroup = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
   const { id, groupId } = req.body;
 
-  try {
-    if (userID && groupId) {
-      const checkIfNotificationExist = await notificationModel.find({ _id: convertToObjectId(id), receiverId: userID });
-      if (!checkIfNotificationExist) {
-        throw new Error('Notification does not exist');
-      }
-
-      //  const status = await communityGroupService.joinCommunityGroup(userID, groupId);
-      const acceptRequest = await communityGroupService.acceptCommunityGroupJoinApproval(convertToObjectId(groupId), userID);
-      await notificationService.updateUserNotification(id, notificationStatus.accepted);
-      return res.status(200).json({ message: 'Group joined successfully', data: acceptRequest });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!id || !groupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Notification ID and Group ID are required');
   }
-};
+
+  const notificationExists = await notificationModel.findOne(
+    { _id: convertToObjectId(id), receiverId: userID },
+    { _id: 1 }
+  );
+  if (!notificationExists) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Notification does not exist');
+  }
+
+  const acceptRequest = await communityGroupService.acceptCommunityGroupJoinApproval(convertToObjectId(groupId), userID);
+  await notificationService.updateUserNotification(id, notificationStatus.accepted);
+  return res.status(httpStatus.OK).json({ message: 'Group joined successfully', data: acceptRequest });
+});

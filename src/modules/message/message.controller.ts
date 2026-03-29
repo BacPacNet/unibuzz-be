@@ -1,5 +1,4 @@
-import { userIdExtend } from 'src/config/userIDType';
-
+import { userIdExtend } from '../../config/userIDType';
 import { Response } from 'express';
 import httpStatus from 'http-status';
 import { messageService } from '.';
@@ -9,105 +8,104 @@ import { ApiError } from '../errors';
 import mongoose from 'mongoose';
 import { userService } from '../user';
 import { userProfileService } from '../userProfile';
+import type { BlockedUserEntry } from '../userProfile/userProfile.interface';
+import catchAsync from '../utils/catchAsync';
 
-export const sendMessge = async (req: userIdExtend, res: Response) => {
+function isBlocked(
+  profile: { blockedUsers?: BlockedUserEntry[] } | null,
+  userId: string
+): boolean {
+  return (profile?.blockedUsers ?? []).some((b: BlockedUserEntry) => b.userId.toString() === userId);
+}
+
+export const sendMessge = catchAsync(async (req: userIdExtend, res: Response) => {
   const UserID = req.userId;
   const { content, chatId, media, UserProfileId } = req.body;
 
-  try {
-    if (UserID) {
-      const chat: chatInterface | null = await chatService.getChatById(chatId);
-
-      const doesUserExist = chat?.users.some((user) => user.userId._id.toString() == UserID);
-      const user = chat?.users.find((user) => user.userId.toString() === UserID);
-
-      if (!chat?.isGroupChat) {
-        const otherUser = chat?.users.find((user) => user.userId.toString() !== UserID);
-        const [yourUserDetails, theirUserDetails] = await Promise.all([
-          userService.getUserById(new mongoose.Types.ObjectId(UserID)),
-          userService.getUserById(new mongoose.Types.ObjectId(otherUser?.userId?.toString())),
-        ]);
-
-        const [yourUserProfile, theirUserProfile] = await Promise.all([
-          userProfileService.getUserProfileById(UserID),
-          userProfileService.getUserProfileById(otherUser?.userId?.toString() || ''),
-        ]);
-
-        if (yourUserDetails?.isDeleted || theirUserDetails?.isDeleted) {
-          throw new ApiError(httpStatus.NOT_FOUND, 'User is deleted');
-        }
-
-        const isBlocked = (profile: any, userId: string) =>
-          profile?.blockedUsers.some((b: any) => b.userId.toString() === userId);
-
-        if (isBlocked(yourUserProfile, otherUser?.userId?.toString() || '')) {
-          throw new ApiError(httpStatus.NOT_FOUND, 'You are blocked by this user');
-        }
-
-        if (isBlocked(theirUserProfile, UserID)) {
-          throw new ApiError(httpStatus.NOT_FOUND, 'You are blocked by this user');
-        }
-      }
-
-      if (!doesUserExist || chat?.isBlock) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'you are not authorized');
-      }
-
-      if (!chat?.isRequestAccepted && chat?.groupAdmin.toString() !== UserID && !chat?.isGroupChat) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Please accept the request to send message');
-      }
-      if (chat?.groupAdmin.toString() !== UserID && !user?.isRequestAccepted && chat?.isGroupChat) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Please accept the request to send message');
-      }
-
-      const newMessge = await messageService.createmessage(UserID, content, UserProfileId, chatId, media);
-      return res.status(200).json(newMessge);
-    }
-  } catch (error: any) {
-    console.log(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!UserID) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User not authenticated');
   }
-};
 
-export const getUserMessages = async (req: userIdExtend, res: Response) => {
+  const chat: chatInterface | null = await chatService.getChatById(chatId);
+  if (!chat) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Chat not found');
+  }
+
+  const doesUserExist = chat.users.some((user) => user.userId._id.toString() == UserID);
+  const user = chat.users.find((user) => user.userId.toString() === UserID);
+
+  if (!chat.isGroupChat) {
+    const otherUser = chat.users.find((user) => user.userId.toString() !== UserID);
+    const otherUserId = otherUser?.userId?.toString() ?? '';
+    const [yourUserDetails, theirUserDetails] = await Promise.all([
+      userService.getUserById(new mongoose.Types.ObjectId(UserID)),
+      userService.getUserById(new mongoose.Types.ObjectId(otherUserId)),
+    ]);
+
+    const [yourUserProfile, theirUserProfile] = await Promise.all([
+      userProfileService.getUserProfileById(UserID),
+      userProfileService.getUserProfileById(otherUserId),
+    ]);
+
+    if (yourUserDetails?.isDeleted || theirUserDetails?.isDeleted) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User is deleted');
+    }
+
+    if (isBlocked(yourUserProfile, otherUserId)) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked by this user');
+    }
+
+    if (isBlocked(theirUserProfile, UserID)) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are blocked by this user');
+    }
+  }
+
+  if (!doesUserExist || chat.isBlock) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'you are not authorized');
+  }
+
+  if (!chat.isRequestAccepted && chat.groupAdmin.toString() !== UserID && !chat.isGroupChat) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Please accept the request to send message');
+  }
+  if (chat.groupAdmin.toString() !== UserID && !user?.isRequestAccepted && chat.isGroupChat) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Please accept the request to send message');
+  }
+
+  const newMessge = await messageService.createmessage(UserID, content, UserProfileId, chatId, media);
+  return res.status(200).json(newMessge);
+});
+
+export const getUserMessages = catchAsync(async (req: userIdExtend, res: Response) => {
   const UserID = req.userId;
   const { chatId } = req.params;
 
-  try {
-    if (UserID && chatId) {
-      const message = await messageService.getMessages(chatId, UserID);
-      return res.status(200).json(message);
-    }
-  } catch (error: any) {
-    console.log(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!UserID || !chatId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User ID and chat ID are required');
   }
-};
 
-export const UpdateMessageIsSeen = async (req: userIdExtend, res: Response) => {
+  const message = await messageService.getMessages(chatId, UserID);
+  return res.status(200).json(message);
+});
+
+export const UpdateMessageIsSeen = catchAsync(async (req: userIdExtend, res: Response) => {
   const { messageId } = req.params;
   const { readByUserId } = req.body;
 
-  try {
-    if (messageId) {
-      const message = await messageService.updateMessageSeen(messageId, readByUserId);
-      return res.status(200).json(message);
-    }
-  } catch (error: any) {
-    console.log(error);
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!messageId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Message ID is required');
   }
-};
 
-export const reactToMessage = async (req: userIdExtend, res: Response) => {
+  const message = await messageService.updateMessageSeen(messageId, readByUserId);
+  return res.status(200).json(message);
+});
+
+export const reactToMessage = catchAsync(async (req: userIdExtend, res: Response) => {
   const { messageId, emoji } = req.body;
 
-  try {
-    if (messageId && req.userId && emoji) {
-      let message = await messageService.reactToMessage(new mongoose.Types.ObjectId(messageId), req.userId, emoji);
-      return res.status(200).json({ message });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!messageId || !req.userId || !emoji) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Message ID, user ID and emoji are required');
   }
-};
+
+  const message = await messageService.reactToMessage(new mongoose.Types.ObjectId(messageId), req.userId, emoji);
+  return res.status(200).json({ message });
+});

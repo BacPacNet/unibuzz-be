@@ -1,18 +1,22 @@
-import { userIdAuth } from '../../modules/user';
-import { userPostController } from '../../modules/userPost';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import { userPostController, userPostValidation } from '../../modules/userPost';
 
 const router: Router = express.Router();
 
-router.route('/').get(userIdAuth, userPostController.getAllUserPosts);
+router.route('/').get(userIdAuth, validate(userPostValidation.getAllUserPosts), userPostController.getAllUserPosts);
 
-router.route('/').post(userIdAuth, userPostController.createUserPost);
+router.route('/').post(userIdAuth, validate(userPostValidation.createUserPost), userPostController.createUserPost);
 
-router.route('/timeline').get(userIdAuth, userPostController.getAllTimelinePosts);
+router.route('/timeline').get(userIdAuth, validate(userPostValidation.getAllTimelinePosts), userPostController.getAllTimelinePosts);
 
-router.route('/:postId').put(userPostController.updateUserPost).delete(userPostController.deleteUserPost);
+router
+  .route('/:postId')
+  .put(validate(userPostValidation.updateUserPost), userPostController.updateUserPost)
+  .delete(validate(userPostValidation.deleteUserPost), userPostController.deleteUserPost);
 
-router.put('/likes/:postId', userIdAuth, userPostController.updateLikeStatus);
+router.put('/likes/:postId', userIdAuth, validate(userPostValidation.updateLikeStatus), userPostController.updateLikeStatus);
 
 export default router;
 

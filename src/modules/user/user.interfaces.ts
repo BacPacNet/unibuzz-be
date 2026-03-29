@@ -1,4 +1,4 @@
-import mongoose, { Model, Document } from 'mongoose';
+import mongoose, { Model, Document, Types } from 'mongoose';
 import { QueryResult } from '../paginate/paginate';
 import { AccessAndRefreshTokens } from '../token/token.interfaces';
 import { UserProfileDocument } from '../userProfile/userProfile.interface';
@@ -74,4 +74,62 @@ export type NewCreatedUser = Omit<IUser, 'isEmailVerified' | 'profile' | 'isUser
 export interface IUserWithTokens {
   user: IUserDoc;
   tokens: AccessAndRefreshTokens;
+}
+
+/** Match stage used in getAllUser aggregation ($match stage) */
+export interface GetAllUserMatchStage {
+  _id: {
+    $ne: mongoose.Types.ObjectId;
+    $nin?: mongoose.Types.ObjectId[];
+  };
+  isDeleted: { $ne: true };
+  'profile.blockedUsers': {
+    $not: {
+      $elemMatch: {
+        userId: mongoose.Types.ObjectId;
+      };
+    };
+  };
+  firstName?: { $regex: RegExp };
+  lastName?: { $regex: RegExp };
+  'profile.university_name'?: { $regex: RegExp };
+  $or?: GetAllUserOrCondition[];
+}
+
+/** Or-condition items used in getAllUser match stage */
+export type GetAllUserOrCondition =
+  | { $and: [{ 'profile.study_year': { $in: string[] } }, { 'profile.major': { $in: string[] } }] }
+  | { $and: [{ 'profile.occupation': { $in: string[] } }, { 'profile.affiliation': { $in: string[] } }] }
+  | { 'profile.study_year': { $in: string[] } }
+  | { 'profile.major': { $in: string[] } }
+  | { 'profile.occupation': { $in: string[] } }
+  | { 'profile.affiliation': { $in: string[] } };
+
+/** Query params for getAllUser (list users with filters) */
+export interface GetAllUserQuery {
+  page?: string;
+  limit?: string;
+  name?: string;
+  universityName?: string;
+  studyYear?: string;
+  major?: string;
+  occupation?: string;
+  affiliation?: string;
+  chatId?: string;
+}
+
+/** Filter for user list/query (queryUsers / paginate) */
+export interface IUserQueryFilter {
+  name?: string;
+  role?: string;
+}
+
+/** Query filter used in getUsersWithProfile (User.find) */
+export interface GetUsersWithProfileQuery {
+  $and: Array<
+    | { _id: { $ne: string } }
+    | { _id: { $nin: (Types.ObjectId | undefined)[] } }
+    | { $or: [{ firstName: RegExp }, { lastName: RegExp }] }
+  >;
+  $or?: [{ firstName: RegExp }, { lastName: RegExp }];
 }

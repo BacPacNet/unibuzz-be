@@ -34,7 +34,6 @@ export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextF
 // without error token check
 export const noErrorUserIdAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1] || '';
-
   if (!token || token.length < 1) {
     return next();
   }

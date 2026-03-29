@@ -1,53 +1,82 @@
-import mongoose from 'mongoose';
+import mongoose, { type PopulateOptions } from 'mongoose';
 import { chatModel } from '../chat';
 import messageModel from './message.model';
 import { UserProfile } from '../userProfile';
+import { toIdString, toUserIdString } from '../../utils/common';
+import type { BlockedUserEntry, MessageMedia, ObjectIdLike } from './message.interface';
+import { getUnreadMessagesCountPipeline } from './message.pipeline';
+
+
+const GROUP_WINDOW_MS = 60 * 1000;
+
+function toBlockedUserIdSet(blockedUsers: BlockedUserEntry[] | undefined | null): Set<string> {
+  const ids = (blockedUsers || [])
+    .map((b) => toIdString(b?.userId))
+    .filter((v: string | null): v is string => Boolean(v));
+
+  return new Set(ids);
+}
+
+function isDeletedSender(sender: unknown): sender is { _id?: unknown; isDeleted: true } {
+  return (
+    sender !== null &&
+    typeof sender === 'object' &&
+    'isDeleted' in sender &&
+    (sender as { isDeleted?: unknown }).isDeleted === true
+  );
+}
+
+const MESSAGE_POPULATE_SENDER_BASE: PopulateOptions[] = [
+  { path: 'senderProfile', select: 'profile_dp' },
+  { path: 'sender', select: 'firstName lastName _id' },
+];
+
+const MESSAGE_POPULATE_SENDER_WITH_DELETED_FLAG: PopulateOptions[] = [
+  { path: 'senderProfile', select: 'profile_dp' },
+  { path: 'sender', select: 'firstName lastName _id isDeleted' },
+];
+
+const MESSAGE_POPULATE_WITH_CHAT: PopulateOptions[] = [
+  ...MESSAGE_POPULATE_SENDER_BASE,
+  { path: 'chat', select: 'users' },
+];
 
 export const createmessage = async (
   userId: string,
   content: string,
   UserProfileId: string,
   chatId: string,
-  media: { imageUrl: string; publicId: string }[]
+  media: MessageMedia[]
 ) => {
-  let messageBody;
-
   const latestMessage = await messageModel.findOne({ chat: chatId }).sort({ createdAt: -1 });
 
   const canGroup =
     latestMessage &&
     latestMessage.sender.toString() === userId &&
     latestMessage.createdAt &&
-    new Date().getTime() - new Date(latestMessage.createdAt).getTime() < 60 * 1000 &&
+    new Date().getTime() - new Date(latestMessage.createdAt).getTime() < GROUP_WINDOW_MS &&
     (!latestMessage.media || latestMessage.media.length === 0);
 
-  if (canGroup && !media?.flat().length) {
+  const flatMedia = media?.flat() ?? [];
+  if (canGroup && flatMedia.length === 0) {
     latestMessage.content += `\n${content}`;
     await latestMessage.save();
-    return messageModel.findById(latestMessage._id).populate([
-      { path: 'sender', select: 'firstName lastName _id' },
-      { path: 'senderProfile', select: 'profile_dp' },
-      { path: 'chat', select: 'users' },
-    ]);
+    return messageModel.findById(latestMessage._id).populate(MESSAGE_POPULATE_WITH_CHAT);
   }
 
-  messageBody = {
+  const messageBody = {
     sender: userId,
     content,
     chat: chatId,
     readByUsers: [userId],
     senderProfile: UserProfileId,
-    ...(media?.length && { media: media.flat() }),
+    ...(flatMedia.length > 0 && { media: flatMedia }),
   };
 
   const newMessage = await messageModel.create(messageBody);
   await chatModel.findByIdAndUpdate(chatId, { latestMessage: newMessage._id });
 
-  const message = await messageModel.findById(newMessage._id).populate([
-    { path: 'sender', select: 'firstName lastName _id' },
-    { path: 'senderProfile', select: 'profile_dp' },
-    { path: 'chat', select: 'users' },
-  ]);
+  const message = await messageModel.findById(newMessage._id).populate(MESSAGE_POPULATE_WITH_CHAT);
 
   return message;
 };
@@ -55,14 +84,11 @@ export const createmessage = async (
 export const getMessages = async (chatId: string, currentUserId: string) => {
   const myProfile = await UserProfile.findOne({ users_id: currentUserId }, { blockedUsers: 1 }).lean();
 
-  const myBlockedUserIds = new Set((myProfile?.blockedUsers || []).map((b: any) => b.userId.toString()));
+  const myBlockedUserIds = toBlockedUserIdSet(myProfile?.blockedUsers as BlockedUserEntry[] | undefined);
 
   const messages = await messageModel
     .find({ chat: chatId })
-    .populate([
-      { path: 'sender', select: 'firstName lastName _id isDeleted' },
-      { path: 'senderProfile', select: 'profile_dp' },
-    ])
+    .populate(MESSAGE_POPULATE_SENDER_WITH_DELETED_FLAG)
     .sort({ createdAt: 1 })
     .lean();
 
@@ -78,27 +104,27 @@ export const getMessages = async (chatId: string, currentUserId: string) => {
   ).lean();
 
   const blockedMap = new Map(
-    blockProfiles.map((p) => [p.users_id.toString(), new Set((p.blockedUsers || []).map((b: any) => b.userId.toString()))])
+    blockProfiles.map((p) => [
+      toIdString(p.users_id) ?? String(p.users_id),
+      toBlockedUserIdSet(p.blockedUsers as BlockedUserEntry[] | undefined),
+    ])
   );
 
-  function isUserBlocked(sender: any): boolean {
+  function isUserBlocked(sender: unknown): boolean {
     if (!sender || typeof sender !== 'object') return false;
 
-    const senderId = sender._id?.toString();
+    const senderId = (sender as { _id?: ObjectIdLike })._id?.toString();
     if (!senderId) return false;
 
     const iBlockedSender = myBlockedUserIds.has(senderId);
-    const senderBlockedMe = blockedMap.get(senderId)?.has(currentUserId.toString()) ?? false;
+    const senderBlockedMe = blockedMap.get(senderId)?.has(toUserIdString(currentUserId)) ?? false;
 
     return iBlockedSender || senderBlockedMe;
   }
 
   return messages.map((message) => {
     const sender = message.sender;
-
-    const isDeleted =
-      sender && typeof sender === 'object' && sender !== null && 'isDeleted' in sender && sender.isDeleted === true;
-
+    const isDeleted = isDeletedSender(sender);
     const isBlocked = isUserBlocked(sender);
 
     if (isDeleted || isBlocked) {
@@ -122,16 +148,14 @@ export const getMessages = async (chatId: string, currentUserId: string) => {
 };
 
 export const updateMessageSeen = async (messageId: string, readByUserId: string) => {
-  const message = await messageModel.findByIdAndUpdate(
-    messageId,
-    { $addToSet: { readByUsers: readByUserId } },
-    { new: true }
-  );
+  const message = await messageModel
+    .findByIdAndUpdate(messageId, { $addToSet: { readByUsers: readByUserId } }, { new: true })
+    .lean();
 
   return message;
 };
 
-export const reactToMessage = async (id: any, userId: string, emoji: string) => {
+export const reactToMessage = async (id: ObjectIdLike, userId: string, emoji: string) => {
   const message = await messageModel.findById(id);
 
   if (!message) {
@@ -148,36 +172,18 @@ export const reactToMessage = async (id: any, userId: string, emoji: string) => 
     await messageModel.updateOne({ _id: id, 'reactions.userId': userId }, { $set: { 'reactions.$.emoji': emoji } });
   }
 
-  return messageModel.findById(id).populate([{ path: 'chat', select: ' users' }]);
+  return messageModel.findById(id).populate([{ path: 'chat', select: 'users' }]);
 };
 
-export const unreadMessagesCount = async (chatsID: any[], userId: string) => {
+export const unreadMessagesCount = async (chatsID: ObjectIdLike[], userId: string) => {
   const userObjectId = new mongoose.Types.ObjectId(userId);
+  const chatIds = chatsID.map((id) =>
+    typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+  );
 
-  const messages = await messageModel
-    .find({
-      chat: { $in: chatsID },
-    })
-    .sort({ createdAt: -1 });
+  const result = await messageModel.aggregate<{ totalUnread: number }>(
+    getUnreadMessagesCountPipeline(chatIds, userObjectId)
+  );
 
-  const messagesByChat = new Map<string, any[]>();
-  for (const msg of messages) {
-    const chatId = msg.chat.toString();
-    if (!messagesByChat.has(chatId)) {
-      messagesByChat.set(chatId, []);
-    }
-    messagesByChat.get(chatId)!.push(msg);
-  }
-
-  let totalUnread = 0;
-
-  for (const [_, msgs] of messagesByChat.entries()) {
-    for (const msg of msgs) {
-      const isRead = msg.readByUsers.some((reader: any) => reader.equals(userObjectId));
-      if (isRead) break;
-      totalUnread++;
-    }
-  }
-
-  return totalUnread;
+  return result[0]?.totalUnread ?? 0;
 };

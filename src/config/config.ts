@@ -64,7 +64,9 @@ const envVarsSchema = Joi.object()
         otherwise: Joi.optional(),
       })
       .description('AWS SQS Queue URL'),
+      ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY: Joi.string().optional().description('Allowed community IDs for reward eligibility'),
     DEFAULT_COMMUNITY_ADMIN_ID: Joi.string().required().description('Default Community Admin ID'),
+    RECAPTCHA_SECRET_KEY: Joi.string().optional().description('Google reCAPTCHA v2 secret key'),
   })
   .unknown();
 
@@ -124,7 +126,9 @@ const config = {
     config: envVars.FIREBASE_CONFIG,
   },
   sqsQueueUrl: envVars.SQS_QUEUE_URL,
+  ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY: envVars.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY,
   DEFAULT_COMMUNITY_ADMIN_ID: envVars.DEFAULT_COMMUNITY_ADMIN_ID,
+  recaptchaSecretKey: envVars.RECAPTCHA_SECRET_KEY,
 };
 
 export default config;

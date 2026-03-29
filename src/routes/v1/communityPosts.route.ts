@@ -1,27 +1,65 @@
-import { userIdAuth } from '../../modules/user';
-import { communityPostsController } from '../../modules/communityPosts';
 import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { userIdAuth } from '../../modules/user';
+import { communityPostsController, communityPostsValidation } from '../../modules/communityPosts';
 import { noErrorUserIdAuth } from '../../modules/user/user.middleware';
 
 const router: Router = express.Router();
-router.route('/timelinePost').get(userIdAuth, communityPostsController.getAllCommunityPostV2);
 
-router.route('/group').get(userIdAuth, communityPostsController.getAllCommunityGroupPostV2);
+router
+  .route('/timelinePost')
+  .get(userIdAuth, validate(communityPostsValidation.getAllCommunityPostV2), communityPostsController.getAllCommunityPostV2);
+
+router
+  .route('/group')
+  .get(userIdAuth, validate(communityPostsValidation.getAllCommunityGroupPostV2), communityPostsController.getAllCommunityGroupPostV2);
 
 router
   .route('/post/:postId')
-  .get(noErrorUserIdAuth, communityPostsController.getPostById)
-  .put(userIdAuth, communityPostsController.updateCommunityPostLive);
-router.route('/:communityId/:communityGroupId?').get(userIdAuth, communityPostsController.getAllCommunityPost);
+  .get(
+    noErrorUserIdAuth,
+    validate(communityPostsValidation.getPostById),
+    communityPostsController.getPostById
+  )
+  .put(
+    userIdAuth,
+    validate(communityPostsValidation.updateCommunityPostLive),
+    communityPostsController.updateCommunityPostLive
+  );
 
-router.route('/').post(userIdAuth, communityPostsController.createCommunityPost);
+router
+  .route('/:communityId/:communityGroupId?')
+  .get(
+    userIdAuth,
+    validate(communityPostsValidation.getAllCommunityPost),
+    communityPostsController.getAllCommunityPost
+  );
+
+router
+  .route('/')
+  .post(
+    userIdAuth,
+    validate(communityPostsValidation.createCommunityPost),
+    communityPostsController.createCommunityPost
+  );
 
 router
   .route('/:postId')
-  .put(communityPostsController.updateCommunityPost)
-  .delete(communityPostsController.deleteCommunityPost);
+  .put(
+    validate(communityPostsValidation.updateCommunityPost),
+    communityPostsController.updateCommunityPost
+  )
+  .delete(
+    validate(communityPostsValidation.deleteCommunityPost),
+    communityPostsController.deleteCommunityPost
+  );
 
-router.put('/likeunlike/:postId', userIdAuth, communityPostsController.likeUnlikePost);
+router.put(
+  '/likeunlike/:postId',
+  userIdAuth,
+  validate(communityPostsValidation.likeUnlikePost),
+  communityPostsController.likeUnlikePost
+);
 
 export default router;
 

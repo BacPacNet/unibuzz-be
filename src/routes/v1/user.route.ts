@@ -1,43 +1,86 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
-// import { auth } from '../../modules/auth';
 import { userController, userIdAuth, userValidation } from '../../modules/user';
+import { rewardRedemptionController, rewardRedemptionValidation } from '../../modules/rewardRedemption';
 
 const router: Router = express.Router();
 
 router
   .route('/')
   .post(validate(userValidation.createUser), userController.createUser)
-  .get(userIdAuth, userController.getUsersWithProfileData)
-  .delete(userIdAuth, userController.softDeleteUser);
+  .delete(userIdAuth, validate(userValidation.softDeleteUser), userController.softDeleteUser);
 
-router.route('/connections').get(userIdAuth, userController.getAllUser);
-router.route('/checkAvailability').post(userController.checkUserEmailAndUserNameAvailability);
-router.route('/check-email-availability').post(userController.checkUserEmailAvailability);
+router
+  .route('/connections')
+  .get(userIdAuth, validate(userValidation.getAllUser), userController.getAllUser);
 
-router.route('/changeUserPassword').put(userIdAuth, userController.changeUserPassword);
-router.route('/changeUserName').put(userIdAuth, userController.changeUserName);
-router.route('/changeUserEmail').put(userIdAuth, userController.changeEmail);
-router.route('/deActivateUserAccount').put(userIdAuth, userController.deActivateUserAccount);
+router
+  .route('/checkAvailability')
+  .post(validate(userValidation.checkUserEmailAndUserNameAvailability), userController.checkUserEmailAndUserNameAvailability);
+
+router
+  .route('/check-email-availability')
+  .post(validate(userValidation.checkUserEmailAvailability), userController.checkUserEmailAvailability);
+
+router
+  .route('/changeUserPassword')
+  .put(userIdAuth, validate(userValidation.changeUserPassword), userController.changeUserPassword);
+
+router
+  .route('/changeUserName')
+  .put(userIdAuth, validate(userValidation.changeUserName), userController.changeUserName);
+
+
+
+router
+  .route('/deActivateUserAccount')
+  .put(userIdAuth, validate(userValidation.deActivateUserAccount), userController.deActivateUserAccount);
+
 router.route('/new-user').put(userIdAuth, userController.IsNewUserToggle);
-router.route('/username/:userName').get(userIdAuth, userController.getUserByUsername);
-router.route('/referrals').get(userIdAuth, userController.getReferredUsers);
+
+router
+  .route('/referrals')
+  .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getReferredUsers);
+
+
+
+  router
+  .route('/eligible')
+  .get(userIdAuth, userController.isUserEligibleForRewards);
+
+router
+  .route('/rewards')
+  .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getRewards);
+
+router
+  .route('/rewards/docs')
+  .get(
+    validate(rewardRedemptionValidation.getAllRewardRedemptions),
+    rewardRedemptionController.getAllRewardRedemptions
+  );
+
+
+router
+  .route('/rewards/latest/upi-id')
+  .put(
+    userIdAuth,
+    validate(rewardRedemptionValidation.updateLatestRewardRedemptionUpiId),
+    rewardRedemptionController.updateLatestRewardRedemptionUpiId
+  );
+
+router
+  .route('/rewards/:redemptionId/complete')
+  .put(
+    validate(rewardRedemptionValidation.markRewardRedemptionCompleted),
+    rewardRedemptionController.markRewardRedemptionCompleted
+  );
+
 
 router
   .route('/:userId')
   .get(userIdAuth, validate(userValidation.getUser), userController.getUser)
-  .patch(validate(userValidation.updateUser), userController.updateUser)
-  .delete(validate(userValidation.deleteUser), userController.deleteUser);
+  // .delete(validate(userValidation.deleteUser), userController.deleteUser);
 
-//router.route('/:communityId').put(userIdAuth, userController.joinCommunity);
-
-router.route('/user/GroupRole').put(userIdAuth, userController.updateUserCommunityGroupRole);
-router.route('/user/CommunityRole').put(userIdAuth, userController.updateUserCommunityRole);
-
-router.route('/communityUsers/:communityId').get(userIdAuth, userController.findUsersByCommunityId);
-router.route('/communityGroupUsers/:communityGroupId').get(userIdAuth, userController.findUsersByCommunityGroupId);
-
-//router.route('/leave/:communityId').put(userIdAuth, userController.leaveCommunity);
 
 export default router;
 

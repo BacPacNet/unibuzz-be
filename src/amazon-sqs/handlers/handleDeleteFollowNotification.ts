@@ -12,7 +12,7 @@ export const handleDeleteFollowNotification = async (job: any) => {
     const senderObjectId = new mongoose.Types.ObjectId(sender_id);
     const receiverObjectId = new mongoose.Types.ObjectId(receiverId);
 
-    const deletedNotification = await notificationService.DeleteNotification({
+    const deletedNotification = await notificationService.deleteNotification({
       sender_id: senderObjectId,
       receiverId: receiverObjectId,
       type: notificationRoleAccess.FOLLOW,

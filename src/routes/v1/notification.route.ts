@@ -1,18 +1,24 @@
-import { notificationController } from '../../modules/Notification';
+import express, { Router } from 'express';
+import { validate } from '../../modules/validate';
+import { notificationController, notificationValidation } from '../../modules/Notification';
 import { userIdAuth } from '../../modules/user';
-import { Router } from 'express';
 
-const router: Router = Router();
+const router: Router = express.Router();
 
 router
   .route('/')
-  .get(userIdAuth, notificationController.getGroupNotification)
-  .put(userIdAuth, notificationController.updateGroupNotification);
+  .get(userIdAuth, validate(notificationValidation.getGroupNotification), notificationController.getGroupNotification)
+  .put(userIdAuth, validate(notificationValidation.updateGroupNotification), notificationController.updateGroupNotification);
 
-router.route('/user').get(userIdAuth, notificationController.getUserNotification);
+router
+  .route('/user')
+  .get(userIdAuth, validate(notificationValidation.getUserNotification), notificationController.getUserNotification);
+
 router.route('/user/total-count').get(userIdAuth, notificationController.getUserNotificationTotalCount);
 router.route('/user/read-all').put(userIdAuth, notificationController.markUserNotificationsAsRead);
 
-router.route('/join').put(userIdAuth, notificationController.JoinGroup);
+router
+  .route('/join')
+  .put(userIdAuth, validate(notificationValidation.joinGroup), notificationController.JoinGroup);
 
 export default router;

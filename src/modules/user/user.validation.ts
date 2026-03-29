@@ -41,21 +41,84 @@ export const getUser = {
   }),
 };
 
-export const updateUser = {
-  params: Joi.object().keys({
-    userId: Joi.required().custom(objectId),
-  }),
-  body: Joi.object()
-    .keys({
-      email: Joi.string().email(),
-      password: Joi.string().custom(password),
-      name: Joi.string(),
-    })
-    .min(1),
-};
+
 
 export const deleteUser = {
   params: Joi.object().keys({
     userId: Joi.string().custom(objectId),
   }),
+};
+
+const paginationQuery = {
+  page: Joi.string().optional(),
+  limit: Joi.string().optional(),
+};
+
+export const getAllUser = {
+  query: Joi.object().keys({
+    ...paginationQuery,
+    name: Joi.string().optional(),
+    universityName: Joi.string().optional(),
+    studyYear: Joi.string().optional(),
+    major: Joi.string().optional(),
+    occupation: Joi.string().optional(),
+    affiliation: Joi.string().optional(),
+    chatId: Joi.string().optional(),
+  }),
+};
+
+export const checkUserEmailAndUserNameAvailability = {
+  body: Joi.object().keys({
+    email: Joi.string().required().email(),
+    userName: Joi.string().required(),
+  }),
+};
+
+export const checkUserEmailAvailability = {
+  body: Joi.object().keys({
+    email: Joi.string().required().email(),
+  }),
+};
+
+export const softDeleteUser = {
+  body: Joi.object().keys({
+    password: Joi.string().required().custom(password),
+    sure: Joi.boolean().required(),
+  }),
+};
+
+export const changeUserPassword = {
+  body: Joi.object().keys({
+    currentPassword: Joi.string().required(),
+    confirmPassword: Joi.string().required().custom(password),
+    newPassword: Joi.string().required().custom(password),
+  }),
+};
+
+export const changeUserName = {
+  body: Joi.object().keys({
+    userName: Joi.string().required(),
+    newUserName: Joi.string().required(),
+    password: Joi.string().required().custom(password),
+  }),
+};
+
+export const changeEmail = {
+  body: Joi.object().keys({
+    currentEmail: Joi.string().required().email(),
+    newMail: Joi.string().required().email(),
+    emailOtp: Joi.string().required(),
+  }),
+};
+
+export const deActivateUserAccount = {
+  body: Joi.object().keys({
+    userName: Joi.string().required(),
+    email: Joi.string().required().email(),
+    Password: Joi.string().required().custom(password),
+  }),
+};
+
+export const getReferredUsers = {
+  query: Joi.object().keys(paginationQuery),
 };

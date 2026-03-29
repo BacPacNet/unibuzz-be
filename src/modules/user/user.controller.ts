@@ -1,19 +1,17 @@
 import httpStatus from 'http-status';
-import { NextFunction, Request, Response } from 'express';
+import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import catchAsync from '../utils/catchAsync';
 import ApiError from '../errors/ApiError';
 import pick from '../utils/pick';
+import { parseUserIdOrThrow, requireAuthenticatedUserIdOrThrow } from '../../utils/common';
 import { IOptions } from '../paginate/paginate';
 import * as userService from './user.service';
-// import { notificationService } from '../Notification';
-// import { io } from '../../index';
-// import { notificationRoleAccess } from '../Notification/notification.interface';
-import { userIdExtend } from 'src/config/userIDType';
-import { loginEmailVerificationService } from '../loginEmailVerification';
-import { communityService } from '../community';
-import { communityGroupService } from '../communityGroup';
+import { userIdExtend } from '../../config/userIDType';
 import { userProfileService } from '../userProfile';
+import { BlockedUserEntry } from '../userProfile/userProfile.interface';
+import { GetAllUserQuery } from './user.interfaces';
+import { whitelistRewardCommunityService } from '../whitelistRewardCommunity';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -27,93 +25,43 @@ export const getUsers = catchAsync(async (req: Request, res: Response) => {
   res.send(result);
 });
 
-export const getUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const userId = req.params['userId'] as string;
-    const myUserId = req.userId;
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
-    }
+export const getUser = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+  const userIdObj = parseUserIdOrThrow(req.params['userId']);
+  const userIdStr = userIdObj.toString();
+  const myUserId = req.userId;
 
-    const myProfile = await userProfileService.getUserProfileById(myUserId as string);
-    let isBlocked = false;
-    if (myProfile?.blockedUsers.some((user: any) => user.userId.toString() === userId.toString())) {
-      isBlocked = true;
-    }
-
-    const user = await userService.getUserProfileById(new mongoose.Types.ObjectId(userId), myUserId as string);
-    if (!user) {
-      return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
-    }
-    user.isBlocked = isBlocked;
-    res.status(httpStatus.OK).json(user);
-  } catch (error) {
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');
+  const myProfile = await userProfileService.getUserProfileById(myUserId as string);
+  let isBlocked = false;
+  if (myProfile?.blockedUsers.some((user: BlockedUserEntry) => user.userId.toString() === userIdStr)) {
+    isBlocked = true;
   }
+
+  const user = await userService.getUserProfileById(userIdObj, myUserId as string);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  user.isBlocked = isBlocked;
+  res.status(httpStatus.OK).json(user);
 });
 
-export const getUserByUsername = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const userName = req.params['userName'] as string;
-
-    if (!userName) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Username is required');
-    }
-
-    const user = await userService.getUserProfileByUsername(userName);
-    if (!user) {
-      return next(new ApiError(httpStatus.NOT_FOUND, 'User not found'));
-    }
-    res.status(httpStatus.OK).json(user);
-  } catch (error) {
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error on get user');
-  }
+export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId } = req.query as GetAllUserQuery;
+  const allUsers = await userService.getAllUser(
+    name ?? '',
+    Number(page),
+    Number(limit),
+    req.userId as string,
+    universityName ?? '',
+    studyYear ? studyYear.split(',') : [],
+    major ? major.split(',') : [],
+    occupation ? occupation.split(',') : [],
+    affiliation ? affiliation.split(',') : [],
+    chatId ?? ''
+  );
+  res.status(httpStatus.OK).json(allUsers);
 });
 
-export const getAllUser = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId } = req.query as any;
-  try {
-    let allUsers = await userService.getAllUser(
-      name,
-      Number(page),
-      Number(limit),
-      req.userId as string,
-      universityName,
-      studyYear ? studyYear.split(',') : [],
-      major ? major.split(',') : [],
-      occupation ? occupation.split(',') : [],
-      affiliation ? affiliation.split(',') : [],
-      chatId ? chatId : ''
-    );
-    return res.status(200).json(allUsers);
-  } catch (error) {
-    console.error(error);
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to Get Users'));
-  }
-});
 
-export const updateUser = catchAsync(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const userId = req.params['userId'];
-
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
-    }
-
-    const user = await userService.updateUserById(new mongoose.Types.ObjectId(userId), req.body);
-
-    if (!user) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    }
-
-    res.status(httpStatus.OK).json({
-      status: 'success',
-      data: user,
-    });
-  } catch (error: any) {
-    next(new ApiError(error.statusCode || httpStatus.INTERNAL_SERVER_ERROR, error.message));
-  }
-});
 
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   if (typeof req.params['userId'] === 'string') {
@@ -122,135 +70,18 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   }
 });
 
-export const softDeleteUser = async (req: userIdExtend, res: Response) => {
-  const userId = req.userId;
+export const softDeleteUser = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = parseUserIdOrThrow(req.userId);
   const { password } = req.body;
-
-  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
-  }
-
-  try {
-    await userService.softDeleteUserById(new mongoose.Types.ObjectId(userId), password);
-    return res.status(httpStatus.NO_CONTENT).json({ message: 'User deleted successfully' });
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const getUsersWithProfileData = async (req: userIdExtend, res: Response) => {
-  const { name } = req.query as { name?: string };
-  const userID = req.userId;
-  try {
-    if (userID) {
-      let user = await userService.getUsersWithProfile(name, userID);
-      return res.status(200).json({ user });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const findUsersByCommunityId = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { communityId } = req.params;
-  const { privacy, name } = req.query as { name?: string; privacy?: string };
-  const userID = req.userId;
-
-  try {
-    if (typeof communityId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(communityId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      }
-      if (userID) {
-        let user = await userService.findUsersByCommunityId(communityId, privacy, name, userID);
-        return res.status(200).json({ user });
-      }
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const findUsersByCommunityGroupId = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { communityGroupId } = req.params;
-  const { name } = req.query as { name?: string };
-  const userID = req.userId;
-
-  try {
-    if (typeof communityGroupId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      }
-      if (userID) {
-        let user = await userService.findUsersByCommunityGroupId(communityGroupId, name, userID);
-        return res.status(200).json({ user });
-      }
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const updateUserCommunityGroupRole = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { communityGroupId, role, id } = req.body;
-  const userID = req.userId;
-
-  try {
-    if (typeof communityGroupId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(communityGroupId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      }
-      const communityGroup = await communityGroupService.getCommunityGroup(communityGroupId);
-      if (userID !== String(communityGroup?.adminUserId)) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
-      }
-      let user = await userService.updateUserCommunityGroupRole(id, communityGroupId, role);
-      // const notifications = {
-      //   sender_id: userID,
-      //   receiverId: id,
-      //   communityGroupId: communityGroupId,
-      //   type: notificationRoleAccess.ASSIGN,
-      //   message: `assigned you as ${role}`,
-      // };
-
-      // await notificationService.CreateNotification(notifications);
-      // io.emit(`notification_${id}`, { type: notificationRoleAccess.ASSIGN });
-      return res.status(200).json({ user });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const updateUserCommunityRole = async (req: userIdExtend, res: Response, next: NextFunction) => {
-  const { communityId, role, userID } = req.body;
-  const adminID = req.userId;
-
-  try {
-    if (typeof communityId == 'string') {
-      if (!mongoose.Types.ObjectId.isValid(communityId)) {
-        return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID'));
-      }
-      if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-      const community = await communityService.getCommunity(communityId);
-
-      if (community?.adminId?.map(String).includes(adminID?.toString() || '')) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Only Admin Allowed!');
-      }
-      let user = await userService.updateUserCommunityRole(userID, communityId, role);
-
-      return res.status(200).json({ user });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  await userService.softDeleteUserById(userId, password);
+  res.status(httpStatus.NO_CONTENT).json({ message: 'User deleted successfully' });
+});
 
 export const checkUserEmailAndUserNameAvailability = async (req: Request, res: Response) => {
   const { email, userName } = req.body;
 
   try {
-    await userService.UserEmailAndUserNameAvailability(email, userName);
+    await userService.userEmailAndUserNameAvailability(email, userName);
     return res.status(httpStatus.OK).json({ message: 'Email and username are available', isAvailable: true });
   } catch (error: any) {
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
@@ -261,117 +92,101 @@ export const checkUserEmailAvailability = async (req: Request, res: Response) =>
   const { email } = req.body;
 
   try {
-    await userService.UserEmailAvailability(email);
+    await userService.userEmailAvailability(email);
     return res.status(httpStatus.OK).json({ message: 'Email is available', isAvailable: true });
   } catch (error: any) {
     return res.status(error.statusCode).json({ message: error.message, isAvailable: false });
   }
 };
 
-export const changeUserName = async (req: userIdExtend, res: Response) => {
+export const changeUserName = catchAsync(async (req: userIdExtend, res: Response) => {
   const { userName, newUserName, password } = req.body;
-  const userID = req.userId;
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+  const user = await userService.changeUserName(userID, userName, newUserName, password);
+  res.status(httpStatus.OK).json(user);
+});
 
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    const user = await userService.changeUserName(userID, userName, newUserName, password);
-    return res.status(httpStatus.OK).json(user);
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const changeUserPassword = async (req: userIdExtend, res: Response) => {
+export const changeUserPassword = catchAsync(async (req: userIdExtend, res: Response) => {
   const { currentPassword, newPassword } = req.body;
-  const userID = req.userId;
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+  const user = await userService.changeUserPassword(userID, currentPassword, newPassword);
+  res.status(httpStatus.OK).json(user);
+});
 
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    const user = await userService.changeUserPassword(userID, currentPassword, newPassword);
-    return res.status(httpStatus.OK).json(user);
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
 
-export const changeEmail = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
-  const { currentEmail, newMail, emailOtp } = req.body;
 
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    await loginEmailVerificationService.checkloginEmailVerificationOtp(emailOtp, newMail);
-    let userProfile = await userService.changeUserEmail(userID, currentEmail, newMail);
-    return res.status(200).json(userProfile);
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-export const deActivateUserAccount = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
+export const deActivateUserAccount = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
   const { userName, email, Password } = req.body;
+  const userProfile = await userService.deActivateUserAccount(userID, userName, email, Password);
+  res.status(httpStatus.OK).json(userProfile);
+});
 
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    let userProfile = await userService.deActivateUserAccount(userID, userName, email, Password);
-    return res.status(200).json(userProfile);
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+export const IsNewUserToggle = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireAuthenticatedUserIdOrThrow(req);
+  const UserData = await userService.IsNewUserFalse(userID);
+  res.status(httpStatus.OK).json({ message: 'success', UserData });
+});
 
-export const IsNewUserToggle = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
+export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+  const userId = parseUserIdOrThrow(req.userId);
+  const { page, limit } = req.query as { page?: string; limit?: string };
 
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-    let UserData = await userService.IsNewUserFalse(userID);
-    return res.status(200).json({ message: 'success', UserData });
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  const result = await userService.getReferredUsers(
+    userId,
+    page ? Number(page) : 1,
+    limit ? Number(limit) : 10
+  );
 
-export const getReferredUsers = catchAsync(async (req: userIdExtend, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const userId = req.userId;
-    const { page, limit } = req.query as { page?: string; limit?: string };
+  // Get all user profiles in one query to avoid N+1 queries
+  const referralIds = result.referrals.map((referral) => new mongoose.Types.ObjectId(referral._id));
+  const profiles = await userProfileService.getUserProfiles(referralIds);
 
-    if (!userId) {
-      throw new ApiError(httpStatus.UNAUTHORIZED, 'User not authenticated');
-    }
+  // Map profiles to referrals
+  const referralsWithProfiles = result.referrals.map((referral) => {
+    const profile = profiles.find((p) => p.users_id.toString() === referral._id.toString());
+    return {
+      ...referral,
+      profile: profile || null,
+    };
+  });
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
-    }
+  res.status(httpStatus.OK).json({
+    referCode: result.referCode,
+    totalReferrals: result.totalReferrals,
+    currentPage: result.currentPage,
+    totalPages: result.totalPages,
+    referrals: referralsWithProfiles,
+  });
+});
 
-    const result = await userService.getReferredUsers(
-      new mongoose.Types.ObjectId(userId),
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 10
-    );
 
-    // Get all user profiles in one query to avoid N+1 queries
-    const referralIds = result.referrals.map((referral) => new mongoose.Types.ObjectId(referral._id));
-    const profiles = await userProfileService.getUserProfiles(referralIds);
 
-    // Map profiles to referrals
-    const referralsWithProfiles = result.referrals.map((referral) => {
-      const profile = profiles.find((p) => p.users_id.toString() === referral._id.toString());
-      return {
-        ...referral,
-        profile: profile || null,
-      };
-    });
+export const getRewards = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+  const userId = parseUserIdOrThrow(req.userId);
+  const result = await userService.getRewardsDetails(
+    userId,
+  );
 
-    res.status(httpStatus.OK).json({
-      referCode: result.referCode,
-      totalReferrals: result.totalReferrals,
-      currentPage: result.currentPage,
-      totalPages: result.totalPages,
-      referrals: referralsWithProfiles,
-    });
-  } catch (error: any) {
-    next(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Failed to get referred users'));
-  }
+  res.status(httpStatus.OK).json({
+    referCode: result.referCode,
+    totalInvites: result.totalInvites,
+    totalEarning: result.totalEarning,
+    thisMonthProgress: result.thisMonthProgress,
+    previousMonthProgress: result.previousMonthProgress,
+    thisMonthReward: result.thisMonthReward,
+    previousMonthReward: result.previousMonthReward,
+    thisMonthLeftoverInvites: result.thisMonthLeftoverInvites,
+    previousMonthLeftoverInvites: result.previousMonthLeftoverInvites,
+    currentUPI: result.currentUPI
+    // previousMonthRedeemed: result.previousMonthmoRedeemed,
+  });
+});
+
+export const isUserEligibleForRewards = catchAsync(async (req: userIdExtend, res: Response): Promise<void> => {
+
+  
+  const userId = parseUserIdOrThrow(req.userId);
+  const eligible = await whitelistRewardCommunityService.isUserEligibleForRewards(userId);
+  res.status(httpStatus.OK).json({ eligible });
 });

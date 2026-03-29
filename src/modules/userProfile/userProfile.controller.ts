@@ -1,227 +1,182 @@
 import httpStatus from 'http-status';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import * as userProfileService from './userProfile.service';
 import mongoose from 'mongoose';
 import { ApiError } from '../errors';
-import { userIdExtend } from 'src/config/userIDType';
-import { communityModel, communityService } from '../community';
+import { userIdExtend } from '../../config/userIDType';
+import catchAsync from '../utils/catchAsync';
+import { communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
-import universityModel, { IUniversity } from '../university/university.model';
-import UniversityModel from '../university/university.model';
-import { EditProfileRequest } from './userProfile.interface';
+
+import { EditProfileRequest, AddUniversityEmailBody, PaginationQueryWithUserId, CommunityUser } from './userProfile.interface';
+
+/** Message constants for API responses and errors */
+const MESSAGES = {
+  INVALID_USER_PROFILE_ID: 'Invalid User Profile ID',
+  NO_UPDATE_DATA: 'No update data provided',
+  USER_ID_REQUIRED: 'User ID required',
+  USER_NOT_FOUND: 'User not found',
+  CANNOT_FOLLOW_SELF: 'You cannot follow to yourself',
+  CANNOT_BLOCK_SELF: 'You cannot block yourself',
+  MISSING_USER_OR_TARGET: (fields: string) => `Missing ${fields}`,
+  ALREADY_VERIFIED_IN_COMMUNITY: 'User is already verified to this community',
+} as const;
+
+
+function requireUserId(
+  req: userIdExtend,
+  options?: { status?: number; message?: string }
+): string {
+  const userId = req.userId;
+  if (!userId) {
+    throw new ApiError(
+      options?.status ?? httpStatus.BAD_REQUEST,
+      options?.message ?? MESSAGES.USER_ID_REQUIRED
+    );
+  }
+  return userId;
+}
 
 // update userProfile
-export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
+export const updateUserProfile = catchAsync(async (req: Request, res: Response) => {
   const { userProfileId } = req.params;
   const updateData = req.body as EditProfileRequest;
 
-  console.log(updateData, 'updateData');
-
-  try {
-    // Validate userProfileId
-    if (!userProfileId || !mongoose.Types.ObjectId.isValid(userProfileId)) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'Invalid User Profile ID'));
-    }
-
-    // Validate update data
-    if (!updateData || Object.keys(updateData).length === 0) {
-      return next(new ApiError(httpStatus.BAD_REQUEST, 'No update data provided'));
-    }
-
-    const updatedUserProfile = await userProfileService.updateUserProfile(
-      new mongoose.Types.ObjectId(userProfileId),
-      updateData
-    );
-
-    return res.status(httpStatus.OK).json({
-      success: true,
-      data: updatedUserProfile,
-    });
-  } catch (error: any) {
-    return next(
-      new ApiError(error.statusCode || httpStatus.INTERNAL_SERVER_ERROR, error.message || 'Error updating user profile')
-    );
+  // Validate userProfileId
+  if (!userProfileId || !mongoose.Types.ObjectId.isValid(userProfileId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, MESSAGES.INVALID_USER_PROFILE_ID);
   }
-};
 
-export const toggleFollow = async (req: userIdExtend, res: Response) => {
+  // Validate update data
+  if (!updateData || Object.keys(updateData).length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, MESSAGES.NO_UPDATE_DATA);
+  }
+
+  const updatedUserProfile = await userProfileService.updateUserProfile(
+    new mongoose.Types.ObjectId(userProfileId),
+    updateData
+  );
+
+  return res.status(httpStatus.OK).json({
+    success: true,
+    data: updatedUserProfile,
+  });
+});
+
+export const toggleFollow = catchAsync(async (req: userIdExtend, res: Response) => {
   const { userToFollow } = req.query as { userToFollow?: string };
   const userId = req.userId;
-  try {
-    if (userToFollow === userId) {
-      return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: 'You cannot follow to yorself' });
-    }
 
-    if (userId && userToFollow) {
-      let followed = await userProfileService.toggleFollow(
-        new mongoose.Types.ObjectId(userId),
-        new mongoose.Types.ObjectId(userToFollow)
-      );
-      return res.status(200).json(followed);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (userToFollow === userId) {
+    return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: MESSAGES.CANNOT_FOLLOW_SELF });
   }
-};
 
-export const getAllUserFollowing = async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, userId } = req.query as any;
-  const myUserId = req.userId;
-  try {
-    if (myUserId) {
-      let profile = await userProfileService.getFollowing(name, userId, Number(page), Number(limit), myUserId);
-
-      return res.status(200).json(profile);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (!userId || !userToFollow) {
+    throw new ApiError(httpStatus.BAD_REQUEST, MESSAGES.MISSING_USER_OR_TARGET('userId or userToFollow'));
   }
-};
 
-export const getAllUserFollowers = async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, userId } = req.query as any;
-  const myUserId = req.userId;
-  try {
-    if (myUserId) {
-      let profile = await userProfileService.getFollowers(name, userId, Number(page), Number(limit), myUserId);
-      return res.status(200).json(profile);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  const followed = await userProfileService.toggleFollow(
+    new mongoose.Types.ObjectId(userId),
+    new mongoose.Types.ObjectId(userToFollow)
+  );
+  return res.status(httpStatus.OK).json(followed);
+});
 
-export const getAllMututalUsers = async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, userId } = req.query as any;
-  try {
-    if (req.userId) {
-      let profile = await userProfileService.getFollowingAndMutuals(name, userId, Number(page), Number(limit));
-      return res.status(200).json(profile);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+export const getAllUserFollowing = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, userId } = req.query as PaginationQueryWithUserId;
+  const myUserId = requireUserId(req);
 
-export const getAllUserFollowersAndFollowing = async (req: userIdExtend, res: Response) => {
+  const profile = await userProfileService.getFollowing(name ?? '', userId ?? '', Number(page), Number(limit), myUserId);
+  return res.status(httpStatus.OK).json(profile);
+});
+
+export const getAllUserFollowers = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, userId } = req.query as PaginationQueryWithUserId;
+  const myUserId = requireUserId(req);
+
+  const profile = await userProfileService.getFollowers(name ?? '', userId ?? '', Number(page), Number(limit), myUserId);
+  return res.status(httpStatus.OK).json(profile);
+});
+
+export const getAllMutualUsers = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, userId } = req.query as PaginationQueryWithUserId;
+  requireUserId(req);
+
+  const profile = await userProfileService.getFollowingAndMutuals(name ?? '', userId ?? '', Number(page), Number(limit));
+  return res.status(httpStatus.OK).json(profile);
+});
+
+export const getAllUserFollowersAndFollowing = catchAsync(async (req: userIdExtend, res: Response) => {
   const { name } = req.query as { name?: string };
+  const userId = requireUserId(req);
 
-  try {
-    if (req.userId) {
-      let user = await userProfileService.getFollowersAndFollowing(name, req.userId);
-      return res.status(200).json(user);
-    }
-  } catch (error: any) {
-    console.log(error);
+  const user = await userProfileService.getFollowersAndFollowing(name, userId);
+  return res.status(httpStatus.OK).json(user);
+});
 
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+export const getUserProfile = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireUserId(req);
+
+  const profile = await userProfileService.getUserProfile(userID);
+  return res.status(httpStatus.OK).json({ profile });
+});
+
+export const getUserProfileVerifiedUniversityEmails = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireUserId(req);
+
+  const profile = await userProfileService.getUserProfileVerifiedUniversityEmails(userID);
+  return res.status(httpStatus.OK).json(profile);
+});
+
+export const getBlockedUsers = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireUserId(req);
+
+  const blockedUsers = await userProfileService.getBlockedUsers(userID);
+  return res.status(httpStatus.OK).json({ blockedUsers });
+});
+
+export const addUniversityEmail = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userID = requireUserId(req, { status: httpStatus.NOT_FOUND, message: MESSAGES.USER_NOT_FOUND });
+  const { universityName, universityEmail, UniversityOtp } = req.body as AddUniversityEmailBody;
+
+  await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
+
+  const community = await communityService.findOrCreateCommunityByUniversityName(universityName, userID);
+  const { _id: communityId } = community;
+
+  const user = community.users.find((u: CommunityUser) => u._id.toString() === userID.toString());
+
+  if (user && user.isVerified) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: MESSAGES.ALREADY_VERIFIED_IN_COMMUNITY });
   }
-};
 
-export const getUserProfile = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
-  try {
-    if (userID) {
-      let profile = await userProfileService.getUserProfile(userID);
-      return res.status(200).json({ profile });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
+  await userProfileService.addUniversityEmail(
+    userID,
+    universityEmail,
+    universityName,
+    communityId.toString(),
+    String(community.communityLogoUrl.imageUrl)
+  );
+  const result = await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
 
-export const getUserProfileVerifiedUniversityEmails = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
+  return res.status(httpStatus.OK).json(result);
+});
 
-  try {
-    if (userID) {
-      let profile = await userProfileService.getUserProfileVerifiedUniversityEmails(userID);
-      return res.status(200).json(profile);
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const getBlockedUsers = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
-  try {
-    if (userID) {
-      let blockedUsers = await userProfileService.getBlockedUsers(userID);
-      return res.status(200).json({ blockedUsers });
-    }
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const addUniversityEmail = async (req: userIdExtend, res: Response) => {
-  const userID = req.userId;
-  const { universityName, universityEmail, UniversityOtp } = req.body;
-  try {
-    if (!userID) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-
-    await universityVerificationEmailService.checkUniversityEmailVerificationOtp(UniversityOtp, universityEmail);
-    let community: any = await communityModel.findOne({ name: universityName });
-    if (!community) {
-      const fetchUniversity = await universityModel.findOne({ name: universityName });
-
-      const { _id: university_id, logo, campus, total_students, short_overview } = fetchUniversity as IUniversity;
-
-      community = await communityModel.create({
-        name: universityName,
-        communityLogoUrl: { imageUrl: logo },
-        communityCoverUrl: { imageUrl: campus },
-        total_students: total_students,
-        university_id: university_id,
-        created_by: userID,
-        about: short_overview,
-      });
-
-      await UniversityModel.updateOne({ _id: university_id }, { $set: { communityId: community._id, isVerified: true } });
-    }
-
-    const { _id: communityId } = community;
-
-    const user = community.users.find((user: any) => user._id.toString() === userID.toString());
-
-    if (user && user.isVerified) {
-      return res.status(400).json({ message: 'User is already verified to this community' });
-    }
-
-    await userProfileService.addUniversityEmail(
-      userID,
-      universityEmail,
-      universityName,
-      communityId.toString(),
-      community.communityLogoUrl.imageUrl
-    );
-    const result = await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
-
-    return res.status(200).json(result);
-  } catch (error: any) {
-    res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
-  }
-};
-
-export const toggleBlock = async (req: userIdExtend, res: Response) => {
+export const toggleBlock = catchAsync(async (req: userIdExtend, res: Response) => {
   const { userToBlock } = req.query as { userToBlock?: string };
   const userId = req.userId;
-  try {
-    if (userToBlock === userId) {
-      return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: 'You cannot block yourself' });
-    }
 
-    if (userId && userToBlock) {
-      const result = await userProfileService.toggleBlock(
-        new mongoose.Types.ObjectId(userId),
-        new mongoose.Types.ObjectId(userToBlock)
-      );
-      return res.status(httpStatus.OK).json(result);
-    }
-
-    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Missing userId or userToBlock' });
-  } catch (error: any) {
-    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  if (userToBlock === userId) {
+    return res.status(httpStatus.METHOD_NOT_ALLOWED).json({ message: MESSAGES.CANNOT_BLOCK_SELF });
   }
-};
+
+  if (!userId || !userToBlock) {
+    throw new ApiError(httpStatus.BAD_REQUEST, MESSAGES.MISSING_USER_OR_TARGET('userId or userToBlock'));
+  }
+
+  const result = await userProfileService.toggleBlock(
+    new mongoose.Types.ObjectId(userId),
+    new mongoose.Types.ObjectId(userToBlock)
+  );
+  return res.status(httpStatus.OK).json(result);
+});
