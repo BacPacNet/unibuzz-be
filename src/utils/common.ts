@@ -4,6 +4,9 @@ import mongoose from 'mongoose';
 import { userIdExtend } from '../config/userIDType';
 
 export const convertToObjectId = (id: string) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid id');
+  }
   return new mongoose.Types.ObjectId(id);
 };
 
