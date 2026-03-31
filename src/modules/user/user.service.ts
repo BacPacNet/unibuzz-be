@@ -673,7 +673,7 @@ export const getRewardsDetails = async (
 
   const thisMonthProgress = carryIntoThisMonth + thisMonthNewReferrals;
   const thisMonthCalculated = calculateRewardProgress(thisMonthProgress);
-  const allTimeInvites = await getEligibleReferralCount(new Date(0), new Date());
+  const allTimeInvites = await getEligibleReferralCount(new Date(0), startOfThisMonth);
   const allTimeCalculated = calculateRewardProgress(allTimeInvites);
 
   const previousMonthRedeemed = !!ensuredPreviousMonthRedemption;

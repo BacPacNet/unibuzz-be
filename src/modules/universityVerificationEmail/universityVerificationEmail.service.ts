@@ -4,6 +4,7 @@ import universityVerificationEmailModal from './universityVerificationEmail.moda
 import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
 import { UniversityVerificationEmailStatus } from './universityVerificationEmail.interface';
+import { universityUsersService } from '../universityUsers';
 
 const extractDomainFromEmail = (email: string) => email.split('@')[1]?.toLowerCase().trim() || '';
 
@@ -40,13 +41,20 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid email domain.');
   }
 
+  const universityUsers = await universityUsersService.findUniversityUsersAgg(email, universityId, "", "");
+
+
+  
+
   const universityDomains = university?.domains || [];
 
   const hasMatchedDomain = hasUniversityDomainMatch(emailDomain, universityDomains);
 
-  if (!hasMatchedDomain) {
+  if (!hasMatchedDomain && !universityUsers) {
     throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'Email domain is not associated with this university.');
   }
+
+ 
   const data = {
     email,
     universityId,
