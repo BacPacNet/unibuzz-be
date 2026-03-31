@@ -8,7 +8,7 @@ const paginationQuery = {
 export const getAllUniversity = {
   query: Joi.object().keys({
     ...paginationQuery,
-    searchQuery: Joi.string().trim().optional(),
+    searchQuery: Joi.string().trim().allow('').optional(),
   }),
 };
 
