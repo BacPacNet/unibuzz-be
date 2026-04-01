@@ -17,7 +17,10 @@ const validate =
       const errorMessage = error.details.map((details) => details.message).join(', ');
       return next(new ApiError(httpStatus.BAD_REQUEST, errorMessage));
     }
-    Object.assign(req, value);
+    if (value.headers) {
+      req.headers = { ...req.headers, ...value.headers };
+    }
+    Object.assign(req, { ...value, headers: undefined });
     return next();
   };
 
