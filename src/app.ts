@@ -16,6 +16,7 @@ import OpenAI from 'openai';
 // import { bullBoardRouter } from './bullmq/bullBoard';
 import mongoose from 'mongoose';
 import { createSQSNotification } from './modules/sqsNotification/sqsNotification.Controller';
+import { appVersionMiddleware } from './modules/appVersion';
 
 // import { Server as SocketIoServer } from 'socket.io';
 // import { createServer } from 'http';
@@ -71,7 +72,17 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-App-Version',
+    'X-Client-Platform',
+    'X-Client-Type',
+    'X-Platform',
+    'X-Client',
+    'X-Version',
+  ],
 };
 
 app.use(cors(corsOptions));
@@ -140,6 +151,7 @@ app.get('/health', async (_req, res) => {
 });
 
 // v1 api routes
+app.use(appVersionMiddleware);
 app.use('/v1', routes);
 
 app.post('/enqueue', async (req, res) => {
