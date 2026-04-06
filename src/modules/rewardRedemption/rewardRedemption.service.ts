@@ -100,6 +100,19 @@ export const getLatestRewardRedemptionBeforeMonth = async (
     .lean();
 };
 
+export const getRewardRedemptionsBeforeMonth = async (
+  userId: mongoose.Types.ObjectId,
+  beforeMonth: Date
+) => {
+  const monthStart = getMonthStartUTC(beforeMonth);
+  return RewardRedemptionModel.find({
+    userId,
+    rewardMonth: { $lt: monthStart },
+  })
+    .sort({ rewardMonth: 1 })
+    .lean();
+};
+
 /** Most recent redemption row for the user (any month), by rewardMonth. */
 export const getLatestRewardRedemption = async (userId: mongoose.Types.ObjectId) => {
   return RewardRedemptionModel.findOne({ userId }).sort({ rewardMonth: -1 }).lean();
