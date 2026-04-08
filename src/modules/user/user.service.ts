@@ -618,7 +618,6 @@ export const getRewardsDetails = async (
       },
       { $count: 'count' },
     ]);
-
     return result?.count ?? 0;
   };
 
@@ -628,22 +627,25 @@ export const getRewardsDetails = async (
       rewardRedemptionService.getRewardRedemptionForMonth(userId, startOfPreviousMonth),
       rewardRedemptionService.getLatestRewardRedemptionBeforeMonth(userId, startOfPreviousMonth),
     ]);
-    
 
-  const previousMonthCountStart = anchorBeforePreviousMonth
-    ? startOfUtcMonthAfter(anchorBeforePreviousMonth.rewardMonth)
-    : new Date(0);
+  let previousMonthComputedTotalInvites: number;
+  let previousMonthComputed: RewardProgress;
 
-  const previousMonthReferralsAfterAnchor = await getEligibleReferralCount(
-    previousMonthCountStart,
-    startOfThisMonth
-  );
-
-
-
-  const previousMonthCarryFromAnchor = anchorBeforePreviousMonth?.totalInvites ?? 0;
-  const previousMonthComputedTotalInvites = previousMonthCarryFromAnchor + previousMonthReferralsAfterAnchor;
-  const previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+  if (previousMonthRedemption) {
+    previousMonthComputedTotalInvites = previousMonthRedemption.totalInvites;
+    previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+  } else {
+    const previousMonthCountStart = anchorBeforePreviousMonth
+      ? startOfUtcMonthAfter(anchorBeforePreviousMonth.rewardMonth)
+      : new Date(0);
+    const previousMonthReferralsAfterAnchor = await getEligibleReferralCount(
+      previousMonthCountStart,
+      startOfThisMonth
+    );
+    const previousMonthCarryFromAnchor = anchorBeforePreviousMonth?.totalInvites ?? 0;
+    previousMonthComputedTotalInvites = previousMonthCarryFromAnchor + previousMonthReferralsAfterAnchor;
+    previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+  }
 
   // If no row exists for previous month, create it as processing (closed month — not pending).
   const ensuredPreviousMonthRedemption =
@@ -661,21 +663,19 @@ export const getRewardsDetails = async (
     ensuredPreviousMonthRedemption.status === RewardRedemptionStatus.Processing ||
     ensuredPreviousMonthRedemption.status === RewardRedemptionStatus.Completed;
 
-  // Carry-over to next month must follow tier math remainder from `calculateRewardProgress()`:
-  // - totalInvites < 10 => carry all
-  // - totalInvites = 10 => carry 0
-  // - totalInvites = 13 => carry 3 (10 processed)
-  // This is independent of redemption `status`; if the redemption doc exists, it is the source of truth.
-  const previousRedemptionTotalInvites =
-    ensuredPreviousMonthRedemption.totalInvites ?? previousMonthComputedTotalInvites;
-  const previousRedemptionProgress = calculateRewardProgress(previousRedemptionTotalInvites);
-  const carryIntoThisMonth = previousRedemptionProgress.leftoverInvites;
+  const carryIntoThisMonth = previousMonthComputed.leftoverInvites;
 
   const thisMonthProgress = carryIntoThisMonth + thisMonthNewReferrals;
   const thisMonthCalculated = calculateRewardProgress(thisMonthProgress);
-  const allTimeInvites = await getEligibleReferralCount(new Date(0), startOfThisMonth);
+  const allPreviousRedemptions = await rewardRedemptionService.getRewardRedemptionsBeforeMonth(
+    userId,
+    startOfThisMonth
+  );
+  const allTimeInvites = allPreviousRedemptions.reduce(
+    (sum, redemption) => sum + (redemption.totalInvites ?? 0),
+    0
+  );
   const allTimeCalculated = calculateRewardProgress(allTimeInvites);
-
   const previousMonthRedeemed = !!ensuredPreviousMonthRedemption;
 
   const previousMonthProgress = isPreviousMonthFinalized
