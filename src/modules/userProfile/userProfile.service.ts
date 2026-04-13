@@ -562,6 +562,8 @@ export const addUniversityEmail = async (
     throw new ApiError(httpStatus.NOT_FOUND, ERR_USER_PROFILE_NOT_FOUND);
   }
 
+  
+
   // Check if the university email already exists
   const emailExists = userProfile.email.some((email) => email.UniversityEmail === universityEmail);
   if (emailExists) {

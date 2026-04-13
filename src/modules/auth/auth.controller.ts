@@ -9,6 +9,7 @@ import { userProfileService } from '../userProfile';
 import { userFollowService } from '../userFollow';
 import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 import { communityService } from '../community';
+import { universityVerificationEmailService } from '../universityVerificationEmail';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   try {
@@ -53,6 +54,10 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
           universityName,
           data.community._id.toString(),
           data.community.communityLogoUrl.imageUrl.toString()
+        );
+        await universityVerificationEmailService.upsertCompletedUniversityVerificationForRegistration(
+          universityEmail,
+          universityId
         );
       }
     }
