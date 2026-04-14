@@ -5,6 +5,8 @@ import { sendEmail } from '../email/email.service';
 import { universityModal } from '../university';
 import { UniversityVerificationEmailStatus } from './universityVerificationEmail.interface';
 import { universityUsersService } from '../universityUsers';
+import { UserProfile } from '../userProfile';
+
 
 const extractDomainFromEmail = (email: string) => email.split('@')[1]?.toLowerCase().trim() || '';
 
@@ -41,6 +43,15 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid email domain.');
   }
 
+  const otherProfileWithUniversityEmail = await UserProfile.findOne({
+    email: { $elemMatch: { UniversityEmail: email } },
+  });
+  if (otherProfileWithUniversityEmail) {
+    throw new ApiError(
+      httpStatus.CONFLICT,
+      'This university email has already been verified and cannot be used again.'
+    );
+  }
   const universityUsers = await universityUsersService.findUniversityUsersAgg(email, universityId, "", "");
 
 
@@ -69,6 +80,7 @@ export const createUniversityEmailVerificationOtp = async (email: string, univer
   if (!universityVerificationEmail) {
     await universityVerificationEmailModal.create(data);
   } else {
+   
     if (universityVerificationEmail.status === UniversityVerificationEmailStatus.COMPLETE) {
       throw new ApiError(httpStatus.CONFLICT, 'This university email has already been verified and cannot be used again.');
     }
@@ -124,6 +136,31 @@ export const checkUniversityEmailVerificationOtp = async (otp: string, email: st
   await universityVerificationEmailModal.updateOne(
     { email },
     { $set: { status: UniversityVerificationEmailStatus.COMPLETE, isEmailVerified: true } }
+  );
+};
+
+
+export const upsertCompletedUniversityVerificationForRegistration = async (
+  universityEmail: string,
+  universityId: string
+) => {
+  const existing = await universityVerificationEmailModal.findOne({ email: universityEmail });
+  if (existing?.status === UniversityVerificationEmailStatus.COMPLETE) {
+    return;
+  }
+
+  const payload = {
+    universityId: String(universityId),
+    otp: 0,
+    status: UniversityVerificationEmailStatus.COMPLETE,
+    isEmailVerified: true,
+    otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+  };
+
+  await universityVerificationEmailModal.findOneAndUpdate(
+    { email: universityEmail },
+    { $set: payload },
+    { upsert: true, new: true }
   );
 };
 

@@ -17,6 +17,25 @@ const rewardRedemptionSchema = new Schema<IRewardRedemption>(
       type: String,
       trim: true,
     },
+    payer: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    reference: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    paymentDate: {
+      type: Date,
+      default: null,
+    },
+    notes: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     rewardMonth: {
       type: Date,
       required: true,

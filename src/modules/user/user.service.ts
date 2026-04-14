@@ -49,7 +49,7 @@ const USER_ERROR_MESSAGES = {
  * @param {string} email
  * @param {mongoose.Types.ObjectId} [excludeUserId] - User ID to exclude (e.g. when updating own email)
  */
-const ensureEmailNotTaken = async (
+export const ensureEmailNotTaken = async (
   email: string,
   excludeUserId?: mongoose.Types.ObjectId
 ): Promise<void> => {
@@ -304,7 +304,15 @@ export const deleteUserById = async (userId: mongoose.Types.ObjectId): Promise<I
 
 export const userEmailAndUserNameAvailability = async (email: string, userName: string) => {
   const [userEmail, userNameAvailable,universityVerificationEmail] = await Promise.all([User.findOne({ email }), User.findOne({ userName }),universityVerificationEmailModal.findOne({ email })]);
-
+  const otherProfileWithUniversityEmail = await UserProfile.findOne({
+    email: { $elemMatch: { UniversityEmail: email } },
+  });
+  if (otherProfileWithUniversityEmail) {
+    throw new ApiError(
+      httpStatus.CONFLICT,
+      'This university email has already been verified and cannot be used again.'
+    );
+  }
   if (userEmail) {
     throw new ApiError(httpStatus.CONFLICT, USER_ERROR_MESSAGES.EMAIL_ALREADY_TAKEN);
   }
@@ -611,11 +619,25 @@ export const getRewardsDetails = async (
         },
       },
       { $unwind: '$profile' },
+      { $unwind: '$profile.email' },
       {
         $match: {
           'profile.email.communityId': { $in: allowedCommunityIds },
         },
       },
+      {
+        $project: {
+          normalizedUniversityEmail: {
+            $toLower: {
+              $trim: {
+                input: { $ifNull: ['$profile.email.UniversityEmail', ''] },
+              },
+            },
+          },
+        },
+      },
+      { $match: { normalizedUniversityEmail: { $ne: '' } } },
+      { $group: { _id: '$normalizedUniversityEmail' } },
       { $count: 'count' },
     ]);
     return result?.count ?? 0;

@@ -12,6 +12,10 @@ export const REWARD_REDEMPTION_STATUS_VALUES = Object.values(RewardRedemptionSta
 export interface IRewardRedemption {
   userId: Schema.Types.ObjectId;
   upiId?: string;
+  payer?: string;
+  reference?: string;
+  paymentDate?: Date | null;
+  notes?: string;
   /**
    * Month the reward corresponds to, normalized to the first day of the month in UTC.
    */
