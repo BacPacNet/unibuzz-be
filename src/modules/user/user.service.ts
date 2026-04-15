@@ -234,7 +234,8 @@ export const getAllUser = async (
   major: string[],
   occupation: string[],
   affiliation: string[],
-  chatId: string
+  chatId: string,
+  role: string
 ) => {
   const currentPage = page || DEFAULT_PAGE;
   const limitPerPage = limit || DEFAULT_LIMIT;
@@ -246,7 +247,7 @@ export const getAllUser = async (
   const followingIds = loggedInUser?.following.map((id) => id.userId.toString()) || [];
   const myBlockedUserIds = loggedInUser?.blockedUsers.map((u) => convertToObjectId(u.userId.toString())) || [];
 
-  const orConditions = buildGetAllUserOrConditions(studyYear, major, occupation, affiliation);
+  const orConditions = buildGetAllUserOrConditions(studyYear, major, occupation, affiliation, role);
   const matchStage = buildGetAllUserMatchStage({
     userId,
     myBlockedUserIds,
