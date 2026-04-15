@@ -45,7 +45,7 @@ export const getUser = catchAsync(async (req: userIdExtend, res: Response): Prom
 });
 
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId } = req.query as GetAllUserQuery;
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId,role } = req.query as GetAllUserQuery;
   const allUsers = await userService.getAllUser(
     name ?? '',
     Number(page),
@@ -56,7 +56,8 @@ export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) =>
     major ? major.split(',') : [],
     occupation ? occupation.split(',') : [],
     affiliation ? affiliation.split(',') : [],
-    chatId ?? ''
+    chatId ?? '',
+    role?.toLowerCase() ?? ''
   );
   res.status(httpStatus.OK).json(allUsers);
 });

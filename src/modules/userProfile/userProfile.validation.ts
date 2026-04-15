@@ -93,6 +93,7 @@ export const updateUserProfile = {
       university_id: Joi.string().optional().custom(objectId),
       universityId: Joi.string().optional().custom(objectId),
       universityLogo: Joi.string().allow('').optional(),
+      communityId:Joi.string().allow('').optional(),
     })
     .min(1),
 };

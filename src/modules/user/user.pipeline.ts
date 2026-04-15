@@ -397,37 +397,44 @@ export function getProfileByIdPipeline(options: GetProfileByIdPipelineOptions): 
 /**
  * Build $or conditions for study year, major, occupation, and affiliation filters in getAllUser.
  */
+
 export function buildGetAllUserOrConditions(
   studyYear: string[],
   major: string[],
   occupation: string[],
-  affiliation: string[]
+  affiliation: string[],
+  role: string
 ): GetAllUserOrCondition[] {
-  const orConditions: GetAllUserOrCondition[] = [];
+  const andConditions: Array<Record<string, { $in: string[] }>> = [];
+  const trimmedRole = role.trim();
 
-  if (studyYear.length && major.length) {
-    orConditions.push({
-      $and: [{ 'profile.study_year': { $in: studyYear } }, { 'profile.major': { $in: major } }],
-    });
-  } else if (studyYear.length) {
-    orConditions.push({ 'profile.study_year': { $in: studyYear } });
-  } else if (major.length) {
-    orConditions.push({ 'profile.major': { $in: major } });
+  if (trimmedRole !== '') {
+    andConditions.push({ 'profile.role': { $in: [trimmedRole] } });
   }
 
-  if (occupation.length && affiliation.length) {
-    orConditions.push({
-      $and: [{ 'profile.occupation': { $in: occupation } }, { 'profile.affiliation': { $in: affiliation } }],
-    });
-  } else if (occupation.length) {
-    orConditions.push({ 'profile.occupation': { $in: occupation } });
-  } else if (affiliation.length) {
-    orConditions.push({ 'profile.affiliation': { $in: affiliation } });
+  if (trimmedRole.toLowerCase() === 'faculty') {
+    if (occupation.length) {
+      andConditions.push({ 'profile.occupation': { $in: occupation } });
+    }
+
+    if (affiliation.length) {
+      andConditions.push({ 'profile.affiliation': { $in: affiliation } });
+    }
+  } else {
+    if (studyYear.length) {
+      andConditions.push({ 'profile.study_year': { $in: studyYear } });
+    }
+
+    if (major.length) {
+      andConditions.push({ 'profile.major': { $in: major } });
+    }
   }
 
-  return orConditions;
+
+  if (!andConditions.length) return [];
+
+  return [{ $and: andConditions }];
 }
-
 /** Options for building the $match stage used in getAllUser aggregation. */
 export interface BuildGetAllUserMatchStageOptions {
   userId: string;
