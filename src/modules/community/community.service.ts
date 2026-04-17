@@ -389,12 +389,8 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     if (communityIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
     }
-
+  
     userProfile.communities.splice(communityIndex, 1);
-    userProfile.communities = userProfile?.communities?.map((c) => {
-        c.communityGroups = [];
-        return c;
-      }) || [];
     await userProfile.save();
 
     // Remove user from the community users list using atomic update

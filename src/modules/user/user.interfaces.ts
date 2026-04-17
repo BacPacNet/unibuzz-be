@@ -98,12 +98,14 @@ export interface GetAllUserMatchStage {
 
 /** Or-condition items used in getAllUser match stage */
 export type GetAllUserOrCondition =
-  | { $and: [{ 'profile.study_year': { $in: string[] } }, { 'profile.major': { $in: string[] } }] }
-  | { $and: [{ 'profile.occupation': { $in: string[] } }, { 'profile.affiliation': { $in: string[] } }] }
-  | { 'profile.study_year': { $in: string[] } }
-  | { 'profile.major': { $in: string[] } }
-  | { 'profile.occupation': { $in: string[] } }
-  | { 'profile.affiliation': { $in: string[] } };
+  | { $and: Array<Record<string, { $in: string[] }>> }
+  | {
+      'profile.study_year'?: { $in: string[] };
+      'profile.major'?: { $in: string[] };
+      'profile.occupation'?: { $in: string[] };
+      'profile.affiliation'?: { $in: string[] };
+      'profile.role'?: { $in: string[] };
+    };
 
 /** Query params for getAllUser (list users with filters) */
 export interface GetAllUserQuery {
@@ -116,6 +118,7 @@ export interface GetAllUserQuery {
   occupation?: string;
   affiliation?: string;
   chatId?: string;
+  role?: string;
 }
 
 /** Filter for user list/query (queryUsers / paginate) */
