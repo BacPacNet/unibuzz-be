@@ -1,5 +1,5 @@
 import mongoose, { PipelineStage } from 'mongoose';
-import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupLabel, CommunityGroupType } from '../../config/community.type';
 import { status } from '../communityGroup/communityGroup.interface';
 
 /** Filter options for getUserFilteredCommunities */
@@ -7,7 +7,10 @@ export type CommunityGroupFilters = {
   selectedType?: string[];
   selectedLabel?: string[];
   selectedFilters?: Record<string, string[]>;
+  searchTerm?: string;
 };
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export function buildFilteredCommunitiesBasePipeline(
   communityId: string,
@@ -118,6 +121,92 @@ export function buildFilteredCommunitiesBasePipeline(
   ];
 }
 
+export function buildSuperAdminFilteredCommunitiesBasePipeline(
+  communityId: string
+): PipelineStage[] {
+  return [
+    { $match: { _id: new mongoose.Types.ObjectId(communityId) } },
+    {
+      $lookup: {
+        from: 'communitygroups',
+        localField: '_id',
+        foreignField: 'communityId',
+        as: 'communityGroups',
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'communityGroups.adminUserId',
+        foreignField: '_id',
+        as: 'groupAdmins',
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'communityGroups.adminUserId',
+        foreignField: 'users_id',
+        as: 'adminProfiles',
+      },
+    },
+    {
+      $addFields: {
+        communityGroups: {
+          $map: {
+            input: '$communityGroups',
+            as: 'group',
+            in: {
+              $mergeObjects: [
+                '$$group',
+                {
+                  admin: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: '$groupAdmins',
+                          as: 'a',
+                          cond: { $eq: ['$$a._id', '$$group.adminUserId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  adminProfile: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: '$adminProfiles',
+                          as: 'p',
+                          cond: { $eq: ['$$p.users_id', '$$group.adminUserId'] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        communityGroups: {
+          $filter: {
+            input: '$communityGroups',
+            as: 'group',
+            cond: {
+              $and: [{ $ne: ['$$group.admin.isDeleted', true] }],
+            },
+          },
+        },
+      },
+    },
+  ];
+}
+
 export function buildGroupVisibilityFilterStage(
   userObjectId: mongoose.Types.ObjectId,
   hasFilters: boolean
@@ -157,8 +246,15 @@ export function buildGroupVisibilityFilterStage(
 }
 
 export function buildTypeAndLabelFilterStage(filters: CommunityGroupFilters): PipelineStage | null {
-  const { selectedType, selectedLabel } = filters;
-  if (!selectedType?.length && !selectedLabel?.length) return null;
+  const selectedType = (filters.selectedType || []).filter((type) =>
+    [CommunityGroupAccess.Private, CommunityGroupAccess.Public, 'Official', 'Casual'].includes(type)
+  );
+  const selectedLabel = (filters.selectedLabel || []).filter((label) =>
+    [CommunityGroupLabel.Course, CommunityGroupLabel.Club, CommunityGroupLabel.Circle, CommunityGroupLabel.Other].includes(
+      label as CommunityGroupLabel
+    )
+  );
+  if (!selectedType.length && !selectedLabel.length) return null;
 
   const filterConditions: any[] = [];
 
@@ -250,6 +346,29 @@ export function buildSelectedFiltersStage(selectedFilters: Record<string, string
                 in: { $ne: ['$$matchedCategory', null] },
               },
             },
+          },
+        },
+      },
+    },
+  };
+}
+
+export function buildSearchTermFilterStage(searchTerm: string): PipelineStage | null {
+  const trimmedSearchTerm = searchTerm?.trim();
+  if (!trimmedSearchTerm) return null;
+
+  const safeRegex = new RegExp(escapeRegex(trimmedSearchTerm), 'i');
+  return {
+    $addFields: {
+      communityGroups: {
+        $filter: {
+          input: '$communityGroups',
+          as: 'group',
+          cond: {
+            $or: [
+              { $regexMatch: { input: { $ifNull: ['$$group.title', ''] }, regex: safeRegex } },
+              { $regexMatch: { input: { $ifNull: ['$$group.description', ''] }, regex: safeRegex } },
+            ],
           },
         },
       },
@@ -437,6 +556,51 @@ export function buildCommunityGroupsProjectStage(userObjectId: mongoose.Types.Ob
                       input: { $ifNull: ['$$group.users', []] },
                       as: 'u',
                       cond: { $eq: ['$$u._id', userObjectId] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        'communityGroups.adminProfile': 0,
+        'communityGroups.admin': 0,
+        'communityGroups.inviteUsers': 0,
+      },
+    },
+  ];
+}
+
+export function buildCommunityGroupsProjectStageForSuperAdmin(): PipelineStage[] {
+  return [
+    {
+      $addFields: {
+        communityGroups: {
+          $map: {
+            input: '$communityGroups',
+            as: 'group',
+            in: {
+              $mergeObjects: [
+                '$$group',
+                {
+                  memberCount: {
+                    $size: {
+                      $filter: {
+                        input: { $ifNull: ['$$group.users', []] },
+                        as: 'u',
+                        cond: { $ne: ['$$u.status', status.pending] },
+                      },
+                    },
+                  },
+                  users: {
+                    $filter: {
+                      input: { $ifNull: ['$$group.users', []] },
+                      as: 'u',
+                      cond: { $eq: ['$$u._id', '$$group.adminUserId'] },
                     },
                   },
                 },

@@ -35,6 +35,7 @@ import { User } from '../user';
 import {
   buildCommunityGroupMembersDataPipeline,
   buildCommunityGroupMembersCountPipeline,
+  buildCommunityGroupMembersDataPipelineForSuperAdmin,
 } from './communityGroup.pipeline';
 import { UserCommunities } from '../userProfile/userProfile.interface';
 
@@ -102,6 +103,8 @@ function buildGroupMemberFromUserAndProfile(
     status: options.status,
   };
 }
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Updates a single member's request status in a community group (users subdocument).
@@ -592,6 +595,70 @@ export const createCommunityGroup = async (
   return createdGroup;
 };
 
+export const createCommunityGroupBySuperAdmin = async (
+  body: CreateCommunityGroupBody,
+  communityId: string,
+  userId: string
+) => {
+  if (!communityId || !userId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
+  }
+
+  if (!body?.title || !body.title.trim()) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Title is required');
+  }
+
+  const community = await communityService.getCommunity(communityId);
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const existingGroupWithSameTitle = await communityGroupModel.findOne({
+    communityId,
+    title: { $regex: new RegExp(`^${escapeRegExp(body.title.trim())}$`, 'i') },
+  });
+  if (existingGroupWithSameTitle) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community group with same name already exists');
+  }
+
+  const [creator, creatorProfile] = await Promise.all([
+    getUserById(new mongoose.Types.ObjectId(userId)),
+    userProfileService.getUserProfileById(userId),
+  ]);
+
+  if (!creator) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
+  }
+  if (!creatorProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
+  }
+
+  const inviteUsers = (body.selectedUsers ?? []).map((user: SelectedUserItem) => ({
+    userId: user.users_id,
+  }));
+
+  const normalizedType = String(body.communityGroupType ?? '').toLowerCase();
+  const isOfficial = normalizedType === CommunityGroupType.OFFICIAL;
+  const creatorAsMember = buildGroupMemberFromUserAndProfile(creator, creatorProfile, {
+    isRequestAccepted: true,
+    status: status.accepted,
+  });
+
+  const createdGroup = await communityGroupModel.create({
+    ...body,
+    title: body.title.trim(),
+    communityId,
+    adminUserId: userId,
+    communityGroupType: isOfficial ? CommunityGroupType.OFFICIAL : CommunityGroupType.CASUAL,
+    status: isOfficial ? status.accepted : status.default,
+    isCommunityGroupLive: true,
+    inviteUsers,
+    users: [creatorAsMember],
+  });
+
+  return createdGroup;
+};
+
 export const getCommunityGroupById = async (groupId: string, userId: string) => {
   const communityGroup = (await communityGroupModel
     .findById(groupId)
@@ -975,6 +1042,64 @@ export const getCommunityGroupMembers = async (
 
     const totalPipeline = buildCommunityGroupMembersCountPipeline(groupId, targetStatus);
 
+    const totalResult = await communityGroupModel.aggregate(totalPipeline);
+    const totalCount = totalResult[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: (users as MemberWithVerified[]).map((u) => ({
+        ...u,
+        isVerified: u.isVerified ?? false,
+      })),
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+    };
+  } catch (error: any) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_FETCHING_MEMBERS);
+  }
+};
+
+export const getCommunityGroupMembersForSuperAdmin = async (
+  communityGroupId: string,
+  userStatus: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  try {
+    if (!communityGroupId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_SHORT);
+    }
+
+    const groupId = new Types.ObjectId(communityGroupId);
+
+    const communityGroup = await getCommunityGroupByObjectId(communityGroupId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+    }
+
+    const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
+    const adminId = communityGroup.adminUserId?.toString();
+    const communityId = communityGroup.communityId;
+
+    if (!communityId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.COMMUNITY_REFERENCE_MISSING);
+    }
+
+    const pipeline = buildCommunityGroupMembersDataPipelineForSuperAdmin(
+      groupId,
+      targetStatus,
+      adminId,
+      communityId,
+      page,
+      limit
+    );
+
+    const results = await communityGroupModel.aggregate(pipeline);
+    const users = results[0]?.users || [];
+
+    const totalPipeline = buildCommunityGroupMembersCountPipeline(groupId, targetStatus);
     const totalResult = await communityGroupModel.aggregate(totalPipeline);
     const totalCount = totalResult[0]?.total || 0;
     const totalPages = Math.ceil(totalCount / limit);

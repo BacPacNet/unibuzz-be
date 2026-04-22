@@ -10,6 +10,8 @@ import { userFollowService } from '../userFollow';
 import resetPasswordOTPModel from '../resetPasswordOTP/resetPasswordOTP.model';
 import { communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
+import { superAdminsService } from '../superAdmins';
+import { ApiError } from '../errors';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   try {
@@ -79,6 +81,20 @@ export const login = catchAsync(async (req: Request, res: Response) => {
   const Following = await userFollowService.getFollowCounts(user.id);
   const tokens = await tokenService.generateAuthTokens(user);
   res.send({ user, tokens, userProfile, Following });
+});
+
+export const dashboardLogin = catchAsync(async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  const allowed = await superAdminsService.isSuperAdminByEmail(email);
+
+  if (!allowed) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Only super admins can access this resource');
+  }
+  const user = await authService.loginUserWithEmailAndPassword(email, password);
+  // const userProfile = await userProfileService.getUserProfile(user.id);
+  // const Following = await userFollowService.getFollowCounts(user.id);
+  const tokens = await tokenService.generateAuthTokens(user);
+  res.send({ user, tokens });
 });
 
 export const logout = catchAsync(async (req: Request, res: Response) => {

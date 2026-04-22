@@ -137,6 +137,57 @@ export const CreateCommunityGroup = catchAsync(async (req: userIdExtend, res: Re
   });
 });
 
+export const createCommunityGroupBySuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = req.userId;
+  const { communityId } = req.params;
+  const payloads = Array.isArray(req.body) ? req.body : [req.body];
+  const settledResults = await Promise.allSettled(
+    payloads.map((body) => communityGroupService.createCommunityGroupBySuperAdmin(body, communityId || '', userId || ''))
+  );
+
+  const passed: Array<{ index: number; title: string | undefined; data: unknown }> = [];
+  const failed: Array<{ index: number; title: string | undefined; reason: string; statusCode: number }> = [];
+
+  settledResults.forEach((result, index) => {
+    const inputBody = payloads[index] as { title?: string } | undefined;
+    const title = typeof inputBody?.title === 'string' ? inputBody.title : undefined;
+
+    if (result.status === 'fulfilled') {
+      passed.push({
+        index,
+        title,
+        data: result.value,
+      });
+      return;
+    }
+
+    const error = result.reason as Partial<ApiError> & { message?: string };
+    failed.push({
+      index,
+      title,
+      reason: error?.message || 'Failed to create community group',
+      statusCode: typeof error?.statusCode === 'number' ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
+    });
+  });
+
+  const hasFailures = failed.length > 0;
+
+  res.status(200).json({
+    success: !hasFailures,
+    partialSuccess: hasFailures && passed.length > 0,
+    message: hasFailures ? 'Community group bulk create completed with partial failures' : RESPONSE_MESSAGE.CREATED_GROUP,
+    summary: {
+      total: payloads.length,
+      passed: passed.length,
+      failed: failed.length,
+    },
+    data: {
+      passed,
+      failed,
+    },
+  });
+});
+
 export const updateCommunityGroup = catchAsync(async (req: Request, res: Response) => {
   const { groupId } = req.params;
   const validGroupId = parseGroupIdOrThrow(groupId);
@@ -363,6 +414,17 @@ export const getCommunityGroupMembers = catchAsync(async (req: userIdExtend, res
     Number(page),
     Number(limit),
     userId
+  );
+  res.status(httpStatus.OK).json(communityGroup);
+});
+
+export const getCommunityGroupMembersForSuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityGroupId, userStatus, page, limit } = req.query;
+  const communityGroup = await communityGroupService.getCommunityGroupMembersForSuperAdmin(
+    communityGroupId as string,
+    userStatus as string,
+    Number(page),
+    Number(limit)
   );
   res.status(httpStatus.OK).json(communityGroup);
 });

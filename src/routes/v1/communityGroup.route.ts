@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
 import { userIdAuth } from '../../modules/user';
 import { communityGroupController, communityGroupValidation } from '../../modules/communityGroup';
+import { requireSuperAdmin } from '../../modules/superAdmins';
 
 const router: Router = express.Router();
 
@@ -10,6 +11,24 @@ const router: Router = express.Router();
 router
   .route('/members')
   .get(userIdAuth, validate(communityGroupValidation.getCommunityGroupMembers), communityGroupController.getCommunityGroupMembers);
+
+router
+  .route('/super-admin/members')
+  .get(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityGroupValidation.getCommunityGroupMembers),
+    communityGroupController.getCommunityGroupMembersForSuperAdmin
+  );
+
+router
+  .route('/super-admin/:communityId')
+  .post(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityGroupValidation.createCommunityGroupBySuperAdmin),
+    communityGroupController.createCommunityGroupBySuperAdmin
+  );
 
 router
   .route('/:communityId')

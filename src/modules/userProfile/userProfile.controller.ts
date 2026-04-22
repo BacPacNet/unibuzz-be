@@ -8,7 +8,12 @@ import catchAsync from '../utils/catchAsync';
 import { communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
 
-import { EditProfileRequest, AddUniversityEmailBody, PaginationQueryWithUserId, CommunityUser } from './userProfile.interface';
+import {
+  EditProfileRequest,
+  AddUniversityEmailBody,
+  PaginationQueryWithUserId,
+  CommunityUser,
+} from './userProfile.interface';
 
 /** Message constants for API responses and errors */
 const MESSAGES = {
@@ -158,6 +163,30 @@ export const addUniversityEmail = catchAsync(async (req: userIdExtend, res: Resp
     String(community.communityLogoUrl.imageUrl)
   );
   const result = await communityService.joinCommunity(new mongoose.Types.ObjectId(userID), communityId.toString(), true);
+
+  return res.status(httpStatus.OK).json(result);
+});
+
+export const manuallyVerifyUniversityUser = catchAsync(async (req: Request, res: Response) => {
+  const { userID, universityEmail } = req.body;
+
+  const universityName = 'Unibuzz';
+  const communityId = '6881f7fa83fc938b6302b0aa';
+  const communityLogoUrl = 'https://unibuzz-uploads.s3.ap-south-1.amazonaws.com/assets/unibuzz_dark_square.png';
+  
+  await userProfileService.addUniversityEmail(
+    userID,
+    universityEmail,
+    universityName,
+    communityId,
+    communityLogoUrl
+  );
+
+  const result = await communityService.joinCommunity(
+    new mongoose.Types.ObjectId(userID),
+    communityId,
+    true
+  );
 
   return res.status(httpStatus.OK).json(result);
 });

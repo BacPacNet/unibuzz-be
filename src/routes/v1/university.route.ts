@@ -13,6 +13,13 @@ router
   .get(validate(universityValidation.searchUniversityByQuery), universityController.searchUniversityByQuery);
 
 router
+  .route('/:university_name/dashboard-stats')
+  .get(
+    validate(universityValidation.getUniversityDashboardStats),
+    universityController.getUniversityDashboardStats
+  );
+
+router
   .route('/:university_name')
   .get(validate(universityValidation.getUniversityById), universityController.getUniversityById);
 
