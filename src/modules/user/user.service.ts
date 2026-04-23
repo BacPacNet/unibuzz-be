@@ -30,6 +30,7 @@ import * as rewardRedemptionService from '../rewardRedemption/rewardRedemption.s
 import { RewardRedemptionStatus } from '../rewardRedemption/rewardRedemption.interface';
 import { universityVerificationEmailModal } from '../universityVerificationEmail';
 import { UniversityVerificationEmailStatus } from '../universityVerificationEmail/universityVerificationEmail.interface';
+import communityModel from '../community/community.model';
 
 /** Centralized user-related error messages and status for consistency */
 const USER_ERROR_MESSAGES = {
@@ -166,6 +167,91 @@ export const queryUsers = async (filter: IUserQueryFilter, options: IOptions): P
  * @returns {Promise<IUserDoc | null>}
  */
 export const getUserById = async (id: mongoose.Types.ObjectId): Promise<IUserDoc | null> => User.findById(id);
+
+/**
+ * Get active user by uniqueId
+ * @param {string} uniqueId
+ * @returns {Promise<IUserDoc | null>}
+ */
+export const getUserByUniqueId = async (uniqueId: string): Promise<IUserDoc | null> =>
+  User.findOne({ uniqueId: uniqueId.trim(), isDeleted: { $ne: true } });
+
+/**
+ * Get active users by uniqueIds (lean)
+ * @param {string[]} uniqueIds
+ * @returns {Promise<Array<{ _id: mongoose.Types.ObjectId; uniqueId?: string | null }>>}
+ */
+export const getUsersByUniqueIds = async (
+  uniqueIds: string[]
+): Promise<Array<{ _id: mongoose.Types.ObjectId; uniqueId?: string | null }>> => {
+  const normalized = Array.from(new Set(uniqueIds.map((id) => id.trim()).filter(Boolean)));
+  if (normalized.length === 0) return [];
+  return User.find(
+    {
+      uniqueId: { $in: normalized },
+      isDeleted: { $ne: true },
+    },
+    { _id: 1, uniqueId: 1 }
+  ).lean();
+};
+
+/**
+ * Get active users by uniqueIds and indicate membership in a community.
+ * A user is considered part of a community when it exists in either verified or unverified community lists.
+ */
+export const getUsersByUniqueIdsWithCommunityMembership = async (
+  uniqueIds: string[],
+  communityId: string
+): Promise<
+  Array<{ _id: mongoose.Types.ObjectId; uniqueId?: string | null; isCommunityMember: boolean; isCommunityVerified: boolean }>
+> => {
+  const normalizedUniqueIds = Array.from(new Set(uniqueIds.map((id) => id.trim()).filter(Boolean)));
+  const normalizedCommunityId = communityId.trim();
+
+  if (normalizedUniqueIds.length === 0 || !normalizedCommunityId) return [];
+
+  const users = await User.find(
+    {
+      uniqueId: { $in: normalizedUniqueIds },
+      isDeleted: { $ne: true },
+    },
+    { _id: 1, uniqueId: 1 }
+  ).lean();
+
+  const community = await communityModel.findById(normalizedCommunityId, { users: 1 }).lean();
+  const membershipMap = new Map<string, boolean>();
+
+  if (Array.isArray(community?.users)) {
+    community?.users?.forEach((communityUser) => {
+      const memberId = communityUser?._id ? String(communityUser._id) : null;
+      if (!memberId) return;
+      membershipMap.set(memberId, communityUser?.isVerified === true);
+    });
+  }
+
+  return users.map((user) => {
+    const memberId = String(user._id);
+    const isCommunityMember = membershipMap.has(memberId);
+    const isCommunityVerified = isCommunityMember ? membershipMap.get(memberId) === true : false;
+
+    const mappedUser: {
+      _id: mongoose.Types.ObjectId;
+      uniqueId?: string | null;
+      isCommunityMember: boolean;
+      isCommunityVerified: boolean;
+    } = {
+      _id: user._id,
+      isCommunityMember,
+      isCommunityVerified,
+    };
+
+    if (typeof user.uniqueId === 'string' || user.uniqueId === null) {
+      mappedUser.uniqueId = user.uniqueId;
+    }
+
+    return mappedUser;
+  });
+};
 
 /**
  * Get user by id or throw ApiError if not found

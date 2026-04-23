@@ -16,6 +16,7 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   isNewUser: Joi.boolean(),
   isDeleted: Joi.boolean(),
   deletedAt: Joi.date(),
+  uniqueId: Joi.string().optional(),
 };
 
 export const register = {

@@ -18,6 +18,7 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   deletedAt: Joi.date(),
   referCode: Joi.string().optional(),
   referredBy: Joi.string().optional(),
+  uniqueId: Joi.string().optional(),
 };
 
 export const createUser = {

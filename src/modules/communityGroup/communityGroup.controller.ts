@@ -14,6 +14,7 @@ import { sendPushNotification } from '../pushNotification/pushNotification.servi
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import catchAsync from '../utils/catchAsync';
 import { userIdExtend } from '../../config/userIDType';
+import { userService } from '../user';
 
 const RESPONSE_MESSAGE = {
   STATUS_UPDATED: 'Status Updated Successfully',
@@ -146,7 +147,13 @@ export const createCommunityGroupBySuperAdmin = catchAsync(async (req: userIdExt
   );
 
   const passed: Array<{ index: number; title: string | undefined; data: unknown }> = [];
-  const failed: Array<{ index: number; title: string | undefined; reason: string; statusCode: number }> = [];
+  const failed: Array<{
+    index: number;
+    title: string | undefined;
+    reason: string;
+    statusCode: number;
+    unresolvedUniqueIds?: { adminId?: string[]; memberList?: string[] };
+  }> = [];
 
   settledResults.forEach((result, index) => {
     const inputBody = payloads[index] as { title?: string } | undefined;
@@ -161,13 +168,26 @@ export const createCommunityGroupBySuperAdmin = catchAsync(async (req: userIdExt
       return;
     }
 
-    const error = result.reason as Partial<ApiError> & { message?: string };
-    failed.push({
+    const error = result.reason as Partial<ApiError> & {
+      message?: string;
+      missingUniqueIds?: { adminId?: string[]; memberList?: string[] };
+    };
+    const failedItem: {
+      index: number;
+      title: string | undefined;
+      reason: string;
+      statusCode: number;
+      unresolvedUniqueIds?: { adminId?: string[]; memberList?: string[] };
+    } = {
       index,
       title,
       reason: error?.message || 'Failed to create community group',
       statusCode: typeof error?.statusCode === 'number' ? error.statusCode : httpStatus.INTERNAL_SERVER_ERROR,
-    });
+    };
+    if (error?.missingUniqueIds) {
+      failedItem.unresolvedUniqueIds = error.missingUniqueIds;
+    }
+    failed.push(failedItem);
   });
 
   const hasFailures = failed.length > 0;
@@ -184,6 +204,107 @@ export const createCommunityGroupBySuperAdmin = catchAsync(async (req: userIdExt
     data: {
       passed,
       failed,
+    },
+  });
+});
+
+export const validateCommunityGroupUsersByUniqueId = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params as { communityId?: string };
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
+  }
+
+  const payloads = Array.isArray(req.body) ? req.body : [req.body];
+
+  const normalizedPayloads = payloads.map((body) => {
+    const item = (body ?? {}) as { title?: string; adminId?: string; memberList?: string[] };
+    const normalizedAdminId = typeof item.adminId === 'string' ? item.adminId.trim() : '';
+    const normalizedMemberList = Array.isArray(item.memberList)
+      ? Array.from(new Set(item.memberList.map((memberId) => String(memberId).trim()).filter(Boolean)))
+      : [];
+
+    return {
+      title: typeof item.title === 'string' ? item.title : undefined,
+      adminId: normalizedAdminId,
+      memberList: normalizedMemberList,
+    };
+  });
+
+  const allUniqueIds = Array.from(
+    new Set(
+      normalizedPayloads.flatMap((item) => {
+        const ids = [...item.memberList];
+        if (item.adminId) ids.push(item.adminId);
+        return ids;
+      })
+    )
+  );
+
+  const users = await userService.getUsersByUniqueIdsWithCommunityMembership(allUniqueIds, communityId);
+  const existingUniqueIds = new Set(users.map((user) => user.uniqueId).filter((id): id is string => typeof id === 'string'));
+  const nonMemberUniqueIds = new Set(
+    users
+      .filter((user) => !user.isCommunityMember && typeof user.uniqueId === 'string')
+      .map((user) => user.uniqueId as string)
+  );
+  const nonVerifiedUniqueIds = new Set(
+    users
+      .filter((user) => user.isCommunityMember && !user.isCommunityVerified && typeof user.uniqueId === 'string')
+      .map((user) => user.uniqueId as string)
+  );
+
+  const results = normalizedPayloads.map((item, index) => {
+    const missingAdminIds = item.adminId && !existingUniqueIds.has(item.adminId) ? [item.adminId] : [];
+    const missingMemberIds = item.memberList.filter((memberId) => !existingUniqueIds.has(memberId));
+    const adminNotInCommunityIds =
+      item.adminId && existingUniqueIds.has(item.adminId) && nonMemberUniqueIds.has(item.adminId) ? [item.adminId] : [];
+    const membersNotInCommunityIds = item.memberList.filter(
+      (memberId) => existingUniqueIds.has(memberId) && nonMemberUniqueIds.has(memberId)
+    );
+    const adminNotVerifiedIds =
+      item.adminId && existingUniqueIds.has(item.adminId) && nonVerifiedUniqueIds.has(item.adminId) ? [item.adminId] : [];
+    const membersNotVerifiedIds = item.memberList.filter(
+      (memberId) => existingUniqueIds.has(memberId) && nonVerifiedUniqueIds.has(memberId)
+    );
+
+    return {
+      index,
+      title: item.title,
+      unresolvedUniqueIds: {
+        adminId: missingAdminIds,
+        memberList: missingMemberIds,
+      },
+      nonCommunityMemberUniqueIds: {
+        adminId: adminNotInCommunityIds,
+        memberList: membersNotInCommunityIds,
+      },
+      nonVerifiedUniqueIds: {
+        adminId: adminNotVerifiedIds,
+        memberList: membersNotVerifiedIds,
+      },
+      isValid:
+        missingAdminIds.length === 0 &&
+        missingMemberIds.length === 0 &&
+        adminNotInCommunityIds.length === 0 &&
+        membersNotInCommunityIds.length === 0 &&
+        adminNotVerifiedIds.length === 0 &&
+        membersNotVerifiedIds.length === 0,
+    };
+  });
+
+  const invalidItems = results.filter((item) => !item.isValid);
+
+  res.status(200).json({
+    success: true,
+    message: 'Unique ID validation completed',
+    summary: {
+      total: results.length,
+      valid: results.length - invalidItems.length,
+      invalid: invalidItems.length,
+    },
+    data: {
+      results,
+      failed: invalidItems,
     },
   });
 });

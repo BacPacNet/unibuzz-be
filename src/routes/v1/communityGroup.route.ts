@@ -31,6 +31,15 @@ router
   );
 
 router
+  .route('/super-admin/:communityId/validate-unique-ids')
+  .post(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityGroupValidation.validateCommunityGroupUsersByUniqueId),
+    communityGroupController.validateCommunityGroupUsersByUniqueId
+  );
+
+router
   .route('/:communityId')
   .get(
     userIdAuth,

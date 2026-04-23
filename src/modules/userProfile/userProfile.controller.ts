@@ -170,9 +170,9 @@ export const addUniversityEmail = catchAsync(async (req: userIdExtend, res: Resp
 export const manuallyVerifyUniversityUser = catchAsync(async (req: Request, res: Response) => {
   const { userID, universityEmail } = req.body;
 
-  const universityName = 'Unibuzz';
-  const communityId = '6881f7fa83fc938b6302b0aa';
-  const communityLogoUrl = 'https://unibuzz-uploads.s3.ap-south-1.amazonaws.com/assets/unibuzz_dark_square.png';
+  const universityName = 'Aggarwal College, Ballabgarh';
+  const communityId = '69b6f1cbc031edbcb4a82055';
+  const communityLogoUrl = 'https://www.aggarwalcollege.ac.in/images/2017photos/LogoACB27-06-2017.jpg';
   
   await userProfileService.addUniversityEmail(
     userID,

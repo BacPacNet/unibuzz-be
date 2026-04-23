@@ -149,6 +149,24 @@ export const createCommunityGroupBySuperAdmin = {
   body: Joi.alternatives().try(createCommunityGroupBySuperAdminItem, Joi.array().items(createCommunityGroupBySuperAdminItem)),
 };
 
+const validateCommunityGroupUsersByUniqueIdItem = Joi.object()
+  .keys({
+    title: Joi.string().trim().optional(),
+    adminId: Joi.string().trim().optional(),
+    memberList: Joi.array().items(Joi.string().trim()).optional(),
+  })
+  .unknown(true);
+
+export const validateCommunityGroupUsersByUniqueId = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+  body: Joi.alternatives().try(
+    validateCommunityGroupUsersByUniqueIdItem,
+    Joi.array().items(validateCommunityGroupUsersByUniqueIdItem)
+  ),
+};
+
 export const updateCommunityGroup = {
   params: Joi.object().keys({
     groupId: Joi.string().required().custom(objectId),

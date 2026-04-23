@@ -30,6 +30,7 @@ interface unverifiedInterface {
 }
 
 export interface IUser {
+  uniqueId?: string | null;
   firstName: string;
   lastName: string;
   userName: string;

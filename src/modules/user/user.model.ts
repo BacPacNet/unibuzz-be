@@ -99,6 +99,11 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       ref: 'User',
       default: null,
     },
+    uniqueId: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     userVerifiedCommunities: [
       {
         communityId: String,
