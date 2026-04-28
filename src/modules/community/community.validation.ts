@@ -62,6 +62,22 @@ export const getFilteredUserCommunity = {
   body: Joi.object()
     .keys({
       sort: Joi.string().optional(),
+      searchTerm: Joi.string().trim().allow('').optional(),
+      selectedType: Joi.array().items(Joi.string()).optional(),
+      selectedLabel: Joi.array().items(Joi.string()).optional(),
+      selectedFilters: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())).optional(),
+    })
+    .unknown(true),
+};
+
+export const getFilteredSuperAdminCommunity = {
+  params: Joi.object().keys({
+    universityId: Joi.string().required().custom(objectId),
+  }),
+  body: Joi.object()
+    .keys({
+      sort: Joi.string().optional(),
+      searchTerm: Joi.string().trim().allow('').optional(),
       selectedType: Joi.array().items(Joi.string()).optional(),
       selectedLabel: Joi.array().items(Joi.string()).optional(),
       selectedFilters: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())).optional(),

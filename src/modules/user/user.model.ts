@@ -74,6 +74,10 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
       type: Boolean,
       default: false,
     },
+    isPasswordSet:{
+      type: Boolean,
+      default: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -97,6 +101,11 @@ const userSchema = new mongoose.Schema<IUserDoc, IUserModel>(
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+      default: null,
+    },
+    uniqueId: {
+      type: String,
+      trim: true,
       default: null,
     },
     userVerifiedCommunities: [

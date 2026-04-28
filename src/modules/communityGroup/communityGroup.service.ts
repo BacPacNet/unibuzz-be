@@ -2,7 +2,7 @@ import mongoose, { Types } from 'mongoose';
 import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { getUserById } from '../user/user.service';
+import { getUserById, getUsersByUniqueIds } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
 import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
 import {
@@ -35,6 +35,7 @@ import { User } from '../user';
 import {
   buildCommunityGroupMembersDataPipeline,
   buildCommunityGroupMembersCountPipeline,
+  buildCommunityGroupMembersDataPipelineForSuperAdmin,
 } from './communityGroup.pipeline';
 import { UserCommunities } from '../userProfile/userProfile.interface';
 
@@ -102,6 +103,8 @@ function buildGroupMemberFromUserAndProfile(
     status: options.status,
   };
 }
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Updates a single member's request status in a community group (users subdocument).
@@ -592,6 +595,132 @@ export const createCommunityGroup = async (
   return createdGroup;
 };
 
+export const createCommunityGroupBySuperAdmin = async (
+  body: CreateCommunityGroupBody,
+  communityId: string,
+  userId: string
+) => {
+  if (!communityId || !userId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID is required');
+  }
+
+  if (!body?.title || !body.title.trim()) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Title is required');
+  }
+
+  const community = await communityService.getCommunity(communityId);
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const existingGroupWithSameTitle = await communityGroupModel.findOne({
+    communityId,
+    title: { $regex: new RegExp(`^${escapeRegExp(body.title.trim())}$`, 'i') },
+  });
+  if (existingGroupWithSameTitle) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community group with same name already exists');
+  }
+
+  const normalizedAdminUniqueId = typeof body.adminId === 'string' ? body.adminId.trim() : '';
+  const normalizedMemberUniqueIds = Array.isArray(body.memberList)
+    ? Array.from(new Set(body.memberList.map((memberId) => String(memberId).trim()).filter(Boolean)))
+    : [];
+
+  const uniqueIdsToLookup = normalizedAdminUniqueId
+    ? [normalizedAdminUniqueId, ...normalizedMemberUniqueIds]
+    : [...normalizedMemberUniqueIds];
+
+  const resolvedUsers = await getUsersByUniqueIds(uniqueIdsToLookup);
+  const userByUniqueId = new Map<string, { _id: mongoose.Types.ObjectId; uniqueId?: string | null }>();
+  for (const resolvedUser of resolvedUsers) {
+    if (resolvedUser.uniqueId) {
+      userByUniqueId.set(resolvedUser.uniqueId.trim(), resolvedUser);
+    }
+  }
+
+  const missingMemberUniqueIds = normalizedMemberUniqueIds.filter((memberUniqueId) => !userByUniqueId.has(memberUniqueId));
+
+  let adminUserIdForGroup = userId;
+  if (normalizedAdminUniqueId) {
+    const adminByUniqueId = userByUniqueId.get(normalizedAdminUniqueId);
+    if (!adminByUniqueId) {
+      const adminError = new ApiError(httpStatus.BAD_REQUEST, `Admin with uniqueId "${normalizedAdminUniqueId}" not found`);
+      (
+        adminError as ApiError & {
+          missingUniqueIds?: { adminId: string[]; memberList: string[] };
+        }
+      ).missingUniqueIds = {
+        adminId: [normalizedAdminUniqueId],
+        memberList: missingMemberUniqueIds,
+      };
+      throw adminError;
+    }
+    adminUserIdForGroup = adminByUniqueId._id.toString();
+  }
+
+  const selectedUsersFromMemberList = normalizedMemberUniqueIds
+    .map((memberUniqueId) => userByUniqueId.get(memberUniqueId))
+    .filter((member): member is { _id: mongoose.Types.ObjectId; uniqueId?: string | null } => Boolean(member))
+    .map((member) => ({
+      users_id: member._id.toString(),
+    }));
+
+  const existingSelectedUsers = Array.isArray(body.selectedUsers) ? body.selectedUsers : [];
+  const existingSelectedIds = new Set(existingSelectedUsers.map((item) => String(item.users_id)));
+  const mergedSelectedUsers = [
+    ...existingSelectedUsers,
+    ...selectedUsersFromMemberList.filter((item) => !existingSelectedIds.has(item.users_id)),
+  ];
+
+  const normalizedBody: CreateCommunityGroupBody = {
+    ...body,
+    selectedUsers: mergedSelectedUsers,
+  };
+
+  const [creator, creatorProfile] = await Promise.all([
+    getUserById(new mongoose.Types.ObjectId(adminUserIdForGroup)),
+    userProfileService.getUserProfileById(adminUserIdForGroup),
+  ]);
+
+  if (!creator) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
+  }
+  if (!creatorProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
+  }
+
+  const inviteUsers = (normalizedBody.selectedUsers ?? []).map((user: SelectedUserItem) => ({
+    userId: user.users_id,
+  }));
+
+  const normalizedType = String(normalizedBody.communityGroupType ?? '').toLowerCase();
+  const isOfficial = normalizedType === CommunityGroupType.OFFICIAL;
+  const creatorAsMember = buildGroupMemberFromUserAndProfile(creator, creatorProfile, {
+    isRequestAccepted: true,
+    status: status.accepted,
+  });
+
+  const createdGroup = await communityGroupModel.create({
+    ...normalizedBody,
+    title: normalizedBody.title!.trim(),
+    communityId,
+    adminUserId: adminUserIdForGroup,
+    communityGroupType: isOfficial ? CommunityGroupType.OFFICIAL : CommunityGroupType.CASUAL,
+    status: isOfficial ? status.accepted : status.default,
+    isCommunityGroupLive: true,
+    inviteUsers,
+    users: [creatorAsMember],
+  });
+
+  return {
+    group: createdGroup,
+    unresolvedUniqueIds: {
+      adminId: [] as string[],
+      memberList: missingMemberUniqueIds,
+    },
+  };
+};
+
 export const getCommunityGroupById = async (groupId: string, userId: string) => {
   const communityGroup = (await communityGroupModel
     .findById(groupId)
@@ -975,6 +1104,64 @@ export const getCommunityGroupMembers = async (
 
     const totalPipeline = buildCommunityGroupMembersCountPipeline(groupId, targetStatus);
 
+    const totalResult = await communityGroupModel.aggregate(totalPipeline);
+    const totalCount = totalResult[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: (users as MemberWithVerified[]).map((u) => ({
+        ...u,
+        isVerified: u.isVerified ?? false,
+      })),
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+    };
+  } catch (error: any) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_FETCHING_MEMBERS);
+  }
+};
+
+export const getCommunityGroupMembersForSuperAdmin = async (
+  communityGroupId: string,
+  userStatus: string,
+  page: number = 1,
+  limit: number = 10
+) => {
+  try {
+    if (!communityGroupId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.INVALID_COMMUNITY_GROUP_ID_SHORT);
+    }
+
+    const groupId = new Types.ObjectId(communityGroupId);
+
+    const communityGroup = await getCommunityGroupByObjectId(communityGroupId);
+    if (!communityGroup) {
+      throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+    }
+
+    const targetStatus = userStatus === status.pending ? status.pending : status.accepted;
+    const adminId = communityGroup.adminUserId?.toString();
+    const communityId = communityGroup.communityId;
+
+    if (!communityId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.COMMUNITY_REFERENCE_MISSING);
+    }
+
+    const pipeline = buildCommunityGroupMembersDataPipelineForSuperAdmin(
+      groupId,
+      targetStatus,
+      adminId,
+      communityId,
+      page,
+      limit
+    );
+
+    const results = await communityGroupModel.aggregate(pipeline);
+    const users = results[0]?.users || [];
+
+    const totalPipeline = buildCommunityGroupMembersCountPipeline(groupId, targetStatus);
     const totalResult = await communityGroupModel.aggregate(totalPipeline);
     const totalCount = totalResult[0]?.total || 0;
     const totalPages = Math.ceil(totalCount / limit);

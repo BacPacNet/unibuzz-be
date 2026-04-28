@@ -1,12 +1,22 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
 import { authValidation, authController } from '../../modules/auth';
+import { userIdAuth } from '../../modules/user';
+import { requireSuperAdmin } from '../../modules/superAdmins';
 
 const router: Router = express.Router();
 
 //router.post('/register', authController.register);
 router.post('/register', authController.register_v2);
 router.post('/login', validate(authValidation.login), authController.login);
+router.post('/dashboard-login', validate(authValidation.login), authController.dashboardLogin);
+router.post(
+  '/super-admin/bulk-register-users',
+  userIdAuth,
+  requireSuperAdmin,
+  validate(authValidation.bulkRegisterUsersBySuperAdmin),
+  authController.bulkRegisterUsersBySuperAdmin
+);
 router.post('/logout', validate(authValidation.logout), authController.logout);
 router.post('/refresh-tokens', validate(authValidation.refreshTokens), authController.refreshTokens);
 router.post('/forgot-password', validate(authValidation.forgotPassword), authController.forgotPassword);

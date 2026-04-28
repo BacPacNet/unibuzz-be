@@ -18,6 +18,11 @@ router.route('/following_and_followers').get(userIdAuth, validate(userProfileVal
 
 router.route('/blocked_users').get(userIdAuth, userProfileController.getBlockedUsers);
 router.route('/addUniversityEmail').put(userIdAuth, validate(userProfileValidation.addUniversityEmail), userProfileController.addUniversityEmail);
+router
+  .route('/manual-verify-university-user')
+  .post(
+    userProfileController.manuallyVerifyUniversityUser
+  );
 router.route('/verifiedUniversityEmails').get(userIdAuth, userProfileController.getUserProfileVerifiedUniversityEmails);
 router.route('/:userProfileId').put(validate(userProfileValidation.updateUserProfile), userProfileController.updateUserProfile);
 
