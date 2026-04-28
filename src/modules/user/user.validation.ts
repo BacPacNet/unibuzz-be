@@ -19,6 +19,7 @@ const createUserBody: Record<keyof NewCreatedUser, any> = {
   referCode: Joi.string().optional(),
   referredBy: Joi.string().optional(),
   uniqueId: Joi.string().optional(),
+  isPasswordSet: Joi.boolean().optional(),
 };
 
 export const createUser = {

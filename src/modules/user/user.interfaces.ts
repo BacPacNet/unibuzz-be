@@ -49,6 +49,7 @@ export interface IUser {
   deletedAt: Date | null;
   referCode?: string;
   referredBy?: mongoose.Types.ObjectId | null;
+  isPasswordSet?: boolean;
 }
 
 export interface IUserDoc extends IUser, Document {
@@ -137,3 +138,33 @@ export interface GetUsersWithProfileQuery {
   >;
   $or?: [{ firstName: RegExp }, { lastName: RegExp }];
 }
+
+
+
+export type SuperAdminBulkRegisterItem = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  userName?: string;
+  password?: string;
+  gender?: string;
+  uniqueId?: string;
+  birthDate?: string;
+  birthday?: string;
+  country?: string;
+  universityEmail?: string;
+  universityName?: string;
+  universityId?: string;
+  year?: string;
+  degree?: string;
+  major?: string;
+  occupation?: string;
+  department?: string;
+  affiliation?: string;
+  userType?: string;
+  isJoinUniversity?: boolean;
+  isUniversityVerified?: boolean;
+  universityLogo?: string;
+  isEmailVerified?: boolean;
+  [key: string]: any;
+};

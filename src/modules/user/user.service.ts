@@ -177,6 +177,55 @@ export const getUserByUniqueId = async (uniqueId: string): Promise<IUserDoc | nu
   User.findOne({ uniqueId: uniqueId.trim(), isDeleted: { $ne: true } });
 
 /**
+ * Check whether a uniqueId already exists for a user in the same university community.
+ * Matches both verified and unverified community memberships.
+ */
+export const isUniqueIdTakenInUniversity = async (
+  uniqueId: string,
+  universityId: string,
+  universityName?: string
+): Promise<boolean> => {
+  const normalizedUniqueId = uniqueId?.trim();
+  const normalizedUniversityId = universityId?.trim();
+  const normalizedUniversityName = universityName?.trim();
+
+  if (!normalizedUniqueId || !normalizedUniversityId) {
+    return false;
+  }
+
+  const existingUser = await User.findOne({
+    uniqueId: normalizedUniqueId,
+    isDeleted: { $ne: true },
+  }).select('_id');
+
+  if (!existingUser?._id) {
+    return false;
+  }
+
+  const communityIdMatchCandidates: Array<string | mongoose.Types.ObjectId> = [normalizedUniversityId];
+  if (mongoose.Types.ObjectId.isValid(normalizedUniversityId)) {
+    communityIdMatchCandidates.push(new mongoose.Types.ObjectId(normalizedUniversityId));
+  }
+
+  const emailMatchConditions: Record<string, any>[] = [{ communityId: { $in: communityIdMatchCandidates } }];
+  if (normalizedUniversityName) {
+    emailMatchConditions.push({
+      UniversityName: { $regex: `^${normalizedUniversityName}$`, $options: 'i' },
+    });
+  }
+
+  const userProfile = await UserProfile.findOne({
+    users_id: existingUser._id,
+    email: {
+      $elemMatch: {
+        $or: emailMatchConditions,
+      },
+    },
+  }).select('_id');
+  return Boolean(userProfile);
+};
+
+/**
  * Get active users by uniqueIds (lean)
  * @param {string[]} uniqueIds
  * @returns {Promise<Array<{ _id: mongoose.Types.ObjectId; uniqueId?: string | null }>>}

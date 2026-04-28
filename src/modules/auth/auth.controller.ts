@@ -12,6 +12,9 @@ import { communityService } from '../community';
 import { universityVerificationEmailService } from '../universityVerificationEmail';
 import { superAdminsService } from '../superAdmins';
 import { ApiError } from '../errors';
+import { SuperAdminBulkRegisterItem } from '../user/user.interfaces';
+import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
+import { NotificationIdentifier } from '../../amazon-sqs/NotificationIdentifierEnums';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   try {
@@ -155,4 +158,159 @@ export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   } catch (error: any) {
     return res.status(400).json({ message: error.message });
   }
+});
+
+export const bulkRegisterUsersBySuperAdmin = catchAsync(async (req: Request, res: Response) => {
+ 
+
+  const payload = req.body as SuperAdminBulkRegisterItem[];
+  const results: Array<{ index: number; email?: string; uniqueId?: string; status: 'success' | 'failed'; error?: string }> =
+    [];
+
+  for (const [index, userPayload] of payload.entries()) {
+    const {
+      birthDate,
+      birthday,
+      country,
+      universityName,
+      universityId,
+      year,
+      degree,
+      major,
+      occupation,
+      department,
+      affiliation,
+      userType,
+      universityLogo,
+      isEmailVerified,
+      password,
+      ...body
+    } = userPayload;
+
+
+    try {
+      const normalizedEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : body.email;
+      const normalizedUniversityNameNoSpaces = universityName
+      ? universityName.replace(/\s+/g, '').toLowerCase()
+      : '';
+      const generatedUserName =normalizedUniversityNameNoSpaces + (body?.uniqueId ?  body?.uniqueId : '');
+    
+
+      const registerBody = {
+        ...body,
+        email: normalizedEmail,
+        userName: generatedUserName,
+        password: password,
+        gender: body.gender || 'not_specified',
+        isPasswordSet: false,
+      } as any;
+      if (registerBody.uniqueId && universityId) {
+        const isUniqueIdAlreadyUsedInUniversity = await userService.isUniqueIdTakenInUniversity(
+          registerBody.uniqueId,
+          universityId,
+          universityName
+        );
+        if (isUniqueIdAlreadyUsedInUniversity) {
+          throw new ApiError(
+            httpStatus.CONFLICT,
+            `Unique ID ${registerBody.uniqueId} already exists for this university`
+          );
+        }
+      }
+      // return console.log("registerBody",registerBody);
+      const user = await userService.registerUser(registerBody);
+      const { _id: userId } = user;
+
+      const profilePayload = {
+        ...userPayload,
+        birthDate: birthDate || birthday || '',
+        department: department || affiliation || '',
+      };
+      await userProfileService.createUserProfile(userId.toString(), profilePayload);
+
+      const shouldJoinUniversity =  Boolean(universityId);
+      const shouldMarkUniversityVerified = true;
+      const universityEmail = user.email;
+
+      if (shouldJoinUniversity && universityId) {
+        const community = await communityService.joinCommunityFromUniversity(
+          userId.toString(),
+          universityId || '',
+          shouldMarkUniversityVerified
+        );
+
+        if (shouldMarkUniversityVerified && universityEmail && universityName) {
+          const { data } = community as any;
+          
+          await userProfileService.addUniversityEmail(
+            userId.toString(),
+            universityEmail || '',
+            universityName || '',
+            data.community._id.toString(),
+            data.community.communityLogoUrl.imageUrl.toString()
+          );
+          await universityVerificationEmailService.upsertCompletedUniversityVerificationForRegistration(
+            universityEmail || '',
+            universityId || ''
+          );
+        }
+      }
+
+      await userService.updateUserById(userId as any, { isEmailVerified: isEmailVerified ?? true });
+
+      try {
+        await queueSQSNotification({
+          type: NotificationIdentifier.INSTITUTIONAL_ACCOUNT_CREATED_EMAIL,
+          email: normalizedEmail,
+          firstName: body.firstName,
+          userStatus: userPayload.userType || 'student',
+          temporaryPassword: password || '',
+        });
+      } catch (queueError: any) {
+        console.error(`Failed to enqueue onboarding email for ${normalizedEmail}:`, queueError?.message || queueError);
+      }
+
+      const successResult: { index: number; email: string; uniqueId?: string; status: 'success' } = {
+        index,
+        email: normalizedEmail,
+        status: 'success',
+      };
+      if (body.uniqueId) successResult.uniqueId = body.uniqueId || '';
+      results.push(successResult);
+    } catch (error: any) {
+      const failedResult: { index: number; email: string; uniqueId?: string; status: 'failed'; error: string } = {
+        index,
+        email: userPayload.email,
+        status: 'failed',
+        error: error?.message || 'Registration failed',
+      };
+      if (userPayload.uniqueId) failedResult.uniqueId = userPayload.uniqueId || '';
+      results.push(failedResult);
+    }
+  }
+
+  const successResults = results.filter((item) => item.status === 'success');
+  const failedResults = results
+    .filter((item) => item.status === 'failed')
+    .map((item) => ({
+      index: item.index,
+      email: item.email,
+      uniqueId: item.uniqueId,
+      status: item.status,
+      err: item.error || 'Registration failed',
+    }));
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: 'Bulk registration processed',
+    summary: {
+      total: payload.length,
+      valid: successResults.length,
+      invalid: failedResults.length,
+    },
+    data: {
+      results: successResults,
+      failed: failedResults,
+    },
+  });
 });

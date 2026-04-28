@@ -15,6 +15,7 @@ export enum NotificationIdentifier {
   REPLIED_TO_COMMENT = 'REPLIED_TO_COMMENT',
   REPLIED_TO_COMMUNITY_COMMENT = 'REPLIED_TO_COMMUNITY_COMMENT',
   COMMUNITY_ADMIN_POST = 'COMMUNITY_ADMIN_POST',
+  INSTITUTIONAL_ACCOUNT_CREATED_EMAIL = 'INSTITUTIONAL_ACCOUNT_CREATED_EMAIL',
 
   send_notification = 'send-notification',
   like_notification = 'like-notification',

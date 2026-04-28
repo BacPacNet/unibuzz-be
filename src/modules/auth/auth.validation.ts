@@ -17,6 +17,7 @@ const registerBody: Record<keyof NewRegisteredUser, any> = {
   isDeleted: Joi.boolean(),
   deletedAt: Joi.date(),
   uniqueId: Joi.string().optional(),
+  isPasswordSet: Joi.boolean().optional(),
 };
 
 export const register = {
@@ -61,4 +62,23 @@ export const verifyEmail = {
   query: Joi.object().keys({
     token: Joi.string().required(),
   }),
+};
+
+export const bulkRegisterUsersBySuperAdmin = {
+  body: Joi.array()
+    .items(
+      Joi.object({
+        uniqueId: Joi.string().trim().optional(),
+        email: Joi.string().email().required(),
+        firstName: Joi.string().required(),
+        lastName: Joi.string().required(),
+        userName: Joi.string().optional(),
+        password: Joi.string().optional(),
+        gender: Joi.string().optional(),
+      })
+        .unknown(true)
+        .required()
+    )
+    .min(1)
+    .required(),
 };

@@ -122,3 +122,82 @@ export const sendAccountCreated = async (to: string, name: string): Promise<void
   <p><strong>Team</strong></p></div>`;
   await sendEmail(to, subject, text, html);
 };
+
+/**
+ * Send institutional account creation email with temporary credentials.
+ * @param {string} to
+ * @param {string} firstName
+ * @param {string} userStatus
+ * @param {string} temporaryPassword
+ * @returns {Promise<void>}
+ */
+export const sendInstitutionalAccountCreatedEmail = async (
+  to: string,
+  firstName: string,
+  userStatus: string,
+  temporaryPassword: string
+): Promise<void> => {
+  const subject = 'Your Unibuzz Account Has Been Created';
+  const normalizedStatus = (userStatus || 'student').toLowerCase();
+  const loginUrl = 'https://unibuzz.org/login';
+  const appStoreUrl = 'https://apps.apple.com/us/app/unibuzz-app/id6751199821';
+  const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.unibuzzapp&hl=en-US';
+  const safeFirstName = firstName || 'User';
+  const safePassword = temporaryPassword || 'Please contact your university administrator';
+
+  const text = `Dear ${safeFirstName},
+
+As part of your university's initiative to streamline campus communication and collaboration, an official ${normalizedStatus} account has been created for you on Unibuzz at the request of your institution.
+
+Unibuzz serves as a centralized and verified platform for academic discussions, official updates, and campus engagement.
+
+Login Credentials
+Email: ${to}
+Temporary Password: ${safePassword}
+
+You may access your account using the following link:
+${loginUrl}
+
+Access via Mobile App
+Download on iOS: ${appStoreUrl}
+Download on Android: ${playStoreUrl}
+
+Important
+Please change your password after your first login from Settings.
+
+For any assistance, please contact your university or use the Feedback Form on Unibuzz.
+
+Yours sincerely,
+Team Unibuzz`;
+
+  const html = `<div style="margin:30px; padding:30px; border:1px solid #e5e7eb; border-radius:12px; font-family: Arial, sans-serif; line-height:1.6; font-size:15px;">
+  <p>Dear ${safeFirstName},</p>
+  <p>
+    As part of your university's initiative to streamline campus communication and collaboration, an official
+    <strong>${normalizedStatus}</strong> account has been created for you on Unibuzz at the request of your institution.
+  </p>
+  <p>
+    Unibuzz serves as a centralized and verified platform for academic discussions, official updates, and campus engagement.
+  </p>
+  <h4 style="margin:16px 0 8px; font-size:18px;">Login Credentials</h4>
+  <p style="margin:0;"><strong>Email:</strong> ${to}</p>
+  <p style="margin:0 0 16px 0;"><strong>Temporary Password:</strong> ${safePassword}</p>
+  <p>
+    You may access your account using the following link:<br />
+    <a href="${loginUrl}">${loginUrl}</a>
+  </p>
+  <h4 style="margin:16px 0 8px; font-size:18px;">Access via Mobile App</h4>
+  <p style="margin:0;">
+    Download on iOS: <a href="${appStoreUrl}">${appStoreUrl}</a>
+  </p>
+  <p style="margin:0 0 16px 0;">
+    Download on Android: <a href="${playStoreUrl}">${playStoreUrl}</a>
+  </p>
+  <h4 style="margin:16px 0 8px; font-size:18px;">Important</h4>
+  <p>Please change your password after your first login from Settings.</p>
+  <p>For any assistance, please contact your university or use the Feedback Form on Unibuzz.</p>
+  <p style="margin-top:24px;">Yours sincerely,<br /><strong>Team Unibuzz</strong></p>
+</div>`;
+
+  await sendEmail(to, subject, text, html);
+};
