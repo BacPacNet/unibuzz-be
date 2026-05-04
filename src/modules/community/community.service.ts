@@ -16,9 +16,11 @@ import { communityGroupService } from '../communityGroup';
 import {
   CommunityGroupFilters,
   buildFilteredCommunitiesBasePipeline,
+  buildSuperAdminFilteredCommunitiesBasePipeline,
   buildGroupVisibilityFilterStage,
   buildTypeAndLabelFilterStage,
   buildSelectedFiltersStage,
+  buildSearchTermFilterStage,
   buildCommunityGroupsSortStages,
   buildCommunityUsersBasePipeline,
   buildCommunityGroupUsersExclusionStage,
@@ -37,6 +39,7 @@ import {
   buildUserCommunitiesProjectStage,
   buildUserCommunitiesUsersFilterStage,
   buildCommunityGroupsProjectStage,
+  buildCommunityGroupsProjectStageForSuperAdmin,
   buildCommunityUsersServiceBaseStages,
   buildCommunityUsersServiceSearchStage,
 } from './community.pipeline';
@@ -101,6 +104,19 @@ export const getCommunity = async (
   return await communityModel.findById(id).lean();
 };
 
+export const getCommunityIdByUniversityId = async (universityId: string): Promise<string> => {
+  const community = await communityModel
+    .findOne({ university_id: convertToObjectId(universityId) })
+    .select('_id')
+    .lean();
+
+  if (!community?._id) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found for this university');
+  }
+
+  return community._id.toString();
+};
+
 
 /**
  * Finds a community by ID. Throws ApiError if not found.
@@ -129,6 +145,11 @@ const getUserAndProfileOrThrow = async (userID: string) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'User Profile not found');
   }
   return { user, userProfile };
+};
+
+const hasEffectiveSelectedFilters = (selectedFilters?: Record<string, string[]>) => {
+  if (!selectedFilters) return false;
+  return Object.values(selectedFilters).some((values) => Array.isArray(values) && values.length > 0);
 };
 
 /**
@@ -248,6 +269,42 @@ export const getUserFilteredCommunities = async (
     return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;
   } catch (error) {
     console.error('Error fetching user communities:', error);
+    throw error;
+  }
+};
+
+export const getSuperAdminFilteredCommunities = async (
+  communityId: string = '',
+  sortBy: string,
+  filters?: CommunityGroupFilters
+): Promise<GetUserFilteredCommunitiesResult> => {
+  try {
+    const pipeline: PipelineStage[] = [
+      ...buildSuperAdminFilteredCommunitiesBasePipeline(communityId),
+    ];
+
+    // Super admins should be able to inspect all groups. The regular
+    // visibility stage hides groups based on the current member context.
+    // Keeping it here can lead to empty results for valid communities.
+
+    const typeLabelStage = filters ? buildTypeAndLabelFilterStage(filters) : null;
+    if (typeLabelStage) pipeline.push(typeLabelStage);
+
+    const selectedFilters = filters?.selectedFilters;
+    if (selectedFilters && hasEffectiveSelectedFilters(selectedFilters)) {
+      pipeline.push(buildSelectedFiltersStage(selectedFilters));
+    }
+
+    const searchTermStage = buildSearchTermFilterStage(filters?.searchTerm || '');
+    if (searchTermStage) pipeline.push(searchTermStage);
+
+    pipeline.push({ $project: { communityGroups: 1 } });
+    pipeline.push(...buildCommunityGroupsSortStages(sortBy));
+    pipeline.push(...buildCommunityGroupsProjectStageForSuperAdmin());
+    const communities = await communityModel.aggregate(pipeline);
+    return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;
+  } catch (error) {
+    console.error('Error fetching super admin communities:', error);
     throw error;
   }
 };

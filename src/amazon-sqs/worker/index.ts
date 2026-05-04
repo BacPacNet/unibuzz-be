@@ -17,6 +17,7 @@ import { handleSendDeleteCommunityGroupNotification } from '../handlers/handleDe
 import { handleUserPostReplyCommentNotification } from '../handlers/handleUserPostReplyCommentNotification';
 import { handleUserCommunityPostReplyCommentNotification } from '../handlers/handleUserCommunityPostReplyCommentNotification';
 import { handleCommunityAdminPostNotification } from '../handlers/handleCcommunityAdminPostNotification';
+import { handleInstitutionalAccountCreatedEmail } from '../handlers/handleInstitutionalAccountCreatedEmail';
 
 const sqs = new SQSClient({ region: config.aws.region });
 
@@ -111,6 +112,8 @@ async function dispatchNotification(data: any) {
         return await handleUserCommunityPostReplyCommentNotification(data);
       case NotificationIdentifier.COMMUNITY_ADMIN_POST:
         return await handleCommunityAdminPostNotification(data);
+      case NotificationIdentifier.INSTITUTIONAL_ACCOUNT_CREATED_EMAIL:
+        return await handleInstitutionalAccountCreatedEmail(data);
       default:
         logger.warn('⚠️ Unknown notification type:', data.type);
         return null;

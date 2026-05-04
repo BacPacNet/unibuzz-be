@@ -28,6 +28,16 @@ export const getFilteredUserCommunity = catchAsync(async (req: userIdExtend, res
 
 })
 
+export const getFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { universityId } = req.params;
+  if (!universityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'universityId not found');
+  }
+  const communityId = await communityService.getCommunityIdByUniversityId(universityId);
+  const communities = await communityService.getSuperAdminFilteredCommunities(communityId, req.body.sort, req.body);
+  return res.status(httpStatus.OK).json(communities);
+})
+
 //get community
 export const getCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const communityId = req.params['communityId'];

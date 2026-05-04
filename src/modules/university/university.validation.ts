@@ -24,3 +24,9 @@ export const getUniversityById = {
     university_name: Joi.string().trim().required(),
   }),
 };
+
+export const getUniversityDashboardStats = {
+  params: Joi.object().keys({
+    university_name: Joi.string().trim().required(),
+  }),
+};

@@ -44,6 +44,12 @@ export const getUniversityById = catchAsync(async (req: Request, res: Response) 
   return res.status(httpStatus.OK).json(university);
 });
 
+export const getUniversityDashboardStats = catchAsync(async (req: Request, res: Response) => {
+  const { university_name } = req.params;
+  const stats = await universityService.getUniversityDashboardStats(decodeURIComponent(university_name as string));
+  return res.status(httpStatus.OK).json(stats);
+});
+
 // search by name or country
 export const searchUniversityByQuery = catchAsync(async (req: Request, res: Response) => {
   const { searchTerm, page, limit } = req.query;

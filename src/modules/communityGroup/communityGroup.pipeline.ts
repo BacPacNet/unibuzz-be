@@ -137,3 +137,62 @@ export function buildCommunityGroupMembersDataPipeline(
     },
   ];
 }
+
+
+export function buildCommunityGroupMembersDataPipelineForSuperAdmin(
+  groupId: Types.ObjectId,
+  targetStatus: string,
+  adminId: string,
+  communityId: string | Types.ObjectId,
+  page: number,
+  limit: number
+): PipelineStage[] {
+  const communityObjectId =
+    typeof communityId === 'string' ? new Types.ObjectId(communityId) : communityId;
+
+  return [
+    ...buildCommunityGroupMembersBaseStages(groupId, targetStatus),
+    {
+      $lookup: {
+        from: 'communities',
+        let: { userId: '$users._id' },
+        pipeline: [
+          { $match: { _id: communityObjectId } },
+          { $unwind: '$users' },
+          {
+            $match: {
+              $expr: {
+                $eq: [{ $toString: '$users._id' }, { $toString: '$$userId' }],
+              },
+            },
+          },
+          { $project: { 'users.isVerified': 1 } },
+        ],
+        as: 'communityUser',
+      },
+    },
+    { $unwind: { path: '$communityUser', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        'users.isAdmin': {
+          $eq: ['$users._id', new Types.ObjectId(adminId)],
+        },
+        'users.isVerified': '$communityUser.users.isVerified',
+      },
+    },
+    {
+      $sort: {
+        'users.isAdmin': -1,
+        'users.firstName': 1,
+      },
+    },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    {
+      $group: {
+        _id: '$_id',
+        users: { $push: '$users' },
+      },
+    },
+  ];
+}

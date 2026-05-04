@@ -3,6 +3,7 @@ import { validate } from '../../modules/validate';
 import { userIdAuth } from '../../modules/user';
 import { communityController, communityValidation, requireCommunityMember } from '../../modules/community';
 import { noErrorUserIdAuth } from '../../modules/user/user.middleware';
+import { requireSuperAdmin } from '../../modules/superAdmins';
 
 const router: Router = express.Router();
 
@@ -37,6 +38,15 @@ router
     validate(communityValidation.getFilteredUserCommunity),
     requireCommunityMember,
     communityController.getFilteredUserCommunity
+  );
+
+router
+  .route('/super-admin/filtered/:universityId')
+  .post(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityValidation.getFilteredSuperAdminCommunity),
+    communityController.getFilteredCommunityForSuperAdmin
   );
 
 router

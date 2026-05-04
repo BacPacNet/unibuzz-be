@@ -229,6 +229,8 @@ export interface UpdateCommunityGroupBody {
 export interface CreateCommunityGroupBody {
   communityGroupCategory?: Record<string, string[]>;
   selectedUsers?: SelectedUserItem[];
+  adminId?: string;
+  memberList?: string[];
   communityGroupType?: string;
   communityGroupLabel?: CommunityGroupLabel;
   title?: string;
