@@ -4,6 +4,16 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { RewardRedemptionStatus } from './rewardRedemption.interface';
 import { buildPaginationResponse, getPaginationSkip } from '../../utils/common';
+import User from '../user/user.model';
+import { UserProfile } from '../userProfile';
+import config from '../../config/config';
+import {
+  calculateRewardProgress,
+  getUtcMonthBoundaries,
+  parseAllowedCommunityIds,
+  RewardProgress,
+  startOfUtcMonthAfter,
+} from '../user/rewardProgress.helpers';
 
 /**
  * Normalize a date to the first day of that month in UTC.
@@ -68,6 +78,149 @@ export const upsertRewardRedemptionForMonth = async ({
   }
 
   return doc;
+};
+
+/**
+ * Upsert the referrer's reward redemption row for the current UTC month, using the same
+ * carry + eligible-referral rules as getRewardsDetails in user.service.
+ * Does not modify completed redemption rows for that month.
+ */
+export const syncReferrerRewardRedemptionForCurrentMonth = async (
+  referrerUserId: mongoose.Types.ObjectId | null | undefined,
+  referenceDate: Date = new Date()
+) => {
+  if (!referrerUserId) {
+    return null;
+  }
+
+  const referrerExists = await User.exists({ _id: referrerUserId });
+  if (!referrerExists) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  const allowedCommunityIds = parseAllowedCommunityIds(config.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY);
+  const { startOfThisMonth, startOfNextMonth, startOfPreviousMonth } = getUtcMonthBoundaries(referenceDate);
+
+  const baseFilter = {
+    referredBy: referrerUserId,
+    isDeleted: { $ne: true },
+  };
+
+  const getEligibleReferralCount = async (startDate: Date, endExclusive: Date): Promise<number> => {
+    if (!allowedCommunityIds.length) {
+      return 0;
+    }
+
+    const [result] = await User.aggregate<{ count: number }>([
+      {
+        $match: {
+          ...baseFilter,
+          createdAt: {
+            $gte: startDate,
+            $lt: endExclusive,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: UserProfile.collection.name,
+          localField: '_id',
+          foreignField: 'users_id',
+          as: 'profile',
+        },
+      },
+      { $unwind: '$profile' },
+      { $unwind: '$profile.email' },
+      {
+        $match: {
+          'profile.email.communityId': { $in: allowedCommunityIds },
+        },
+      },
+      {
+        $project: {
+          normalizedUniversityEmail: {
+            $toLower: {
+              $trim: {
+                input: { $ifNull: ['$profile.email.UniversityEmail', ''] },
+              },
+            },
+          },
+        },
+      },
+      { $match: { normalizedUniversityEmail: { $ne: '' } } },
+      { $group: { _id: '$normalizedUniversityEmail' } },
+      { $count: 'count' },
+    ]);
+    return result?.count ?? 0;
+  };
+
+  const [thisMonthNewReferrals, previousMonthRedemption, anchorBeforePreviousMonth] = await Promise.all([
+    getEligibleReferralCount(startOfThisMonth, startOfNextMonth),
+    getRewardRedemptionForMonth(referrerUserId, startOfPreviousMonth),
+    getLatestRewardRedemptionBeforeMonth(referrerUserId, startOfPreviousMonth),
+  ]);
+
+  let previousMonthComputedTotalInvites: number;
+  let previousMonthComputed: RewardProgress;
+
+  if (previousMonthRedemption) {
+    previousMonthComputedTotalInvites = previousMonthRedemption.totalInvites ?? 0;
+    previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+  } else {
+    const previousMonthCountStart = anchorBeforePreviousMonth
+      ? startOfUtcMonthAfter(anchorBeforePreviousMonth.rewardMonth as Date)
+      : new Date(0);
+    const previousMonthReferralsAfterAnchor = await getEligibleReferralCount(
+      previousMonthCountStart,
+      startOfThisMonth
+    );
+    const previousMonthCarryFromAnchor = anchorBeforePreviousMonth?.totalInvites ?? 0;
+    previousMonthComputedTotalInvites = previousMonthCarryFromAnchor + previousMonthReferralsAfterAnchor;
+    previousMonthComputed = calculateRewardProgress(previousMonthComputedTotalInvites);
+  }
+
+  if (!previousMonthRedemption) {
+    await upsertRewardRedemptionForMonth({
+      userId: referrerUserId,
+      rewardMonth: startOfPreviousMonth,
+      status: RewardRedemptionStatus.Processing,
+      amount: previousMonthComputed.reward || 0,
+      totalInvites: previousMonthComputedTotalInvites,
+      leftoverInvites: previousMonthComputed.leftoverInvites,
+    });
+  }
+
+  const carryIntoThisMonth = previousMonthComputed.leftoverInvites;
+  const thisMonthProgress = carryIntoThisMonth + thisMonthNewReferrals;
+  const thisMonthCalculated = calculateRewardProgress(thisMonthProgress);
+
+  const existingThisMonth = await getRewardRedemptionForMonth(referrerUserId, startOfThisMonth);
+
+  if (existingThisMonth?.status === RewardRedemptionStatus.Completed) {
+    return existingThisMonth;
+  }
+
+  const redemptionsBeforeThisMonth = await getRewardRedemptionsBeforeMonth(referrerUserId, startOfThisMonth);
+  const latestPreviousWithUpi = [...redemptionsBeforeThisMonth]
+    .filter((r) => r.upiId && String(r.upiId).trim().length > 0)
+    .sort(
+      (a, b) => new Date(b.rewardMonth as Date).getTime() - new Date(a.rewardMonth as Date).getTime()
+    )[0];
+  const inheritedUpi =
+    (existingThisMonth?.upiId && String(existingThisMonth.upiId).trim()) ||
+    (latestPreviousWithUpi?.upiId ? String(latestPreviousWithUpi.upiId).trim() : undefined);
+
+  const status = existingThisMonth?.status ?? RewardRedemptionStatus.Pending;
+
+  return upsertRewardRedemptionForMonth({
+    userId: referrerUserId,
+    rewardMonth: startOfThisMonth,
+    status,
+    amount: thisMonthCalculated.reward || 0,
+    totalInvites: thisMonthProgress,
+    leftoverInvites: thisMonthCalculated.leftoverInvites,
+    ...(inheritedUpi ? { upiId: inheritedUpi } : {}),
+  });
 };
 
 

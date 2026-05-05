@@ -15,6 +15,7 @@ import { ApiError } from '../errors';
 import { SuperAdminBulkRegisterItem } from '../user/user.interfaces';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
 import { NotificationIdentifier } from '../../amazon-sqs/NotificationIdentifierEnums';
+import { syncReferrerRewardRedemptionForCurrentMonth } from '../rewardRedemption/rewardRedemption.service';
 
 export const register_v2 = catchAsync(async (req: Request, res: Response) => {
   try {
@@ -67,6 +68,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
       }
     }
 
+        await syncReferrerRewardRedemptionForCurrentMonth(user.referredBy);
     res.status(httpStatus.CREATED).send({ message: 'Registered Successfully', isRegistered: true });
   } catch (error: any) {
     console.error('Registration failed:', error);
