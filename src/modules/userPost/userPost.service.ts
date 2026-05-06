@@ -456,13 +456,26 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
 
   const joinedCommunityIds = userProfile.communities.map((c) => toIdString(c.communityId as string | mongoose.Types.ObjectId));
 
+  const communityMemberUserIds = joinedCommunityIds.length
+    ? await UserProfile.distinct('users_id', {
+        'communities.communityId': { $in: joinedCommunityIds.map((id) => toObjectId(id)) },
+      })
+    : [];
+
+  const combinedFollowingUserIds = Array.from(
+    new Set([
+      ...followingUserIds,
+      ...communityMemberUserIds.map((id) => toIdString(id as string | mongoose.Types.ObjectId)),
+    ])
+  );
+
   const joinedGroupIds = userProfile.communities.flatMap((c) =>
     (c.communityGroups ?? [])
       .filter((g) => g.status === communityGroupStatus.accepted)
       .map((g) => toObjectId(typeof g.id === 'string' ? g.id : String(g.id)))
   );
 
-  const orQuery = buildTimelineRelationshipOrQuery(followingUserIds, joinedCommunityIds, joinedGroupIds);
+  const orQuery = buildTimelineRelationshipOrQuery(combinedFollowingUserIds, joinedCommunityIds, joinedGroupIds);
   if (!orQuery.length) {
     return getEmptyTimelineResult(page);
   }
