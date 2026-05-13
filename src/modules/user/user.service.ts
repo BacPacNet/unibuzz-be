@@ -279,13 +279,44 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
 
   if (Array.isArray(community?.users)) {
     community?.users?.forEach((communityUser) => {
-      const memberId = communityUser?._id ? String(communityUser._id) : null;
+      const normalizedCommunityUser = communityUser as { id?: mongoose.Types.ObjectId; _id?: mongoose.Types.ObjectId };
+      const memberId = normalizedCommunityUser?.id
+        ? String(normalizedCommunityUser.id)
+        : normalizedCommunityUser?._id
+          ? String(normalizedCommunityUser._id)
+          : null;
       if (!memberId) return;
       membershipMap.set(memberId, communityUser?.isVerified === true);
     });
   }
 
-  return users.map((user) => {
+  
+  const selectedUsersByUniqueId = new Map<string, (typeof users)[number]>();
+  const usersWithoutUniqueId: typeof users = [];
+
+  users.forEach((user) => {
+    if (typeof user.uniqueId !== 'string' || user.uniqueId.trim().length === 0) {
+      usersWithoutUniqueId.push(user);
+      return;
+    }
+
+    const existingUser = selectedUsersByUniqueId.get(user.uniqueId);
+    if (!existingUser) {
+      selectedUsersByUniqueId.set(user.uniqueId, user);
+      return;
+    }
+
+    const existingIsMember = membershipMap.has(String(existingUser._id));
+    const currentIsMember = membershipMap.has(String(user._id));
+
+    if (!existingIsMember && currentIsMember) {
+      selectedUsersByUniqueId.set(user.uniqueId, user);
+    }
+  });
+
+  const filteredUsers = [...selectedUsersByUniqueId.values(), ...usersWithoutUniqueId];
+
+  return filteredUsers.map((user) => {
     const memberId = String(user._id);
     const isCommunityMember = membershipMap.has(memberId);
     const isCommunityVerified = isCommunityMember ? membershipMap.get(memberId) === true : false;
