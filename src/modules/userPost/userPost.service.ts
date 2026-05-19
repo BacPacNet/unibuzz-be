@@ -7,6 +7,7 @@ import httpStatus from 'http-status';
 import UserPostModel from './userPost.model';
 import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
+import { getViewerProfileRole, maskPostProfilesForViewer } from '../userProfile/profileCommunities.util';
 import { status as communityGroupStatus } from '../communityGroup/communityGroup.interface';
 import { userPostType } from '../../config/community.type';
 import { notificationRoleAccess } from '../Notification/notification.interface';
@@ -117,7 +118,10 @@ function buildUserPostLookupStages(options: UserPostLookupStageOptions): Pipelin
 export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT, myUserId?: string) => {
   const skip = (page - 1) * limit;
 
-  const myBlockedUserIds = await getBlockedUserIds(myUserId);
+  const [myBlockedUserIds, viewerRole] = await Promise.all([
+    getBlockedUserIds(myUserId),
+    myUserId ? getViewerProfileRole(myUserId) : Promise.resolve(undefined),
+  ]);
 
   const userObjectId = toObjectId(userId);
   const pipeline: PipelineStage[] = [
@@ -133,7 +137,10 @@ export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAG
     getUserPostListProjectStage({ profileAs: ALIAS_USER_PROFILE }),
   ];
 
-  const userPosts = await UserPostModel.aggregate(pipeline).exec();
+  const userPosts = maskPostProfilesForViewer(
+    await UserPostModel.aggregate(pipeline).exec(),
+    viewerRole
+  );
 
   const totalPosts = await UserPostModel.countDocuments({ user_id: userId });
   return {
@@ -445,7 +452,7 @@ function getTimelineCommunityPostsPipeline(
  */
 export const getTimelinePostsFromRelationship = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT) => {
   const userProfile = await UserProfile.findOne({ users_id: userId })
-    .select('following communities blockedUsers')
+    .select('following communities blockedUsers role')
     .lean() as TimelineProfileLean | null;
   if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
@@ -497,7 +504,10 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
 
   const totalPosts = allPosts.length;
   const totalPages = Math.ceil(totalPosts / limit);
-  const paginatedPosts = allPosts.slice((page - 1) * limit, page * limit);
+  const paginatedPosts = maskPostProfilesForViewer(
+    allPosts.slice((page - 1) * limit, page * limit),
+    userProfile.role
+  );
 
   return {
     allPosts: paginatedPosts,

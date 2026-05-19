@@ -9,6 +9,10 @@ router
   .get(validate(universityValidation.getAllUniversity), universityController.getAllUniversity);
 
 router
+  .route('/partnered')
+  .get(universityController.getPartneredUniversities);
+
+router
   .route('/searched')
   .get(validate(universityValidation.searchUniversityByQuery), universityController.searchUniversityByQuery);
 

@@ -43,6 +43,8 @@ import {
   buildCommunityUsersServiceBaseStages,
   buildCommunityUsersServiceSearchStage,
 } from './community.pipeline';
+import { partneredUniService } from '../partneredUni';
+import { UserRole } from '../userProfile/userProfile.interface';
 
 export const createCommunity = async (
   name: string,
@@ -99,9 +101,43 @@ export const getCommunity = async (
         },
       },
     ]);
-    return community as communityInterface;
+    if (!community) {
+      return community as communityInterface;
+    }
+
+    return buildGetCommunityResponse(community, options.currentUserId);
   }
-  return await communityModel.findById(id).lean();
+  const community = await communityModel.findById(id).lean();
+  if (!community) {
+    return community;
+  }
+
+  return buildGetCommunityResponse(community);
+};
+
+const buildGetCommunityResponse = async (
+  community: communityInterface,
+  currentUserId?: string
+) => {
+  const isAllowedToJoin = await partneredUniService.isPartneredUniversity(community.university_id);
+  const response: communityInterface & { isAllowedToJoin: boolean; isUserAllowedToLeave?: boolean } = {
+    ...community,
+    isAllowedToJoin,
+  };
+
+  if (currentUserId) {
+    const userProfile = await userProfileService.getUserProfile(currentUserId);
+    if (userProfile?.role == UserRole.APPLICANT) {
+      response.isUserAllowedToLeave = true;
+    }
+    else{
+      response.isUserAllowedToLeave = false;
+    }
+  }else{
+    response.isUserAllowedToLeave = false;
+  }
+
+  return response;
 };
 
 export const getCommunityIdByUniversityId = async (universityId: string): Promise<string> => {

@@ -37,6 +37,12 @@ export const getAllUniversity = catchAsync(async (req: Request, res: Response) =
   return res.status(httpStatus.OK).json(allUniversity);
 });
 
+
+export const getPartneredUniversities = catchAsync(async (_: Request, res: Response) => {
+  const partneredUniversities = await universityService.getPartneredUniversities();
+  return res.status(httpStatus.OK).json(partneredUniversities);
+});
+
 // get one university
 export const getUniversityById = catchAsync(async (req: Request, res: Response) => {
   const { university_name } = req.params;

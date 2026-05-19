@@ -4,11 +4,23 @@ import { UniversityFilter } from './university.interface';
 import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
 import communityModel from '../community/community.model';
 import communityGroupModel from '../communityGroup/communityGroup.model';
+import { partneredUniService } from '../partneredUni';
 
 
 
 export const getUniversityById = async (university_name: string) => {
-  return await universityModal.findOne({ name: university_name });
+  const university = await universityModal.findOne({ name: university_name });
+
+  if (!university) {
+    return university;
+  }
+
+  const isAllowedToJoin = await partneredUniService.isPartneredUniversity(university._id);
+
+  return {
+    ...university.toObject(),
+    isAllowedToJoin,
+  };
 };
 
 export const getUniversityDashboardStats = async (university_name: string) => {
@@ -211,6 +223,14 @@ export const getAllUniversity = async (
   };
 };
 
+export const getPartneredUniversities = async () => {
+  const partneredUniversityIds = await partneredUniService.getPartneredUniversityIds();
+  const partneredUniversities =
+    partneredUniversityIds.length > 0
+      ? await universityModal.find({ _id: { $in: partneredUniversityIds } }).lean()
+      : [];
+  return partneredUniversities;
+};
 
 
 
