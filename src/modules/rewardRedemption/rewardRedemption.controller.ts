@@ -8,13 +8,6 @@ import { userIdExtend } from '../../config/userIDType';
 import * as rewardRedemptionService from './rewardRedemption.service';
 import { RewardRedemptionStatus } from './rewardRedemption.interface';
 
-
-
-
-
-
-
-
 export const getPreviousMonthRedemptionStatus = catchAsync(
   async (req: userIdExtend, res: Response): Promise<void> => {
     const userId = parseUserIdOrThrow(req.userId);

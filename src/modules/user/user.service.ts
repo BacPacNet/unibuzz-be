@@ -31,6 +31,13 @@ import { RewardRedemptionStatus } from '../rewardRedemption/rewardRedemption.int
 import { universityVerificationEmailModal } from '../universityVerificationEmail';
 import { UniversityVerificationEmailStatus } from '../universityVerificationEmail/universityVerificationEmail.interface';
 import communityModel from '../community/community.model';
+import {
+  calculateRewardProgress,
+  getUtcMonthBoundaries,
+  parseAllowedCommunityIds,
+  RewardProgress,
+  startOfUtcMonthAfter,
+} from './rewardProgress.helpers';
 
 /** Centralized user-related error messages and status for consistency */
 const USER_ERROR_MESSAGES = {
@@ -272,13 +279,44 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
 
   if (Array.isArray(community?.users)) {
     community?.users?.forEach((communityUser) => {
-      const memberId = communityUser?._id ? String(communityUser._id) : null;
+      const normalizedCommunityUser = communityUser as { id?: mongoose.Types.ObjectId; _id?: mongoose.Types.ObjectId };
+      const memberId = normalizedCommunityUser?.id
+        ? String(normalizedCommunityUser.id)
+        : normalizedCommunityUser?._id
+          ? String(normalizedCommunityUser._id)
+          : null;
       if (!memberId) return;
       membershipMap.set(memberId, communityUser?.isVerified === true);
     });
   }
 
-  return users.map((user) => {
+  
+  const selectedUsersByUniqueId = new Map<string, (typeof users)[number]>();
+  const usersWithoutUniqueId: typeof users = [];
+
+  users.forEach((user) => {
+    if (typeof user.uniqueId !== 'string' || user.uniqueId.trim().length === 0) {
+      usersWithoutUniqueId.push(user);
+      return;
+    }
+
+    const existingUser = selectedUsersByUniqueId.get(user.uniqueId);
+    if (!existingUser) {
+      selectedUsersByUniqueId.set(user.uniqueId, user);
+      return;
+    }
+
+    const existingIsMember = membershipMap.has(String(existingUser._id));
+    const currentIsMember = membershipMap.has(String(user._id));
+
+    if (!existingIsMember && currentIsMember) {
+      selectedUsersByUniqueId.set(user.uniqueId, user);
+    }
+  });
+
+  const filteredUsers = [...selectedUsersByUniqueId.values(), ...usersWithoutUniqueId];
+
+  return filteredUsers.map((user) => {
     const memberId = String(user._id);
     const isCommunityMember = membershipMap.has(memberId);
     const isCommunityVerified = isCommunityMember ? membershipMap.get(memberId) === true : false;
@@ -620,53 +658,6 @@ export const softDeleteUserById = async (userId: mongoose.Types.ObjectId, passwo
 
 
 
-type RewardProgress = {
-  reward: number;
-  leftoverInvites: number;
-  rewardedInvites: number;
-};
-
-function startOfUtcMonthAfter(rewardMonth: Date): Date {
-  return new Date(Date.UTC(rewardMonth.getUTCFullYear(), rewardMonth.getUTCMonth() + 1, 1));
-}
-
-function calculateRewardProgress(totalInvites: number): RewardProgress {
-  if (totalInvites < 10) {
-    return {
-      reward: 0,
-      leftoverInvites: totalInvites,
-      rewardedInvites: 0,
-    };
-  }
-
-  if (totalInvites < 15) {
-    return {
-      reward: 100,
-      leftoverInvites: totalInvites - 10,
-      rewardedInvites: 10,
-    };
-  }
-
-  if (totalInvites < 20) {
-    return {
-      reward: 200,
-      leftoverInvites: totalInvites - 15,
-      rewardedInvites: 15,
-    };
-  }
-
-  const extraInvites = totalInvites - 20;
-  const extraBlocks = Math.floor(extraInvites / 5);
-  const rewardedInvites = 20 + extraBlocks * 5;
-
-  return {
-    reward: 400 + extraBlocks * 100,
-    leftoverInvites: totalInvites - rewardedInvites,
-    rewardedInvites,
-  };
-}
-
-
 /**
  * Get all users referred by a specific user with populated referral details
  * @param {mongoose.Types.ObjectId} userId
@@ -690,36 +681,6 @@ export const getRewardsDetails = async (
   previousMonthRedeemed: boolean;
   currentUPI: string | null;
 }> => {
-  const parseAllowedCommunityIds = (rawValue: string | undefined): string[] => {
-    if (!rawValue) return [];
-
-    try {
-      const parsed = JSON.parse(rawValue);
-      if (Array.isArray(parsed)) {
-        return parsed.map(String).filter(Boolean);
-      }
-    } catch (_err) {
-      // Fallback to comma-separated values when env is not JSON.
-    }
-
-    return rawValue
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-  };
-
-  const getUtcMonthBoundaries = (baseDate: Date) => {
-    const startOfThisMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), 1));
-    const startOfNextMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth() + 1, 1));
-    const startOfPreviousMonth = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth() - 1, 1));
-
-    return {
-      startOfThisMonth,
-      startOfNextMonth,
-      startOfPreviousMonth,
-    };
-  };
-
   const user = await getUserByIdOrThrow(userId);
   const allowedCommunityIds = parseAllowedCommunityIds(config.ALLOWED_COMMUNITY_IDS_FOR_REWARD_ELIGIBILITY);
   const { startOfThisMonth, startOfNextMonth, startOfPreviousMonth } = getUtcMonthBoundaries(new Date());
