@@ -13,6 +13,10 @@ const partneredUniSchema = new Schema<IPartneredUni>(
       ref: 'community',
       required: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );

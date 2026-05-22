@@ -434,15 +434,15 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
   try {
     let community = await communityModel.findOne({ university_id: universityId });
     let userProfile = await userProfileService.getUserProfileById(userId);
-    let numberOfUnverifiedJoinCommunity =
-      userProfile?.communities?.reduce((acc, c) => (c?.isVerified === false ? acc + 1 : acc), 0) || 0;
+    // let numberOfUnverifiedJoinCommunity =
+    //   userProfile?.communities?.reduce((acc, c) => (c?.isVerified === false ? acc + 1 : acc), 0) || 0;
 
     let isCommunityVerified = userProfile?.email.some(
       (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
     );
-    if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
-      throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
-    }
+    // if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
+    //   throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
+    // }
     if (!community) {
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
 
