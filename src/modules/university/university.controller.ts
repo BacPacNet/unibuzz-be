@@ -68,3 +68,19 @@ export const verifyUniversityEmail = catchAsync(async (req: userIdExtend, res: R
   const result = await universityService.searchUniversityByQuery(String(searchTerm), Number(page), Number(limit));
   return res.status(httpStatus.OK).json({ result });
 });
+
+export const setSemesterStart = catchAsync(async (req: Request, res: Response) => {
+  const { university_name } = req.params;
+  const { day, month } = req.body;
+
+  const university = await universityService.setSemesterStart(decodeURIComponent(university_name as string), {
+    day,
+    month,
+  });
+
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  return res.status(httpStatus.OK).json(university);
+});

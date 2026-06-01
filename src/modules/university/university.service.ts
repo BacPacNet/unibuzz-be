@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import universityModal from './university.model';
-import { UniversityFilter } from './university.interface';
+import { ISemesterStart, UniversityFilter } from './university.interface';
 import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
 import communityModel from '../community/community.model';
 import communityGroupModel from '../communityGroup/communityGroup.model';
@@ -158,11 +158,18 @@ export const getUniversityDashboardStats = async (university_name: string) => {
     totalGroups,
     totalOfficialGroups,
     totalCasualGroups,
+    semesterStart: university.semesterStart || null,
   };
 };
 
 export const getUniversityByRealId = async (id: string) => {
   return await universityModal.findById(new mongoose.Types.ObjectId(id));
+};
+
+export const setSemesterStart = async (university_name: string, semesterStart: ISemesterStart) => {
+  return universityModal
+    .findOneAndUpdate({ name: university_name }, { $set: { semesterStart } }, { new: true })
+    .lean();
 };
 
 

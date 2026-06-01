@@ -1,5 +1,9 @@
 import { Document } from 'mongoose';
 
+interface ISemesterStart {
+  day: number;
+  month: number;
+}
 
 interface IUniversity extends Document {
   _id: string;
@@ -37,6 +41,7 @@ interface IUniversity extends Document {
   type: string;
   web_pages: string[];
   communityId?: string;
+  semesterStart: ISemesterStart;
 }
 
 // Interface for WikiInfoBox
@@ -107,4 +112,4 @@ interface College extends Document {
 type UniversityPayload = Partial<IUniversity>;
 type UniversityFilter = Record<string, unknown>;
 
-export { College, SearchParamsType, UniversityPayload, UniversityFilter, IUniversity };
+export { College, ISemesterStart, SearchParamsType, UniversityPayload, UniversityFilter, IUniversity };
