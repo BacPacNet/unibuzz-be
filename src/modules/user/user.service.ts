@@ -11,6 +11,7 @@ import {
   IUserQueryFilter,
 } from './user.interfaces';
 import { UserProfile } from '../userProfile';
+import { UserRole } from '../userProfile/userProfile.interface';
 import { chatModel } from '../chat';
 import {
   getProfileByIdPipeline,
@@ -381,16 +382,18 @@ const updateUserAfterValidation = async (
 };
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
-  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1, role: 1 }).lean();
   const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
   const myBlockedUserIds =
     myProfile?.blockedUsers?.map((b) => convertToObjectId(b.userId.toString())) || [];
+  const viewerIsApplicant = myProfile?.role === UserRole.APPLICANT;
 
   const pipeline = getProfileByIdPipeline({
     id,
     myUserId,
     myBlockedUserIds,
     myUserObjectId,
+    viewerIsApplicant,
   });
 
   const [userProfile] = await User.aggregate(pipeline);

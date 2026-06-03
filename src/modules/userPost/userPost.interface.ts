@@ -35,6 +35,7 @@ interface TimelineProfileLean {
   following: FollowingOrFollowerRef[];
   communities: UserCommunities[];
   blockedUsers?: BlockedUserRef[];
+  role?: string;
 }
 
 interface PostRelationshipLean {

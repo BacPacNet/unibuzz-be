@@ -13,6 +13,11 @@ import {
 } from './userPostComments.pipeline';
 import { CreateCommentBody, UpdateCommentBody, PopulatedReplyWithReplies, CreateUserPostCommentResult, CommentReplyResult } from './userPostComments.interface';
 import { getPaginationSkip, computeTotalPages } from '../../utils/common';
+import {
+  getViewerProfileRole,
+  maskCommentProfileForViewer,
+  maskCommentsForViewer,
+} from '../userProfile/profileCommunities.util';
 const DEFAULT_COMMENTS_PAGE_SIZE = 2;
 const MAX_REPLY_DEPTH = 3;
 const DEFAULT_COMMENTS_SORT_ORDER: 'asc' | 'desc' = 'desc';
@@ -36,14 +41,19 @@ const COMMENTER_PROFILE_SELECT =
 /** Run aggregation to get a single comment by id with enrichment. Returns first result or undefined. */
 async function getEnrichedCommentById(
   commentId: string | mongoose.Types.ObjectId,
-  options: CommentEnrichmentOptions
+  options: CommentEnrichmentOptions,
+  viewerUserId?: string
 ) {
   const id = typeof commentId === 'string' ? new mongoose.Types.ObjectId(commentId) : commentId;
-  const result = await userPostCommentsModel.aggregate([
-    { $match: { _id: id } },
-    ...getCommentEnrichmentStages(options),
+  const [result, viewerRole] = await Promise.all([
+    userPostCommentsModel.aggregate([
+      { $match: { _id: id } },
+      ...getCommentEnrichmentStages(options),
+    ]),
+    viewerUserId ? getViewerProfileRole(viewerUserId) : Promise.resolve(undefined),
   ]);
-  return result[0];
+  const comment = result[0];
+  return comment ? maskCommentProfileForViewer(comment, viewerRole) : undefined;
 }
 
 export const createUserPostComment = async (
@@ -60,11 +70,15 @@ export const createUserPostComment = async (
 
   const createdComment = await userPostCommentsModel.create(payload);
 
-  const comment = await getEnrichedCommentById(createdComment._id, {
-    includeUserPost: true,
-    commentWithUserPostProject: true,
-    repliesStage: getRepliesLookupStage(),
-  });
+  const comment = await getEnrichedCommentById(
+    createdComment._id,
+    {
+      includeUserPost: true,
+      commentWithUserPostProject: true,
+      repliesStage: getRepliesLookupStage(),
+    },
+    userId
+  );
 
   return comment as CreateUserPostCommentResult | undefined;
 };
@@ -124,10 +138,14 @@ export const commentReply = async (
 
   await userPostCommentsModel.findByIdAndUpdate(commentId, { $push: { replies: savedReply._id } }, { new: true });
 
-  const parentComment = await getEnrichedCommentById(commentId, {
-    includeUserPost: true,
-    repliesStage: getRepliesLookupStage(),
-  });
+  const parentComment = await getEnrichedCommentById(
+    commentId,
+    {
+      includeUserPost: true,
+      repliesStage: getRepliesLookupStage(),
+    },
+    userId
+  );
 
   return parentComment as CommentReplyResult | undefined;
 };
@@ -141,7 +159,10 @@ export const getUserPostComments = async (
 ) => {
   const skip = getPaginationSkip(page, limit);
   const mainSortOrder = sortOrder === 'asc' ? SORT_ASC : SORT_DESC;
-  const myBlockedUserIds = await getMyBlockedUserIds(myUserId);
+  const [myBlockedUserIds, viewerRole] = await Promise.all([
+    getMyBlockedUserIds(myUserId),
+    getViewerProfileRole(myUserId),
+  ]);
   const blockedUserFilterStages = getBlockedUserFilterStages(myUserId, myBlockedUserIds);
   const replyFilterStagesAfterCommenter = MATCH_COMMENTER_NOT_DELETED_STAGES;
 
@@ -173,7 +194,7 @@ export const getUserPostComments = async (
     const totalPages = computeTotalPages(totalTopLevelComments, limit);
 
   return {
-    finalComments: comments,
+    finalComments: maskCommentsForViewer(comments, viewerRole),
     currentPage: page,
     totalPages,
     totalComments,
@@ -266,16 +287,20 @@ export const getSingleCommentByCommentId = async (commentId: string, myUserId: s
   const myBlockedUserIds = await getMyBlockedUserIds(myUserId);
   const blockedUserFilterStages = getBlockedUserFilterStages(myUserId, myBlockedUserIds);
 
-  const comment = await getEnrichedCommentById(commentId, {
-    matchAfterCommenter: MATCH_COMMENTER_NOT_DELETED_STAGES,
-    matchAfterProfile: blockedUserFilterStages,
-    includeUserPost: true,
-    commentWithUserPostProject: false,
-    repliesStage: getRepliesLookupStage(
-      MATCH_COMMENTER_NOT_DELETED_STAGES,
-      blockedUserFilterStages
-    ),
-  });
+  const comment = await getEnrichedCommentById(
+    commentId,
+    {
+      matchAfterCommenter: MATCH_COMMENTER_NOT_DELETED_STAGES,
+      matchAfterProfile: blockedUserFilterStages,
+      includeUserPost: true,
+      commentWithUserPostProject: false,
+      repliesStage: getRepliesLookupStage(
+        MATCH_COMMENTER_NOT_DELETED_STAGES,
+        blockedUserFilterStages
+      ),
+    },
+    myUserId
+  );
 
   return comment ?? null;
 };

@@ -10,6 +10,7 @@ import {
 } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
 import { BlockedUserEntry, FollowingEntry } from '../userProfile/userProfile.interface';
+import { getViewerProfileRole, maskPostProfilesForViewer } from '../userProfile/profileCommunities.util';
 import { communityGroupModel } from '../communityGroup';
 import { CommunityGroupTitleAdmin, NotificationWithPopulatedCommunityGroup, UserProfileBlockedUsers } from './communityPosts.interface';
 import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
@@ -241,19 +242,25 @@ export const getCommunityPostsByCommunityId = async (
 ) => {
   try {
     const communityObjectId = convertToObjectId(communityId);
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
-
-    const finalPost = await communityPostsModel.aggregate([
-      { $match: { communityId: communityObjectId, communityGroupId: null } },
-      { $sort: { createdAt: -1 } },
-      { $skip: getPaginationSkip(page, limit) },
-      { $limit: limit },
-      ...buildUserLookupStages(),
-      ...buildUserProfileLookupStages(true),
-      ...buildCommunitiesEnrichmentStages('userProfile'),
-      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
-      buildPostListProjectStage(),
+    const [myBlockedUserIds, viewerRole] = await Promise.all([
+      getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      getViewerProfileRole(userId),
     ]);
+
+    const finalPost = maskPostProfilesForViewer(
+      await communityPostsModel.aggregate([
+        { $match: { communityId: communityObjectId, communityGroupId: null } },
+        { $sort: { createdAt: -1 } },
+        { $skip: getPaginationSkip(page, limit) },
+        { $limit: limit },
+        ...buildUserLookupStages(),
+        ...buildUserProfileLookupStages(true),
+        ...buildCommunitiesEnrichmentStages('userProfile'),
+        ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+        buildPostListProjectStage(),
+      ]),
+      viewerRole
+    );
 
     const total = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
@@ -284,31 +291,37 @@ export const getCommunityGroupPostsByCommunityId = async (
     const communityObjectId = convertToObjectId(communityId);
     const communityGroupObjectId = convertToObjectId(communityGroupId);
     const userObjectId = convertToObjectId(userId);
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId);
-
-    const finalPost = await communityPostsModel.aggregate([
-      buildGroupPostsMatchStage({
-        communityObjectId,
-        communityGroupObjectId,
-        filterPostBy,
-        isAdminOfCommunityGroup,
-        userObjectId,
-      }),
-      { $sort: { createdAt: -1 } },
-      { $skip: getPaginationSkip(page, limit) },
-      { $limit: limit },
-      ...buildUserLookupStages({ matchUserNotDeleted: true }),
-      ...buildUserProfileLookupStages(true),
-      ...buildCommunitiesEnrichmentStages('userProfile'),
-      {
-        $match: {
-          'userProfile.blockedUsers.userId': { $ne: convertToObjectId(userId) },
-        },
-      },
-      { $match: { 'user._id': { $nin: myBlockedUserIds } } },
-      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
-      buildPostListProjectStage({ includeIsPostLive: true, includePostStatus: true }),
+    const [myBlockedUserIds, viewerRole] = await Promise.all([
+      getBlockedUserIdsForUser(userId),
+      getViewerProfileRole(userId),
     ]);
+
+    const finalPost = maskPostProfilesForViewer(
+      await communityPostsModel.aggregate([
+        buildGroupPostsMatchStage({
+          communityObjectId,
+          communityGroupObjectId,
+          filterPostBy,
+          isAdminOfCommunityGroup,
+          userObjectId,
+        }),
+        { $sort: { createdAt: -1 } },
+        { $skip: getPaginationSkip(page, limit) },
+        { $limit: limit },
+        ...buildUserLookupStages({ matchUserNotDeleted: true }),
+        ...buildUserProfileLookupStages(true),
+        ...buildCommunitiesEnrichmentStages('userProfile'),
+        {
+          $match: {
+            'userProfile.blockedUsers.userId': { $ne: convertToObjectId(userId) },
+          },
+        },
+        { $match: { 'user._id': { $nin: myBlockedUserIds } } },
+        ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+        buildPostListProjectStage({ includeIsPostLive: true, includePostStatus: true }),
+      ]),
+      viewerRole
+    );
 
     const total = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
@@ -344,7 +357,10 @@ export const getAllCommunityPost = async (
   userId: string = ''
 ) => {
   try {
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
+    const [myBlockedUserIds, viewerRole] = await Promise.all([
+      getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      getViewerProfileRole(userId),
+    ]);
     const FollowingIds = FollowinguserIds.map((id: mongoose.Types.ObjectId) => convertToObjectId(id.toString()));
 
     const matchConditions: mongoose.FilterQuery<communityPostsInterface>[] = [];
@@ -385,7 +401,7 @@ export const getAllCommunityPost = async (
     const totalPages = computeTotalPages(totalPost, limit);
     const skip = getPaginationSkip(page, limit);
 
-    const finalPost =
+    const finalPost = maskPostProfilesForViewer(
       (await communityPostsModel.aggregate([
         { $match: matchStage },
         { $sort: { createdAt: -1 } },
@@ -417,7 +433,9 @@ export const getAllCommunityPost = async (
           blockedMatchWithOrNull: true,
         }),
         buildPostListProjectStage(),
-      ]).exec()) || [];
+      ]).exec()) || [],
+      viewerRole
+    );
 
     return {
       finalPost,
@@ -433,8 +451,9 @@ export const getAllCommunityPost = async (
 export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
     const userProfile = (await UserProfile.findOne({ users_id: myUserId })
-      .select('following communities blockedUsers')
+      .select('following communities blockedUsers role')
       .lean()) as UserProfileBlockedUsers & {
+      role?: string;
       following?: FollowingEntry[];
       communities?: mongoose.Types.ObjectId[];
     };
@@ -475,7 +494,8 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
       isCommunityGroupMember,
     });
 
-    return await communityPostsModel.aggregate(pipeline);
+    const posts = await communityPostsModel.aggregate(pipeline);
+    return maskPostProfilesForViewer(posts, userProfile?.role);
   } catch (error: unknown) {
     console.error('Error fetching user posts:', error);
     throwApiError(error);

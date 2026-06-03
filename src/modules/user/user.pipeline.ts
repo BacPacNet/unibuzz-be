@@ -167,8 +167,49 @@ export function getProfileCommunitiesLookupStage(): PipelineStage {
  * populated community fields (name, logo, isVerifiedMember, isCommunityAdmin).
  * Depends on profile.communitiesData from getProfileCommunitiesLookupStage.
  * Uses root document _id for isVerifiedMember check.
+ * When viewerIsApplicant is false, isVerifiedMember and isCommunityAdmin are always false.
  */
-export function getProfileCommunitiesAddFieldsStage(): PipelineStage {
+export function getProfileCommunitiesAddFieldsStage(viewerIsApplicant: boolean): PipelineStage {
+  const verifiedMemberExpr = viewerIsApplicant
+    ? {
+        $cond: [
+          {
+            $gt: [
+              {
+                $size: {
+                  $filter: {
+                    input: { $ifNull: ['$$populated.users', []] },
+                    as: 'usr',
+                    cond: {
+                      $and: [
+                        { $eq: ['$$usr._id', '$_id'] },
+                        { $eq: ['$$usr.isVerified', true] },
+                      ],
+                    },
+                  },
+                },
+              },
+              0,
+            ],
+          },
+          true,
+          false,
+        ],
+      }
+    : false;
+
+  const communityAdminExpr = viewerIsApplicant
+    ? {
+        $cond: [
+          {
+            $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
+          },
+          true,
+          false,
+        ],
+      }
+    : false;
+
   return {
     $addFields: {
       'profile.communities': {
@@ -195,40 +236,8 @@ export function getProfileCommunitiesAddFieldsStage(): PipelineStage {
                 _id: '$$populated._id',
                 name: '$$populated.name',
                 logo: '$$populated.communityLogoUrl.imageUrl',
-                isVerifiedMember: {
-                  $cond: [
-                    {
-                      $gt: [
-                        {
-                          $size: {
-                            $filter: {
-                              input: { $ifNull: ['$$populated.users', []] },
-                              as: 'usr',
-                              cond: {
-                                $and: [
-                                  { $eq: ['$$usr._id', '$_id'] },
-                                  { $eq: ['$$usr.isVerified', true] },
-                                ],
-                              },
-                            },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                    true,
-                    false,
-                  ],
-                },
-                isCommunityAdmin: {
-                  $cond: [
-                    {
-                      $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
-                    },
-                    true,
-                    false,
-                  ],
-                },
+                isVerifiedMember: verifiedMemberExpr,
+                isCommunityAdmin: communityAdminExpr,
               },
             },
           },
@@ -258,6 +267,7 @@ export interface GetProfileByIdPipelineOptions {
   myUserId: string;
   myBlockedUserIds: mongoose.Types.ObjectId[];
   myUserObjectId: mongoose.Types.ObjectId;
+  viewerIsApplicant: boolean;
 }
 
 /** Initial $match stages: by id and exclude viewer's blocked users. */
@@ -373,7 +383,7 @@ function getProfileByIdFinalProjectStage(): PipelineStage {
  * Use with User.aggregate(getProfileByIdPipeline(options)).
  */
 export function getProfileByIdPipeline(options: GetProfileByIdPipelineOptions): PipelineStage[] {
-  const { id, myUserId, myBlockedUserIds, myUserObjectId } = options;
+  const { id, myUserId, myBlockedUserIds, myUserObjectId, viewerIsApplicant } = options;
 
   return [
     ...getProfileByIdInitialMatchStages(id, myBlockedUserIds),
@@ -382,7 +392,7 @@ export function getProfileByIdPipeline(options: GetProfileByIdPipelineOptions): 
     getProfileFollowListsFilterStage({ myBlockedUserIds, myUserObjectId }),
     getProfileFollowListsProjectStage(),
     getProfileCommunitiesLookupStage(),
-    getProfileCommunitiesAddFieldsStage(),
+    getProfileCommunitiesAddFieldsStage(viewerIsApplicant),
     getProfileCommunitiesProjectStage(),
     ...getProfileByIdPostFilterStages(myUserId),
     getProfileByIdCommunityDetailsLookupStage(),

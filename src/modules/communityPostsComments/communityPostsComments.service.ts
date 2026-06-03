@@ -22,6 +22,11 @@ import {
   PopulatedRepliesResult,
 } from './communityPostsComments.interface';
 import { BlockedUserEntry } from '../userProfile/userProfile.interface';
+import {
+  getViewerProfileRole,
+  maskCommentProfileForViewer,
+  maskCommentsForViewer,
+} from '../userProfile/profileCommunities.util';
 
 const TOP_LEVEL = 0;
 const DEFAULT_COMMENTS_LIMIT = 2;
@@ -128,27 +133,30 @@ export const createCommunityComment = async (userID: string, communityPostId: st
     communitiesOptions: { useEmailForVerifiedMember: true, currentUserId: userID },
   });
 
-  const [result] = await communityPostCommentModel.aggregate([
-    { $match: { _id: convertToObjectId(comment._id.toString()) } },
-    ...createCommentEnrichment,
-    buildCommentResponseProjectStage(),
-    {
-      $lookup: {
-        from: COLLECTION_COMMENT_POSTS,
-        localField: 'replies',
-        foreignField: '_id',
-        as: 'replies',
-        // Mongoose $lookup.pipeline typings are stricter than PipelineStage[]; cast needed
-        pipeline: [
-          { $sort: { createdAt: -1 } },
-          ...repliesEnrichment,
-          buildCommentResponseProjectStage(),
-        ] as PipelineStage[] as any,
+  const [[result], viewerRole] = await Promise.all([
+    communityPostCommentModel.aggregate([
+      { $match: { _id: convertToObjectId(comment._id.toString()) } },
+      ...createCommentEnrichment,
+      buildCommentResponseProjectStage(),
+      {
+        $lookup: {
+          from: COLLECTION_COMMENT_POSTS,
+          localField: 'replies',
+          foreignField: '_id',
+          as: 'replies',
+          // Mongoose $lookup.pipeline typings are stricter than PipelineStage[]; cast needed
+          pipeline: [
+            { $sort: { createdAt: -1 } },
+            ...repliesEnrichment,
+            buildCommentResponseProjectStage(),
+          ] as PipelineStage[] as any,
+        },
       },
-    },
+    ]),
+    getViewerProfileRole(userID),
   ]);
 
-  return result || null;
+  return result ? maskCommentProfileForViewer(result, viewerRole) : null;
 };
 
 export const updateCommunityPostComment = async (id: mongoose.Types.ObjectId, comment: UpdateCommentPayload) => {
@@ -204,11 +212,12 @@ export const getCommunityPostComments = async (
   const skip = (page - 1) * limit;
   const mainSortOrder = sortOrder === 'asc' ? 1 : -1;
 
-  const myProfile = await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers').lean();
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers role').lean();
 
   const myBlockedUserIds = (myProfile?.blockedUsers || []).map((b: BlockedUserEntry) =>
     convertToObjectId(b.userId.toString())
   );
+  const viewerRole = myProfile?.role;
 
   const listCommentBaseEnrichment = [
     ...buildCommenterLookupStages({ matchNotDeleted: true }),
@@ -299,7 +308,7 @@ export const getCommunityPostComments = async (
   const totalPages = Math.ceil(totalTopLevelComments / limit);
 
   return {
-    finalComments: comments,
+    finalComments: maskCommentsForViewer(comments, viewerRole),
     currentPage: page,
     totalPages,
     totalComments,
@@ -447,32 +456,36 @@ export const commentReply = async (commentId: string, userID: string, body: Comm
     buildCommentResponseProjectStage(),
   ];
 
-  const [aggregatedParent] = await communityPostCommentModel.aggregate([
-    { $match: { _id: convertToObjectId(commentId) } },
-    ...replyEnrichmentWithProject,
-    {
-      $lookup: {
-        from: COLLECTION_COMMENT_POSTS,
-        localField: 'replies',
-        foreignField: '_id',
-        as: 'replies',
-        // Mongoose $lookup.pipeline typings are stricter than PipelineStage[]; cast needed
-        pipeline: repliesPipeline as PipelineStage[] as any,
+  const [[aggregatedParent], viewerRole] = await Promise.all([
+    communityPostCommentModel.aggregate([
+      { $match: { _id: convertToObjectId(commentId) } },
+      ...replyEnrichmentWithProject,
+      {
+        $lookup: {
+          from: COLLECTION_COMMENT_POSTS,
+          localField: 'replies',
+          foreignField: '_id',
+          as: 'replies',
+          // Mongoose $lookup.pipeline typings are stricter than PipelineStage[]; cast needed
+          pipeline: repliesPipeline as PipelineStage[] as any,
+        },
       },
-    },
+    ]),
+    getViewerProfileRole(userID),
   ]);
 
-  return aggregatedParent || null;
+  return aggregatedParent ? maskCommentProfileForViewer(aggregatedParent, viewerRole) : null;
 };
 
 export const getSingleCommunityCommentByCommentId = async (commentId: string, myUserId: string = '') => {
   const myUserObjectId = myUserId ? convertToObjectId(myUserId) : null;
 
-  const myBlockedUserIds = myUserId
-    ? (await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers').lean())?.blockedUsers?.map(
-        (b: BlockedUserEntry) => convertToObjectId(b.userId.toString())
-      ) || []
-    : [];
+  const myProfile = myUserId
+    ? await UserProfile.findOne({ users_id: myUserId }).select('blockedUsers role').lean()
+    : null;
+  const myBlockedUserIds =
+    myProfile?.blockedUsers?.map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString())) || [];
+  const viewerRole = myProfile?.role;
 
   const singleCommentEnrichment = [
     ...buildCommenterLookupStages({ matchNotDeleted: true }),
@@ -516,5 +529,6 @@ export const getSingleCommunityCommentByCommentId = async (commentId: string, my
     },
   ]);
 
-  return result[0] || null;
+  const comment = result[0];
+  return comment ? maskCommentProfileForViewer(comment, viewerRole) : null;
 };
