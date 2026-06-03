@@ -30,3 +30,13 @@ export const getUniversityDashboardStats = {
     university_name: Joi.string().trim().required(),
   }),
 };
+
+export const setSemesterStart = {
+  params: Joi.object().keys({
+    university_name: Joi.string().trim().required(),
+  }),
+  body: Joi.object().keys({
+    day: Joi.number().integer().min(1).max(31).required(),
+    month: Joi.number().integer().min(1).max(12).required(),
+  }),
+};

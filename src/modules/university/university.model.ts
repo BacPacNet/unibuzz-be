@@ -22,6 +22,10 @@ const UniversitySchema = new Schema(
     state_province: { type: String, default: null },
     web_pages: { type: [String], required: true },
     communityId: { type: String, required: false },
+    semesterStart: {
+      day: { type: Number, required: false },
+      month: { type: Number, required: false },
+    },
   },
   { timestamps: true }
 );
