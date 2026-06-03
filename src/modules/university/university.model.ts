@@ -1,9 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { IUniversity } from './university.interface';
 
-
-
-
 const UniversitySchema = new Schema(
   {
     name: { type: String, required: true },

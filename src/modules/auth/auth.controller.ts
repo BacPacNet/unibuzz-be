@@ -22,19 +22,7 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     const {
       birthDate,
       country,
-      universityEmail,
-      universityName,
-      universityId,
-      year,
-      degree,
-      major,
-      occupation,
-      department,
-      userType,
-      isJoinUniversity,
-      isUniversityVerified,
-      universityLogo,
-      isEmailVerified,
+      selectedUniversityIds,
       ...body
     } = req.body;
 
@@ -46,25 +34,14 @@ export const register_v2 = catchAsync(async (req: Request, res: Response) => {
     await userProfileService.createUserProfile(userId.toString(), req.body);
 
     // Handle university-related actions
-    if (isUniversityVerified || isJoinUniversity) {
-      const community = await communityService.joinCommunityFromUniversity(
-        userId.toString(),
-        universityId,
-        isUniversityVerified
-      );
-      if (isUniversityVerified) {
-        const { data } = community as any;
-        await userProfileService.addUniversityEmail(
+    if (selectedUniversityIds?.length) {
+      for (const universityId of selectedUniversityIds) {
+         await communityService.joinCommunityFromUniversity(
           userId.toString(),
-          universityEmail,
-          universityName,
-          data.community._id.toString(),
-          data.community.communityLogoUrl.imageUrl.toString()
+          universityId,
+          false
         );
-        await universityVerificationEmailService.upsertCompletedUniversityVerificationForRegistration(
-          universityEmail,
-          universityId
-        );
+    
       }
     }
 

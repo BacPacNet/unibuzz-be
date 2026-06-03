@@ -11,6 +11,7 @@ export const isPartneredUni = async (
   const partneredUni = await PartneredUniModel.exists({
     universityId: toObjectId(universityId),
     communityId: toObjectId(communityId),
+    isActive: true,
   });
 
   return !!partneredUni;
@@ -21,6 +22,7 @@ export const isPartneredUniversity = async (
 ): Promise<boolean> => {
   const partneredUni = await PartneredUniModel.exists({
     universityId: toObjectId(universityId),
+    isActive: true,
   });
 
   return !!partneredUni;
@@ -31,12 +33,13 @@ export const isPartneredCommunity = async (
 ): Promise<boolean> => {
   const partneredUni = await PartneredUniModel.exists({
     communityId: toObjectId(communityId),
+    isActive: true,
   });
 
   return !!partneredUni;
 };
 
 export const getPartneredUniversityIds = async () => {
-  const partneredUniversityIds = await PartneredUniModel.distinct('universityId');
+  const partneredUniversityIds = await PartneredUniModel.distinct('universityId', { isActive: true });
 return partneredUniversityIds;
 };

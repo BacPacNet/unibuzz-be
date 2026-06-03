@@ -1,7 +1,7 @@
 import { Document } from 'mongoose';
 
 
- interface IUniversity extends Document {
+interface IUniversity extends Document {
   _id: string;
   name: string;
   __v: string;
@@ -38,7 +38,6 @@ import { Document } from 'mongoose';
   web_pages: string[];
   communityId?: string;
 }
-
 
 // Interface for WikiInfoBox
 interface WikiInfoBox {
@@ -107,6 +106,5 @@ interface College extends Document {
 
 type UniversityPayload = Partial<IUniversity>;
 type UniversityFilter = Record<string, unknown>;
- 
-export { College, SearchParamsType, UniversityPayload, UniversityFilter ,IUniversity};
 
+export { College, SearchParamsType, UniversityPayload, UniversityFilter, IUniversity };
