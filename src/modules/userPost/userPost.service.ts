@@ -115,6 +115,34 @@ function buildUserPostLookupStages(options: UserPostLookupStageOptions): Pipelin
   return stages;
 }
 
+
+function buildUserHighlightLookupStages(): PipelineStage[] {
+  const stages: PipelineStage[] = [
+    ...getUserLookupStages({
+      as: ALIAS_POST_OWNER,
+      preserveNullAndEmptyArrays: true,
+    }),
+
+    ...getUserProfileLookupStages({
+      profileAs: ALIAS_PROFILE,
+      userAs: ALIAS_POST_OWNER,
+      preserveNull: true,
+    }),
+
+    ...getProfileCommunitiesStages({
+      profileAs: ALIAS_PROFILE,
+      userRefForVerified: `$${ALIAS_POST_OWNER}._id`,
+    }),
+
+    ...getUserPostCommentCountBySubpipelineStages({
+      myBlockedUserIds: [],
+    }),
+  ];
+
+  return stages;
+}
+
+
 export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT, myUserId?: string) => {
   const skip = (page - 1) * limit;
 
@@ -325,6 +353,41 @@ export const getUserPost = async (postId: string, myUserId?: string) => {
     throw new ApiError(
       httpStatus.INTERNAL_SERVER_ERROR,
       error instanceof Error ? error.message : 'Failed to fetch user post'
+    );
+  }
+};
+
+
+export const getUserHighlightPost = async (postId: string) => {
+  try {
+    const postIdToGet = toObjectId(postId);
+
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          _id: postIdToGet,
+        },
+      },
+
+      ...buildUserHighlightLookupStages(),
+
+      getUserPostDetailProjectStage({
+        userFrom: ALIAS_POST_OWNER,
+        profileFrom: ALIAS_PROFILE,
+      }),
+    ];
+
+    const posts = await UserPostModel.aggregate(pipeline);
+
+    return posts[0] || null;
+  } catch (error) {
+    console.error('Error fetching highlight post', error);
+
+    if (error instanceof ApiError) throw error;
+
+    throw new ApiError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      error instanceof Error ? error.message : 'Failed to fetch highlight post'
     );
   }
 };

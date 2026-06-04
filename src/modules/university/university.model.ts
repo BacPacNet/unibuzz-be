@@ -26,6 +26,23 @@ const UniversitySchema = new Schema(
       day: { type: Number, required: false },
       month: { type: Number, required: false },
     },
+    highlightPosts: [
+      {
+        postId: {
+          type: Schema.Types.ObjectId,
+          required: true,
+        },
+        postType: {
+          type: String,
+          enum: ["CommunityPost", "UserPost"],
+          required: true,
+        },
+        position: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

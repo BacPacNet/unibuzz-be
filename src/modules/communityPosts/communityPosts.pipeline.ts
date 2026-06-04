@@ -482,3 +482,111 @@ export function buildSinglePostPipeline(params: SinglePostPipelineParams): Pipel
     },
   ];
 }
+
+
+
+export const buildCommunityHighlightPostPipeline = (
+  postIdToGet: mongoose.Types.ObjectId
+): PipelineStage[] => [
+  {
+    $match: {
+      _id: postIdToGet,
+    },
+  },
+
+  {
+    $lookup: {
+      from: 'communitygroups',
+      localField: 'communityGroupId',
+      foreignField: '_id',
+      as: 'group',
+    },
+  },
+
+  {
+    $unwind: {
+      path: '$group',
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+
+  {
+    $lookup: {
+      from: 'users',
+      localField: 'group.adminUserId',
+      foreignField: '_id',
+      as: 'groupAdmin',
+    },
+  },
+
+  {
+    $unwind: {
+      path: '$groupAdmin',
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+
+  {
+    $match: {
+      $or: [
+        {
+          communityGroupId: { $exists: false },
+        },
+        {
+          'groupAdmin.isDeleted': { $ne: true },
+        },
+      ],
+    },
+  },
+
+  ...buildUserLookupStages({ matchUserNotDeleted: true }),
+
+  ...buildUserProfileLookupStages(true, 'profile'),
+
+  ...buildCommunitiesEnrichmentStages('profile'),
+
+  ...buildCommentsLookupStages({
+    myBlockedUserIds: [],
+    userId: '',
+    skipBlockedStagesWhenNoUserId: true,
+    skipBlockedUserIdsWhenEmpty: true,
+  }),
+
+  {
+    $project: {
+      _id: 1,
+      user_id: 1,
+      communityId: 1,
+      communityPostsType: 1,
+      content: 1,
+      imageUrl: 1,
+      likeCount: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      communityName: 1,
+      communityGroupName: 1,
+      isPostVerified: 1,
+
+      user: {
+        firstName: '$user.firstName',
+        lastName: '$user.lastName',
+      },
+
+      profile: {
+        profile_dp: 1,
+        university_name: 1,
+        study_year: 1,
+        degree: 1,
+        major: 1,
+        affiliation: 1,
+        occupation: 1,
+        role: 1,
+        isCommunityAdmin: 1,
+        adminCommunityId: 1,
+        communities: 1,
+      },
+
+      commentCount: 1,
+    },
+  },
+];

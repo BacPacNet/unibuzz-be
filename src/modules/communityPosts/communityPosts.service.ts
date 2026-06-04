@@ -31,6 +31,7 @@ import {
   buildPostListProjectStage,
   buildSinglePostPipeline,
   buildGroupPostsMatchStage,
+  buildCommunityHighlightPostPipeline,
 } from './communityPosts.pipeline';
 
 
@@ -500,6 +501,17 @@ export const getcommunityPost = async (postId: string, myUserId: string = '') =>
     console.error('Error fetching user posts:', error);
     throwApiError(error);
   }
+};
+
+
+export const getCommunityPostForHighlight = async (postId: string) => {
+  const postIdToGet = convertToObjectId(postId);
+
+  const posts = await communityPostsModel.aggregate(
+    buildCommunityHighlightPostPipeline(postIdToGet)
+  );
+
+  return posts[0] || null;
 };
 
 export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId, userId: string, status: string) => {

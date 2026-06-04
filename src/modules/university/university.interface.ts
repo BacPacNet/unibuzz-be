@@ -1,9 +1,15 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 interface ISemesterStart {
   day: number;
   month: number;
 }
+
+export type HighlightPost = {
+  postId: Types.ObjectId;
+  postType: "CommunityPost" | "UserPost";
+  position: number;
+};
 
 interface IUniversity extends Document {
   _id: string;
@@ -42,6 +48,7 @@ interface IUniversity extends Document {
   web_pages: string[];
   communityId?: string;
   semesterStart: ISemesterStart;
+  highlightPosts: HighlightPost[];
 }
 
 // Interface for WikiInfoBox
