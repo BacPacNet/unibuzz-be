@@ -3,15 +3,16 @@ import * as communityPostsService from './communityPosts.service';
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import { userPostService } from '../userPost';
-import { communityService } from '../community';
+import { communityModel, communityService } from '../community';
 import { communityGroupModel, communityGroupService } from '../communityGroup';
+import { status as communityGroupUserStatus } from '../communityGroup/communityGroup.interface';
 import he from 'he';
 import { userIdExtend } from '../../config/userIDType';
 import mongoose from 'mongoose';
 import { convertToObjectId, isValidObjectId, parsePostIdOrThrow } from '../../utils/common';
 import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
-import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
+import { validateCommunityMembership } from '../../utils/community';
 import { CommunityGroupType } from '../../config/community.type';
 import type { users as CommunityGroupUser } from '../communityGroup/communityGroup.interface';
 import { notificationRoleAccess } from '../Notification/notification.interface';
@@ -200,22 +201,40 @@ export const getAllCommunityGroupPostV2 = catchAsync(async (req: userIdExtend, r
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid Community ID or Community Group ID format');
   }
 
-  // Get community and validate
-  const community = await communityService.getCommunity(communityId as string);
-  if (!community) {
+  const communityObjectId = convertToObjectId(communityId as string);
+  const communityGroupObjectId = convertToObjectId(communityGroupId as string);
+  const userObjectId = convertToObjectId(userId);
+
+  const [communityExists, communityGroup] = await Promise.all([
+    communityModel.exists({ _id: communityObjectId }),
+    communityGroupModel
+      .findOne({
+        _id: communityGroupObjectId,
+        $or: [
+          { adminUserId: userObjectId },
+          {
+            users: {
+              $elemMatch: { _id: userObjectId, status: communityGroupUserStatus.accepted },
+            },
+          },
+        ],
+      })
+      .select('adminUserId')
+      .lean(),
+  ]);
+
+  if (!communityExists) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
 
-  // Get community group and validate
-  const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId as string));
   if (!communityGroup) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
-  }
-
-  // Check user membership
-  if (!isUserCommunityGroupMember(communityGroup, userId)) {
+    const groupExists = await communityGroupModel.exists({ _id: communityGroupObjectId });
+    if (!groupExists) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+    }
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community group');
   }
+
   const isAdminOfCommunityGroup = communityGroup.adminUserId.toString() === userId.toString();
   // Get posts with pagination
   const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(

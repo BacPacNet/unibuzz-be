@@ -9,10 +9,12 @@ import UniversityModel from '../university/university.model';
 import { IUniversity } from '../university/university.interface';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId, buildPaginationResponse } from '../../utils/common';
-import { GetCommunityUsersOptions, GetUserFilteredCommunitiesResult, communityInterface } from './community.interface';
+import { GetCommunityUsersOptions, GetUserFilteredCommunitiesResult, FilteredCommunityGroup, communityInterface } from './community.interface';
 import type { HydratedDocument } from 'mongoose';
 import config from '../../config/config';
+import { CommunityGroupAccess } from '../../config/community.type';
 import { communityGroupService } from '../communityGroup';
+import { getJoinGroupActionKey, isHiddenGroupAccess, isJoinRequestRequired } from '../communityGroup/communityGroup.access';
 import {
   CommunityGroupFilters,
   buildFilteredCommunitiesBasePipeline,
@@ -289,9 +291,40 @@ export const getUserFilteredCommunities = async (
     pipeline.push(...buildCommunityGroupsProjectStage(userObjectId));
 
     const communities = await communityModel.aggregate(pipeline);
-    return (
+    const result = (
       communities.length ? communities[0] : { _id: communityId, communityGroups: [] }
     ) as GetUserFilteredCommunitiesResult;
+
+    if (Array.isArray(result.communityGroups) && result.communityGroups.length > 0) {
+      result.communityGroups = result.communityGroups.map((group: FilteredCommunityGroup) => {
+        const adminUserId = group.adminUserId?.toString?.() ?? String(group.adminUserId);
+        const isAdmin = adminUserId === userID;
+        const isMember = Array.isArray(group.users)
+          ? group.users.some(
+              (user) => user._id?.toString?.() === userID && user.isRequestAccepted !== false
+            )
+          : false;
+        const isHidden = isHiddenGroupAccess(group.communityGroupAccess);
+        const isInvited = isHidden && !isAdmin && !isMember;
+
+        const requiresJoinRequest = isJoinRequestRequired(group);
+
+        return {
+          ...group,
+          isRequestRequiredToJoinGroup: requiresJoinRequest,
+          joinGroupActionKey: getJoinGroupActionKey({
+            communityGroupAccess: group.communityGroupAccess ?? CommunityGroupAccess.Public,
+            userRole: userProfile.role,
+            isMember,
+            isInvited,
+            isAdmin,
+          }),
+          isOfficialTypeDisabled: isHidden,
+        };
+      });
+    }
+
+    return result;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;

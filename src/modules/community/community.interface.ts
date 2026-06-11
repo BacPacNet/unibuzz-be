@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { CommunityGroupAccess, CommunityGroupJoinActionKey } from '../../config/community.type';
 
 interface User {
   _id: mongoose.Types.ObjectId;
@@ -39,10 +40,24 @@ interface GetCommunityUsersOptions {
   userId: string;
 }
 
+/** Community group item returned from filtered community aggregates. */
+export interface FilteredCommunityGroup {
+  adminUserId: mongoose.Types.ObjectId | string;
+  communityGroupAccess?: CommunityGroupAccess | string;
+  isRequestRequiredToJoinGroup?: boolean;
+  users?: Array<{
+    _id?: mongoose.Types.ObjectId | { toString?: () => string };
+    isRequestAccepted?: boolean;
+  }>;
+  joinGroupActionKey?: CommunityGroupJoinActionKey | null;
+  isOfficialTypeDisabled?: boolean;
+  [key: string]: unknown;
+}
+
 /** Result shape of getUserFilteredCommunities (aggregate or empty fallback). */
 export interface GetUserFilteredCommunitiesResult {
   _id: mongoose.Types.ObjectId | string;
-  communityGroups: unknown[];
+  communityGroups: FilteredCommunityGroup[];
 }
 
 /** Request body for CreateCommunity */

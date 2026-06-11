@@ -9,8 +9,9 @@ import {
   CommunityType,
 } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
-import { BlockedUserEntry, FollowingEntry } from '../userProfile/userProfile.interface';
+import { BlockedUserEntry } from '../userProfile/userProfile.interface';
 import { getViewerProfileRole, maskPostProfilesForViewer } from '../userProfile/profileCommunities.util';
+import { isUniversityMemberRole } from '../communityGroup/communityGroup.access';
 import { communityGroupModel } from '../communityGroup';
 import { CommunityGroupTitleAdmin, NotificationWithPopulatedCommunityGroup, UserProfileBlockedUsers } from './communityPosts.interface';
 import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
@@ -32,6 +33,8 @@ import {
   buildSinglePostPipeline,
   buildGroupPostsMatchStage,
   buildCommunityHighlightPostPipeline,
+  getCommunityPostVisibilityStages,
+  CommunityPostVisibilityMode,
 } from './communityPosts.pipeline';
 
 
@@ -76,6 +79,37 @@ export function getBlockedUserIdsFromProfile(blockedUsers?: BlockedUserEntry[] |
   return (blockedUsers || []).map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString()));
 }
 
+async function resolveCommunityPostVisibilityMode(
+  userId: string,
+  options?: { requireProfile?: boolean }
+): Promise<CommunityPostVisibilityMode> {
+  if (!userId) return 'publicOnly';
+
+  const profile = await UserProfile.findOne({ users_id: userId }).select('role university_id').lean();
+  if (!profile && options?.requireProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+  }
+  if (!profile) return 'publicOnly';
+
+  return {
+    viewerObjectId: convertToObjectId(userId),
+    viewerUniversityId: profile.university_id ? convertToObjectId(String(profile.university_id)) : null,
+    viewerIsUniversityMember: isUniversityMemberRole(profile.role),
+  };
+}
+
+async function countVisibleCommunityPosts(
+  match: mongoose.FilterQuery<communityPostsInterface>,
+  visibilityMode: CommunityPostVisibilityMode
+): Promise<number> {
+  const result = await communityPostsModel.aggregate([
+    { $match: match },
+    ...getCommunityPostVisibilityStages(visibilityMode),
+    { $count: 'total' },
+  ]);
+  return result[0]?.total ?? 0;
+}
+
 /**
  * Emits socket notification and sends push notification for post status updates.
  * Caller is responsible for creating the notification document first when needed.
@@ -112,13 +146,15 @@ export const createCommunityPost = async (
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
   }
-  const postData = { ...post, user_id: userId };
+  const { communityPostsType, ...postWithoutVisibility } = post;
+  const postData = { ...postWithoutVisibility, user_id: userId };
 
   return withTransaction(async (session) => {
     const createdPost: mongoose.HydratedDocument<communityPostsInterface>[] = await communityPostsModel.create(
       [
         {
           ...postData,
+          ...(communityGroupId ? {} : { communityPostsType: communityPostsType ?? CommunityType.PUBLIC }),
           communityName,
           communityGroupName: communityGroup?.title,
           isPostLive,
@@ -219,10 +255,11 @@ export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community
   if (!communityToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
-  Object.assign(communityToUpdate, {
-    content: community.content,
-    communityPostsType: community.communityPostsType,
-  });
+  const updates: Partial<communityPostsInterface> = { content: community.content };
+  if (!communityToUpdate.communityGroupId && community.communityPostsType) {
+    updates.communityPostsType = community.communityPostsType;
+  }
+  Object.assign(communityToUpdate, updates);
   await communityToUpdate.save();
   return communityToUpdate;
 };
@@ -243,14 +280,18 @@ export const getCommunityPostsByCommunityId = async (
 ) => {
   try {
     const communityObjectId = convertToObjectId(communityId);
-    const [myBlockedUserIds, viewerRole] = await Promise.all([
+    const [myBlockedUserIds, visibilityMode, viewerRole] = await Promise.all([
       getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      resolveCommunityPostVisibilityMode(userId, { requireProfile: true }),
       getViewerProfileRole(userId),
     ]);
 
+    const baseMatch = { communityId: communityObjectId, communityGroupId: null };
+
     const finalPost = maskPostProfilesForViewer(
       await communityPostsModel.aggregate([
-        { $match: { communityId: communityObjectId, communityGroupId: null } },
+        { $match: baseMatch },
+        ...getCommunityPostVisibilityStages(visibilityMode),
         { $sort: { createdAt: -1 } },
         { $skip: getPaginationSkip(page, limit) },
         { $limit: limit },
@@ -263,10 +304,7 @@ export const getCommunityPostsByCommunityId = async (
       viewerRole
     );
 
-    const total = await communityPostsModel.countDocuments({
-      communityId: communityObjectId,
-      communityGroupId: null,
-    });
+    const total = await countVisibleCommunityPosts(baseMatch, visibilityMode);
 
     return {
       finalPost,
@@ -350,7 +388,7 @@ export const getCommunityGroupPostsByCommunityId = async (
 };
 
 export const getAllCommunityPost = async (
-  FollowinguserIds: mongoose.Types.ObjectId[] = [],
+  _FollowinguserIds: mongoose.Types.ObjectId[] = [],
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
@@ -358,53 +396,38 @@ export const getAllCommunityPost = async (
   userId: string = ''
 ) => {
   try {
-    const [myBlockedUserIds, viewerRole] = await Promise.all([
+    const [myBlockedUserIds, visibilityMode, viewerRole] = await Promise.all([
       getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      resolveCommunityPostVisibilityMode(userId, { requireProfile: true }),
       getViewerProfileRole(userId),
     ]);
-    const FollowingIds = FollowinguserIds.map((id: mongoose.Types.ObjectId) => convertToObjectId(id.toString()));
-
     const matchConditions: mongoose.FilterQuery<communityPostsInterface>[] = [];
 
     if (!communityGroupId) {
-      matchConditions.push(
-        {
-          communityId: convertToObjectId(communityId),
-          communityPostsType: CommunityType.PUBLIC,
-          communityGroupId: { $exists: false },
-        },
-        {
-          communityId: convertToObjectId(communityId),
-          communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds },
-          communityGroupId: { $exists: false },
-        }
-      );
+      matchConditions.push({
+        communityId: convertToObjectId(communityId),
+        communityGroupId: { $exists: false },
+      });
     } else {
-      matchConditions.push(
-        {
-          communityId: convertToObjectId(communityId),
-          communityGroupId: convertToObjectId(communityGroupId),
-          communityPostsType: CommunityType.PUBLIC,
-        },
-        {
-          communityId: convertToObjectId(communityId),
-          communityGroupId: convertToObjectId(communityGroupId),
-          communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds },
-        }
-      );
+      matchConditions.push({
+        communityId: convertToObjectId(communityId),
+        communityGroupId: convertToObjectId(communityGroupId),
+      });
     }
 
     const matchStage = { $or: matchConditions };
+    const visibilityStages = communityGroupId ? [] : getCommunityPostVisibilityStages(visibilityMode);
 
-    const totalPost = await communityPostsModel.countDocuments(matchStage);
+    const totalPost = communityGroupId
+      ? await communityPostsModel.countDocuments(matchStage)
+      : await countVisibleCommunityPosts(matchStage, visibilityMode);
     const totalPages = computeTotalPages(totalPost, limit);
     const skip = getPaginationSkip(page, limit);
 
     const finalPost = maskPostProfilesForViewer(
       (await communityPostsModel.aggregate([
         { $match: matchStage },
+        ...visibilityStages,
         { $sort: { createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
@@ -452,47 +475,43 @@ export const getAllCommunityPost = async (
 export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
     const userProfile = (await UserProfile.findOne({ users_id: myUserId })
-      .select('following communities blockedUsers role')
+      .select('blockedUsers role university_id')
       .lean()) as UserProfileBlockedUsers & {
       role?: string;
-      following?: FollowingEntry[];
-      communities?: mongoose.Types.ObjectId[];
+      university_id?: mongoose.Types.ObjectId;
     };
     if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
     const myBlockedUserIds = getBlockedUserIdsFromProfile(userProfile?.blockedUsers);
-
-    const followingIds =
-      userProfile?.following?.map((user: FollowingEntry) => user.userId.toString()) ||
-      [];
-    const followingObjectIds = followingIds.map((id: string) => convertToObjectId(id));
     const userId = convertToObjectId(myUserId);
     const postIdToGet = convertToObjectId(postId);
-
-    const allCommunityIds = userProfile?.communities;
 
     const post = await communityPostsModel.findOne({ _id: postIdToGet });
     if (!post) throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
 
-    let isCommunityGroupMember = false;
     if (post.communityGroupId) {
       const communityGroup = await communityGroupModel.findOne({
         _id: post.communityGroupId,
         'users._id': myUserId,
       });
-      isCommunityGroupMember = !!communityGroup;
 
       if (!communityGroup) throw new ApiError(httpStatus.FORBIDDEN, 'You are not a member');
     }
+
+    const visibilityMode: CommunityPostVisibilityMode = {
+      viewerObjectId: userId,
+      viewerUniversityId: userProfile.university_id
+        ? convertToObjectId(String(userProfile.university_id))
+        : null,
+      viewerIsUniversityMember: isUniversityMemberRole(userProfile?.role),
+    };
 
     const pipeline = buildSinglePostPipeline({
       postIdToGet,
       myBlockedUserIds,
       myUserId,
       userId,
-      followingObjectIds,
-      ...(allCommunityIds !== undefined && { allCommunityIds }),
-      isCommunityGroupMember,
+      visibilityMode,
     });
 
     const posts = await communityPostsModel.aggregate(pipeline);

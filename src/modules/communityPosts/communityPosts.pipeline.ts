@@ -1,6 +1,113 @@
 import mongoose, { Types, PipelineStage } from 'mongoose';
 import { CommunityType, communityPostFilterType, communityPostStatus } from '../../config/community.type';
 
+export interface CommunityPostVisibilityContext {
+  viewerObjectId: Types.ObjectId;
+  viewerUniversityId: Types.ObjectId | null;
+  viewerIsUniversityMember: boolean;
+}
+
+export type CommunityPostVisibilityMode = 'publicOnly' | CommunityPostVisibilityContext;
+
+export interface CommunityPostVisibilityOptions {
+  /** Group posts bypass communityPostsType checks (membership handled elsewhere). */
+  allowGroupPosts?: boolean;
+}
+
+/**
+ * Filters community posts by communityPostsType visibility (PUBLIC, UNIVERSITY_WIDE).
+ * UNIVERSITY_WIDE matches userPost rules: same university as post author, student/faculty only.
+ */
+export function getCommunityPostVisibilityStages(
+  mode: CommunityPostVisibilityMode,
+  options: CommunityPostVisibilityOptions = {}
+): PipelineStage[] {
+  const { allowGroupPosts = false } = options;
+
+  if (mode === 'publicOnly') {
+    const publicCommunityPost = { communityPostsType: CommunityType.PUBLIC };
+    if (allowGroupPosts) {
+      return [
+        {
+          $match: {
+            $or: [
+              {
+                $and: [
+                  { communityGroupId: { $ne: null } },
+                  { communityGroupId: { $exists: true } },
+                ],
+              },
+              publicCommunityPost,
+            ],
+          },
+        },
+      ];
+    }
+    return [{ $match: publicCommunityPost }];
+  }
+
+  const { viewerObjectId, viewerUniversityId, viewerIsUniversityMember } = mode;
+
+  const groupPostMatch = allowGroupPosts
+    ? [{ communityGroupId: { $exists: true, $ne: null } }]
+    : [];
+
+  const visibleWithoutAuthorLookup: Record<string, unknown>[] = [
+    ...groupPostMatch,
+    { communityPostsType: CommunityType.PUBLIC },
+    { communityPostsType: CommunityType.UNIVERSITY_WIDE, user_id: viewerObjectId },
+  ];
+
+  if (!viewerIsUniversityMember || !viewerUniversityId) {
+    return [{ $match: { $or: visibleWithoutAuthorLookup } }];
+  }
+
+  return [
+    {
+      $match: {
+        $or: [
+          ...visibleWithoutAuthorLookup,
+          { communityPostsType: CommunityType.UNIVERSITY_WIDE },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        let: { authorId: '$user_id', postType: '$communityPostsType' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$users_id', '$$authorId'] },
+                  { $eq: ['$$postType', CommunityType.UNIVERSITY_WIDE] },
+                ],
+              },
+            },
+          },
+          { $project: { university_id: 1 } },
+        ],
+        as: 'postAuthorProfile',
+      },
+    },
+    {
+      $match: {
+        $or: [
+          ...groupPostMatch,
+          { communityPostsType: CommunityType.PUBLIC },
+          { communityPostsType: CommunityType.UNIVERSITY_WIDE, user_id: viewerObjectId },
+          {
+            communityPostsType: CommunityType.UNIVERSITY_WIDE,
+            'postAuthorProfile.university_id': viewerUniversityId,
+          },
+        ],
+      },
+    },
+    { $project: { postAuthorProfile: 0 } },
+  ];
+}
+
 /** Profile field name used in aggregation ('userProfile' for list endpoints, 'profile' for single post). */
 export type CommunityPostProfileAlias = 'userProfile' | 'profile';
 
@@ -354,9 +461,7 @@ export interface SinglePostPipelineParams {
   myBlockedUserIds: Types.ObjectId[];
   myUserId: string;
   userId: Types.ObjectId;
-  followingObjectIds: Types.ObjectId[];
-  allCommunityIds?: Types.ObjectId[] | undefined;
-  isCommunityGroupMember: boolean;
+  visibilityMode: CommunityPostVisibilityMode;
 }
 
 /**
@@ -364,15 +469,7 @@ export interface SinglePostPipelineParams {
  * user/profile/group lookups, comments, and the final project shape.
  */
 export function buildSinglePostPipeline(params: SinglePostPipelineParams): PipelineStage[] {
-  const {
-    postIdToGet,
-    myBlockedUserIds,
-    myUserId,
-    userId,
-    followingObjectIds,
-    allCommunityIds,
-    isCommunityGroupMember,
-  } = params;
+  const { postIdToGet, myBlockedUserIds, myUserId, userId, visibilityMode } = params;
 
   return [
     { $match: { _id: postIdToGet } },
@@ -418,34 +515,7 @@ export function buildSinglePostPipeline(params: SinglePostPipelineParams): Pipel
       skipBlockedStagesWhenNoUserId: true,
       skipBlockedUserIdsWhenEmpty: true,
     }),
-    {
-      $addFields: {
-        isPublic: { $eq: ['$communityPostsType', CommunityType.PUBLIC] },
-        isFollowerOnly: { $eq: ['$communityPostsType', CommunityType.FOLLOWER_ONLY] },
-        isCommunityMember: {
-          $or: [
-            { $eq: ['$user_id', userId] },
-            { $in: ['$communityId', allCommunityIds ?? []] },
-            { $literal: isCommunityGroupMember },
-          ],
-        },
-        isFollowing: {
-          $or: [{ $eq: ['$user_id', userId] }, { $in: ['$user_id', followingObjectIds] }],
-        },
-      },
-    },
-    {
-      $match: {
-        $or: [
-          { isPublic: true },
-          {
-            isFollowerOnly: true,
-            isCommunityMember: true,
-            isFollowing: true,
-          },
-        ],
-      },
-    },
+    ...getCommunityPostVisibilityStages(visibilityMode, { allowGroupPosts: true }),
     {
       $project: {
         _id: 1,

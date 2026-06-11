@@ -36,6 +36,7 @@ interface TimelineProfileLean {
   communities: UserCommunities[];
   blockedUsers?: BlockedUserRef[];
   role?: string;
+  university_id?: mongoose.Types.ObjectId;
 }
 
 interface PostRelationshipLean {
