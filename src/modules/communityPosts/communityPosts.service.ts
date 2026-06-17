@@ -146,15 +146,14 @@ export const createCommunityPost = async (
       throw new ApiError(httpStatus.NOT_FOUND, 'Community group not found');
     }
   }
-  const { communityPostsType, ...postWithoutVisibility } = post;
-  const postData = { ...postWithoutVisibility, user_id: userId };
+  const postData = { ...post, user_id: userId };
 
   return withTransaction(async (session) => {
     const createdPost: mongoose.HydratedDocument<communityPostsInterface>[] = await communityPostsModel.create(
       [
         {
           ...postData,
-          ...(communityGroupId ? {} : { communityPostsType: communityPostsType ?? CommunityType.PUBLIC }),
+          communityPostsType: post.communityPostsType ?? CommunityType.PUBLIC,
           communityName,
           communityGroupName: communityGroup?.title,
           isPostLive,

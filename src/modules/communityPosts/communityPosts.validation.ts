@@ -71,13 +71,7 @@ export const createCommunityPost = {
       communityId: Joi.string().required().custom(objectId),
       communityGroupId: Joi.string().custom(objectId).optional().allow(null),
     
-      communityPostsType: Joi.when('communityGroupId', {
-        is: Joi.string().custom(objectId),
-        then: Joi.any().strip(),
-        otherwise: Joi.string()
-          .valid(CommunityType.PUBLIC, CommunityType.UNIVERSITY_WIDE)
-          .optional(),
-      }),
+      communityPostsType:Joi.string().valid(CommunityType.PUBLIC, CommunityType.UNIVERSITY_WIDE).allow("").allow(null).optional(),
     })
     .unknown(true),
 };

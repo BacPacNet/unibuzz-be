@@ -51,6 +51,7 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
   let isOfficialGroup = false;
   let isPostLive = false;
 
+
   const community = await communityService.getCommunity(req.body.communityId);
   if (communityId && !communityGroupId) {
     if (!community) {
@@ -87,6 +88,8 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
     }
   }
+
+
   const post = await communityPostsService.createCommunityPost(
     req.body,
     new mongoose.Types.ObjectId(userId),
