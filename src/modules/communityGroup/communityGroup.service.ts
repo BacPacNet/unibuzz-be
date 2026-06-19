@@ -4,7 +4,17 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById, getUsersByUniqueIds } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
-import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupType } from '../../config/community.type';
+import {
+  assertOfficialTypeAllowed,
+  canViewHiddenGroup,
+  getJoinGroupActionKey,
+  isApplicantRole,
+  isHiddenGroupAccess,
+  isJoinRequestRequired,
+  isOpenJoinGroupAccess,
+  isUniversityWideGroupAccess,
+} from './communityGroup.access';
 import {
   communityGroupInterface,
   status,
@@ -56,6 +66,10 @@ const ERROR_MESSAGES = {
   VERIFY_UNIVERSITY_EMAIL_FOR_PRIVATE: 'You need to verify your university email to join private groups',
   BLOCKED_FROM_GROUP: 'You are blocked from this community group',
   NOT_VERIFIED_TO_JOIN: 'You are not verified to join this community',
+  UNIVERSITY_MEMBERS_ONLY: 'University members only can join this group',
+  INVITE_ONLY: 'This group is invite only',
+  APPLICANTS_CANNOT_BE_INVITED: 'Applicants cannot be invited to university-wide groups',
+  HIDDEN_GROUPS_CANNOT_BE_OFFICIAL: 'Hidden groups cannot be official',
   ALREADY_A_MEMBER: 'User is already a member of this community',
   NOT_A_MEMBER: 'User is not a member of this community',
   COMMUNITY_REFERENCE_MISSING: 'Community reference missing in group',
@@ -106,6 +120,62 @@ function buildGroupMemberFromUserAndProfile(
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+async function assertNoApplicantInvitesForUniversityWideGroup(
+  communityGroupAccess: CommunityGroupAccess | string | undefined,
+  selectedUsers: SelectedUserItem[]
+): Promise<void> {
+  if (!isUniversityWideGroupAccess(communityGroupAccess) || selectedUsers.length === 0) {
+    return;
+  }
+
+  const userIds = selectedUsers
+    .map((user) => user.users_id?.toString())
+    .filter((userId): userId is string => Boolean(userId));
+
+  if (userIds.length === 0) {
+    return;
+  }
+
+  const profiles = await getUserProfiles(userIds.map((id) => new mongoose.Types.ObjectId(id)));
+  const hasApplicantInvite = profiles.some((profile) => isApplicantRole(profile.role));
+
+  if (hasApplicantInvite) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.APPLICANTS_CANNOT_BE_INVITED);
+  }
+}
+
+function enrichGroupWithAccessMetadata<
+  T extends { communityGroupAccess?: CommunityGroupAccess | string; isRequestRequiredToJoinGroup?: boolean }
+>(
+  group: T,
+  params: {
+    userRole?: string | null | undefined;
+    userId: string;
+    adminUserId: string;
+    isInvited: boolean;
+    isMember: boolean;
+  }
+): T & {
+  joinGroupActionKey: CommunityGroupJoinActionKey | null;
+  isOfficialTypeDisabled: boolean;
+  isRequestRequiredToJoinGroup: boolean;
+} {
+  const requiresJoinRequest = isJoinRequestRequired(group);
+
+  return {
+    ...group,
+    isRequestRequiredToJoinGroup: requiresJoinRequest,
+    joinGroupActionKey: getJoinGroupActionKey({
+      communityGroupAccess: group.communityGroupAccess ?? CommunityGroupAccess.Public,
+      userRole: params.userRole,
+      isMember: params.isMember,
+      isInvited: params.isInvited,
+      isAdmin: params.userId === params.adminUserId,
+    }),
+    isOfficialTypeDisabled: isHiddenGroupAccess(group.communityGroupAccess),
+  };
+}
+
 /**
  * Updates a single member's request status in a community group (users subdocument).
  * Returns the updated group document or null if group or user in group not found.
@@ -149,7 +219,7 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   if (
     communityGroupAccess &&
     communityGroupAccess === CommunityGroupAccess.Private &&
-    communityGroup.communityGroupAccess === CommunityGroupAccess.Public
+    isOpenJoinGroupAccess(communityGroup.communityGroupAccess)
   ) {
     const community = await communityModel.findById(communityGroup.communityId).select('users');
 
@@ -171,6 +241,14 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   if (communityGroupAccess) {
+    if (isHiddenGroupAccess(communityGroupAccess)) {
+      const nextGroupType = (restBody['communityGroupType'] as string | undefined) ?? communityGroup.communityGroupType;
+      try {
+        assertOfficialTypeAllowed(communityGroupAccess, nextGroupType);
+      } catch {
+        throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+      }
+    }
     communityGroup.communityGroupAccess = communityGroupAccess;
   }
   if (title !== undefined) {
@@ -184,6 +262,11 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(
+      communityGroupAccess ?? communityGroup.communityGroupAccess,
+      selectedUsers
+    );
+
     const existingUserIds = new Set(
       communityGroup.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
     );
@@ -486,8 +569,8 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
 export const getAllCommunityGroup = async (communityId: string, access: string) => {
   const accessType =
     access === CommunityGroupAccess.Public
-      ? CommunityGroupAccess.Public
-      : [CommunityGroupAccess.Public, CommunityGroupAccess.Private];
+      ? [CommunityGroupAccess.Public, CommunityGroupAccess.OpenCampus]
+      : [CommunityGroupAccess.Public, CommunityGroupAccess.OpenCampus, CommunityGroupAccess.Private];
   return await communityGroupModel
     .find({ communityId, communityGroupType: accessType })
     .populate({ path: 'adminUserId', select: 'firstName lastName _id' });
@@ -541,7 +624,17 @@ export const createCommunityGroup = async (
   isOfficial: boolean,
   isAdminOfCommunity: boolean = false
 ) => {
-  const { communityGroupCategory, selectedUsers, communityGroupType, communityGroupLabel } = body;
+  const { communityGroupCategory, selectedUsers, communityGroupType, communityGroupLabel, communityGroupAccess } = body;
+
+  try {
+    assertOfficialTypeAllowed(communityGroupAccess as CommunityGroupAccess | undefined, communityGroupType);
+  } catch {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+  }
+
+  if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(communityGroupAccess as CommunityGroupAccess | undefined, selectedUsers);
+  }
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -695,6 +788,23 @@ export const createCommunityGroupBySuperAdmin = async (
 
   const normalizedType = String(normalizedBody.communityGroupType ?? '').toLowerCase();
   const isOfficial = normalizedType === CommunityGroupType.OFFICIAL;
+
+  try {
+    assertOfficialTypeAllowed(
+      normalizedBody['communityGroupAccess'] as CommunityGroupAccess | undefined,
+      normalizedBody.communityGroupType
+    );
+  } catch {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+  }
+
+  if (Array.isArray(normalizedBody.selectedUsers) && normalizedBody.selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(
+      normalizedBody['communityGroupAccess'] as CommunityGroupAccess | undefined,
+      normalizedBody.selectedUsers
+    );
+  }
+
   const creatorAsMember = buildGroupMemberFromUserAndProfile(creator, creatorProfile, {
     isRequestAccepted: true,
     status: status.accepted,
@@ -742,7 +852,7 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     { path: 'adminUserId', select: 'isDeleted  blockedUsers' },
   ]);
 
-  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers role').lean();
 
   const userIds = (populatedGroup.users || []).map((u: UsersSchema) => u._id);
 
@@ -805,6 +915,26 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
   }
 
+  const isMember = populatedGroup.users.some(
+    (user: UsersSchema) => user._id.toString() === userId && user.isRequestAccepted
+  );
+  const isInvited = (populatedGroup.inviteUsers || []).some(
+    (invite) => invite.userId?.toString() === userId
+  );
+
+  if (
+    isHiddenGroupAccess(populatedGroup.communityGroupAccess) &&
+    !canViewHiddenGroup({
+      userId,
+      adminUserId,
+      isCommunityAdmin: Boolean(communityAdminId),
+      isInvited,
+      isMember,
+    })
+  ) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+  }
+
   if (Array.isArray(populatedGroup.users)) {
     populatedGroup.users.sort((a: UsersSchema, b: UsersSchema) => {
       const isAAdmin = a._id.toString() === adminUserId;
@@ -817,7 +947,13 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     });
   }
 
-  return populatedGroup;
+  return enrichGroupWithAccessMetadata(populatedGroup, {
+    userRole: myBlockedUsers?.role,
+    userId,
+    adminUserId,
+    isInvited,
+    isMember,
+  });
 };
 
 export const joinCommunityGroup = async (
@@ -848,14 +984,28 @@ export const joinCommunityGroup = async (
       throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
     }
 
-    //check if community is private and user is verified
-    const isCommunityPrivate = communityGroup?.communityGroupAccess === CommunityGroupAccess.Private;
+    const groupAccess = communityGroup.communityGroupAccess;
+    const isCommunityPrivate = groupAccess === CommunityGroupAccess.Private;
+    const requiresJoinRequest = isJoinRequestRequired(communityGroup);
     const isUserVerified = userProfile?.email.some(
       (community) => community.communityId.toString() === communityGroup.communityId?.toString()
     );
 
     if (!isUserVerified && isCommunityPrivate) {
       throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.NOT_VERIFIED_TO_JOIN);
+    }
+
+    if (isUniversityWideGroupAccess(groupAccess) && isApplicantRole(userProfile.role)) {
+      throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.UNIVERSITY_MEMBERS_ONLY);
+    }
+
+    if (isHiddenGroupAccess(groupAccess) && !isAdmin) {
+      const isInvited = (communityGroup.inviteUsers || []).some(
+        (invite) => invite.userId?.toString() === userID
+      );
+      if (!isInvited) {
+        throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.INVITE_ONLY);
+      }
     }
 
     const community = await communityService.getCommunity(String(communityGroup.communityId));
@@ -874,8 +1024,8 @@ export const joinCommunityGroup = async (
 
     communityGroup.users.push(
       buildGroupMemberFromUserAndProfile(user, userProfile, {
-        isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
-        status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+        isRequestAccepted: isAdmin ? true : requiresJoinRequest ? false : true,
+        status: isAdmin ? status.accepted : requiresJoinRequest ? status.pending : status.accepted,
       }) as unknown as UsersSchema
     );
 
@@ -915,7 +1065,7 @@ export const joinCommunityGroup = async (
         $push: {
           'communities.$.communityGroups': {
             id: groupId,
-            status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+            status: isAdmin ? status.accepted : requiresJoinRequest ? status.pending : status.accepted,
           },
         },
       },
@@ -927,20 +1077,20 @@ export const joinCommunityGroup = async (
 
 
 
-    if (isCommunityPrivate && !isAdmin) {
+    if (requiresJoinRequest && !isAdmin) {
       const notificationPayload: CreateNotificationPayload = {
         sender_id: userID,
         receiverId: communityGroup.adminUserId,
         communityGroupId: communityGroup._id,
         type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
-        message: 'User has requested to join your private group',
+        message: 'User has requested to join your group',
       };
       await notificationService.createNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
       sendPushNotification(
         communityGroup.adminUserId.toString(),
-        'Private Group Request',
-        user.firstName + ' has requested to join your private group' + communityGroup.title,
+        'Group Join Request',
+        user.firstName + ' has requested to join your group ' + communityGroup.title,
         {
           sender_id: userID,
           receiverId: communityGroup.adminUserId.toString(),

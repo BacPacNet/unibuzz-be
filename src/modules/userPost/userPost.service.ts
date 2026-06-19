@@ -9,7 +9,7 @@ import CommunityPostModel from '../communityPosts/communityPosts.model';
 import { UserProfile, userProfileService } from '../userProfile';
 import { getViewerProfileRole, maskPostProfilesForViewer } from '../userProfile/profileCommunities.util';
 import { status as communityGroupStatus } from '../communityGroup/communityGroup.interface';
-import { userPostType } from '../../config/community.type';
+import { isUniversityMemberRole } from '../communityGroup/communityGroup.access';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import PostRelationship from './postRelationship.model';
 import { queueSQSNotification } from '../../amazon-sqs/sqsWrapperFunction';
@@ -25,9 +25,16 @@ import {
   getTimelineCommunityPostProjectStage,
   getAuthorNotBlockingViewerStages,
   getViewerNotBlockingAuthorStages,
+  getUserPostVisibilityStages,
+  UserPostVisibilityContext,
+  UserPostVisibilityMode,
   UserAlias,
   ProfileAlias,
 } from './userPost.pipeline';
+import {
+  getCommunityPostVisibilityStages,
+  CommunityPostVisibilityContext,
+} from '../communityPosts/communityPosts.pipeline';
 import { toIdString, toObjectId, withTransaction } from '../utils';
 import { ProfileFollowingFollowers } from './userPost.interface';
 
@@ -40,6 +47,52 @@ function getFollowingFollowersAndMutualIds(profile: ProfileFollowingFollowers | 
   const followersIds = profile?.followers?.map((user) => String(user.userId)) ?? [];
   const mutualIds = followersIds.filter((id) => followingIds.includes(id));
   return { followingIds, followersIds, mutualIds };
+}
+
+function buildUserPostVisibilityContext(
+  profile: ProfileFollowingFollowers & { university_id?: unknown; role?: string } | null,
+  myUserId: string
+): UserPostVisibilityContext {
+  const { followingIds } = getFollowingFollowersAndMutualIds(profile);
+  return {
+    viewerObjectId: toObjectId(myUserId),
+    followingObjectIds: followingIds.map((id) => toObjectId(id)),
+    viewerUniversityId: profile?.university_id
+      ? toObjectId(String(profile.university_id))
+      : null,
+    viewerIsUniversityMember: isUniversityMemberRole(profile?.role),
+  };
+}
+
+async function resolveUserPostVisibilityMode(
+  myUserId: string | undefined,
+  profileOwnerId: string
+): Promise<UserPostVisibilityMode> {
+  if (myUserId && myUserId === profileOwnerId) {
+    return 'skip';
+  }
+  if (!myUserId) {
+    return 'publicOnly';
+  }
+
+  const userProfile = await UserProfile.findOne({ users_id: myUserId })
+    .select('following university_id role')
+    .lean();
+
+  return buildUserPostVisibilityContext(userProfile, myUserId);
+}
+
+async function countVisibleUserPosts(
+  userId: string,
+  visibilityMode: UserPostVisibilityMode
+): Promise<number> {
+  const pipeline: PipelineStage[] = [
+    { $match: { user_id: toObjectId(userId) } },
+    ...getUserPostVisibilityStages(visibilityMode),
+    { $count: 'total' },
+  ];
+  const result = await UserPostModel.aggregate(pipeline);
+  return result[0]?.total ?? 0;
 }
 
 /** Lookup alias names used in aggregation pipelines. */
@@ -146,14 +199,16 @@ function buildUserHighlightLookupStages(): PipelineStage[] {
 export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT, myUserId?: string) => {
   const skip = (page - 1) * limit;
 
-  const [myBlockedUserIds, viewerRole] = await Promise.all([
+  const [myBlockedUserIds, viewerRole, visibilityMode] = await Promise.all([
     getBlockedUserIds(myUserId),
     myUserId ? getViewerProfileRole(myUserId) : Promise.resolve(undefined),
+    resolveUserPostVisibilityMode(myUserId, userId),
   ]);
 
   const userObjectId = toObjectId(userId);
   const pipeline: PipelineStage[] = [
     { $match: { user_id: userObjectId } },
+    ...getUserPostVisibilityStages(visibilityMode),
     { $sort: { createdAt: -1 } },
     { $skip: skip },
     { $limit: limit },
@@ -170,7 +225,7 @@ export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAG
     viewerRole
   );
 
-  const totalPosts = await UserPostModel.countDocuments({ user_id: userId });
+  const totalPosts = await countVisibleUserPosts(userId, visibilityMode);
   return {
     data: userPosts,
     currentPage: page,
@@ -248,7 +303,9 @@ export const updateUserPost = async (id: mongoose.Types.ObjectId, post: userPost
     throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
   }
   Object.assign(userPostToUpdate, {
-    content: post.content,
+    ...(post.content !== undefined ? { content: post.content } : {}),
+    ...(post.PostType !== undefined ? { PostType: post.PostType } : {}),
+    ...(post.imageUrl !== undefined ? { imageUrl: post.imageUrl } : {}),
   });
   await userPostToUpdate.save();
   return userPostToUpdate;
@@ -285,54 +342,21 @@ export const getUserPost = async (postId: string, myUserId?: string) => {
   try {
     const [myBlockedUserIds, userProfile] = await Promise.all([
       getBlockedUserIds(myUserId),
-      myUserId ? UserProfile.findOne({ users_id: myUserId }).lean() : Promise.resolve(null),
+      myUserId
+        ? UserProfile.findOne({ users_id: myUserId }).select('following university_id role').lean()
+        : Promise.resolve(null),
     ]);
 
-    const { followingIds, mutualIds } = getFollowingFollowersAndMutualIds(userProfile);
-    const mutualId = mutualIds.map((item) => toObjectId(item));
-    const userId = myUserId ? toObjectId(myUserId) : null;
-    const followingObjectIds = followingIds.map((id) => toObjectId(id));
+    const visibilityMode: UserPostVisibilityMode = myUserId
+      ? buildUserPostVisibilityContext(userProfile, myUserId)
+      : 'publicOnly';
 
     const postIdToGet = toObjectId(postId);
 
-    const pipeline: PipelineStage[] = [{ $match: { _id: postIdToGet } }];
-
-    if (!myUserId) {
-      pipeline.push({
-        $match: { PostType: userPostType.PUBLIC },
-      });
-    } else {
-      pipeline.push(
-        {
-          $addFields: {
-            isPublic: { $eq: ['$PostType', userPostType.PUBLIC] },
-            isFollowerOnly: { $eq: ['$PostType', userPostType.FOLLOWER_ONLY] },
-            isMutual: { $eq: ['$PostType', userPostType.MUTUAL] },
-            isOnlyMe: { $eq: ['$PostType', userPostType.ONLY_ME] },
-
-            isAuthorizedUser: {
-              $or: [
-                { $eq: ['$user_id', userId] },
-                ...(followingObjectIds.length > 0 ? [{ $in: ['$user_id', followingObjectIds] }] : []),
-              ],
-            },
-            isAuthorizedUserAndMutual: {
-              $or: [{ $eq: ['$user_id', userId] }, ...(mutualId.length > 0 ? [{ $in: ['$user_id', mutualId] }] : [])],
-            },
-          },
-        },
-        {
-          $match: {
-            $or: [
-              { isPublic: true },
-              { isFollowerOnly: true, isAuthorizedUser: true },
-              { isMutual: true, isAuthorizedUserAndMutual: true },
-              { isOnlyMe: true, user_id: userId },
-            ],
-          },
-        }
-      );
-    }
+    const pipeline: PipelineStage[] = [
+      { $match: { _id: postIdToGet } },
+      ...getUserPostVisibilityStages(visibilityMode),
+    ];
 
     pipeline.push(
       ...buildUserPostLookupStages({
@@ -438,13 +462,26 @@ function splitRelationshipPostIds(relationships: PostRelationshipLean[]): {
   return { userPostIds, communityPostIds };
 }
 
+function buildCommunityPostVisibilityContext(
+  profile: TimelineProfileLean,
+  myUserId: string
+): CommunityPostVisibilityContext {
+  return {
+    viewerObjectId: toObjectId(myUserId),
+    viewerUniversityId: profile.university_id ? toObjectId(String(profile.university_id)) : null,
+    viewerIsUniversityMember: isUniversityMemberRole(profile.role),
+  };
+}
+
 function getTimelineCommunityPostsPipeline(
   communityPostIds: mongoose.Types.ObjectId[],
   userId: string,
-  myBlockedUserIds: mongoose.Types.ObjectId[]
+  myBlockedUserIds: mongoose.Types.ObjectId[],
+  visibilityContext: CommunityPostVisibilityContext
 ): PipelineStage[] {
   return [
     { $match: { _id: { $in: communityPostIds }, isPostLive: true } },
+    ...getCommunityPostVisibilityStages(visibilityContext, { allowGroupPosts: true }),
     { $sort: { createdAt: -1 } },
     {
       $lookup: {
@@ -515,11 +552,12 @@ function getTimelineCommunityPostsPipeline(
  */
 export const getTimelinePostsFromRelationship = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT) => {
   const userProfile = await UserProfile.findOne({ users_id: userId })
-    .select('following communities blockedUsers role')
+    .select('following communities blockedUsers role university_id')
     .lean() as TimelineProfileLean | null;
   if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
   const myBlockedUserIds = await getBlockedUserIds(userId);
+  const visibilityMode = buildUserPostVisibilityContext(userProfile, userId);
 
   const followingUserIds = userProfile.following.map((f) => toIdString(f.userId));
   followingUserIds.push(userId);
@@ -557,6 +595,7 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
     userPostIds.length
       ? UserPostModel.aggregate([
           { $match: { _id: { $in: userPostIds } } },
+          ...getUserPostVisibilityStages(visibilityMode),
           { $sort: { createdAt: -1 } },
           ...buildUserPostLookupStages({
             viewerUserId: userId,
@@ -568,7 +607,14 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
         ])
       : [],
     communityPostIds.length
-      ? CommunityPostModel.aggregate(getTimelineCommunityPostsPipeline(communityPostIds, userId, myBlockedUserIds))
+      ? CommunityPostModel.aggregate(
+          getTimelineCommunityPostsPipeline(
+            communityPostIds,
+            userId,
+            myBlockedUserIds,
+            buildCommunityPostVisibilityContext(userProfile, userId)
+          )
+        )
       : [],
   ]);
 
