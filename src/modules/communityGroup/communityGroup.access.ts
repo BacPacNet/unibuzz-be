@@ -42,6 +42,22 @@ export function isJoinRequestRequired(group: {
   return group.communityGroupAccess === CommunityGroupAccess.Private;
 }
 
+export function groupRequiresPostApproval(group: {
+  communityGroupType?: CommunityGroupType | string | null;
+  requirePostApproval?: boolean | null;
+}): boolean {
+  if (String(group.communityGroupType ?? '').toLowerCase() !== CommunityGroupType.OFFICIAL) {
+    return false;
+  }
+  if (group.requirePostApproval === true) {
+    return true;
+  }
+  if (group.requirePostApproval === false) {
+    return false;
+  }
+  return true;
+}
+
 export function assertOfficialTypeAllowed(
   communityGroupAccess?: CommunityGroupAccess | string,
   communityGroupType?: CommunityGroupType | string

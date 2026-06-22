@@ -142,6 +142,7 @@ interface communityGroupInterface {
   communityGroupType: CommunityGroupType;
   communityGroupAccess: CommunityGroupAccess;
   isRequestRequiredToJoinGroup: boolean;
+  requirePostApproval: boolean;
   communityGroupLabel: CommunityGroupLabel;
   communityGroupCategory: Map<string, string[]>;
   users: users[];
@@ -222,6 +223,7 @@ export interface UpdateCommunityGroupBody {
   communityGroupCategory?: Record<string, string[]>;
   communityGroupAccess?: CommunityGroupAccess;
   isRequestRequiredToJoinGroup?: boolean;
+  requirePostApproval?: boolean;
   title?: string;
   description?: string;
   communityGroupLogoUrl?: { imageUrl: string; publicId: string };
@@ -237,6 +239,7 @@ export interface CreateCommunityGroupBody {
   memberList?: string[];
   communityGroupType?: string;
   communityGroupLabel?: CommunityGroupLabel;
+  requirePostApproval?: boolean;
   title?: string;
   description?: string;
   communityGroupLogoUrl?: { imageUrl: string; publicId: string };

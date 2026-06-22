@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { objectId } from '../validate/custom.validation';
 
 const paginationQuery = {
   page: Joi.number().integer().min(1).optional(),
@@ -38,5 +39,23 @@ export const setSemesterStart = {
   body: Joi.object().keys({
     day: Joi.number().integer().min(1).max(31).required(),
     month: Joi.number().integer().min(1).max(12).required(),
+  }),
+};
+
+export const addUniversityHighlightPost = {
+  params: Joi.object().keys({
+    universityId: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object().keys({
+    postId: Joi.string().custom(objectId).required(),
+    postType: Joi.string().valid('CommunityPost', 'UserPost').required(),
+    position: Joi.number().integer().min(0).required(),
+  }),
+};
+
+export const deleteUniversityHighlightPost = {
+  params: Joi.object().keys({
+    universityId: Joi.string().custom(objectId).required(),
+    postId: Joi.string().custom(objectId).required(),
   }),
 };

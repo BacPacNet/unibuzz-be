@@ -36,6 +36,10 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
       type: Boolean,
       default: false,
     },
+    requirePostApproval: {
+      type: Boolean,
+      default: false,
+    },
     communityGroupType: {
       type: String,
       enum: ['casual', 'official'],
