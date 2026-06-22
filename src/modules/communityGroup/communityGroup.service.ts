@@ -4,7 +4,7 @@ import { ApiError } from '../errors';
 import httpStatus from 'http-status';
 import { getUserById, getUsersByUniqueIds } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
-import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupType, communityPostStatus } from '../../config/community.type';
 import {
   assertOfficialTypeAllowed,
   canViewHiddenGroup,
@@ -14,6 +14,7 @@ import {
   isJoinRequestRequired,
   isOpenJoinGroupAccess,
   isUniversityWideGroupAccess,
+  groupRequiresPostApproval,
 } from './communityGroup.access';
 import {
   communityGroupInterface,
@@ -197,12 +198,14 @@ async function updateGroupMemberStatus(
 }
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: UpdateCommunityGroupBody) => {
-  const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, ...restBody } = body;
+  const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, requirePostApproval, ...restBody } = body;
 
   const communityGroup = await communityGroupModel.findById(id);
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
+
+  const wasRequiringPostApproval = groupRequiresPostApproval(communityGroup);
 
   const existingGroup = await communityGroupModel.findOne({
     communityId: communityGroup.communityId,
@@ -255,6 +258,15 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
     communityGroup.title = title;
   }
 
+  if (requirePostApproval !== undefined) {
+    const nextGroupType =
+      (restBody['communityGroupType'] as string | undefined) ?? communityGroup.communityGroupType;
+    if (requirePostApproval && nextGroupType !== CommunityGroupType.OFFICIAL) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Post approval can only be enabled for official groups');
+    }
+    communityGroup.requirePostApproval = requirePostApproval;
+  }
+
   Object.assign(communityGroup, restBody);
 
   if (communityGroupCategory && typeof communityGroupCategory === 'object') {
@@ -285,6 +297,13 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   await communityGroup.save();
+
+  if (wasRequiringPostApproval && requirePostApproval === false) {
+    await CommunityPostModel.updateMany(
+      { communityGroupId: id, isPostLive: false,postStatus: communityPostStatus.PENDING },
+      { $set: { isPostLive: true, postStatus: communityPostStatus.SUCCESS } }
+    );
+  }
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
@@ -644,6 +663,10 @@ export const createCommunityGroup = async (
 
   if (!isUserAllowtoCreateGroup) {
     throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.USER_NOT_ALLOWED_TO_CREATE_GROUP);
+  }
+
+  if (body['requirePostApproval'] && !isOfficial) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Post approval can only be enabled for official groups');
   }
 
   const inviteUsers = (selectedUsers ?? []).map((user: SelectedUserItem) => ({

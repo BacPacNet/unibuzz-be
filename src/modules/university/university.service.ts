@@ -1,10 +1,15 @@
 import mongoose from 'mongoose';
+import httpStatus from 'http-status';
 import universityModal from './university.model';
-import { ISemesterStart, UniversityFilter } from './university.interface';
+import { HighlightPost, ISemesterStart, UniversityFilter } from './university.interface';
 import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
 import communityModel from '../community/community.model';
 import communityGroupModel from '../communityGroup/communityGroup.model';
 import { partneredUniService } from '../partneredUni';
+import { ApiError } from '../errors';
+import { communityPostsModel } from '../communityPosts';
+import { userPostModel } from '../userPost';
+import { convertToObjectId } from '../../utils/common';
 
 
 
@@ -170,6 +175,99 @@ export const setSemesterStart = async (university_name: string, semesterStart: I
   return universityModal
     .findOneAndUpdate({ name: university_name }, { $set: { semesterStart } }, { new: true })
     .lean();
+};
+
+type HighlightPostInput = {
+  postId: string;
+  postType: HighlightPost['postType'];
+  position: number;
+};
+
+const verifyHighlightPostExists = async (postId: string, postType: HighlightPost['postType']) => {
+  const objectId = convertToObjectId(postId);
+  if (postType === 'CommunityPost') {
+    return communityPostsModel.exists({ _id: objectId });
+  }
+  return userPostModel.exists({ _id: objectId });
+};
+
+export const addUniversityHighlightPost = async (universityId: string, highlight: HighlightPostInput) => {
+  const universityObjectId = convertToObjectId(universityId);
+  const postObjectId = convertToObjectId(highlight.postId);
+
+  const university = await universityModal.findById(universityObjectId).select('highlightPosts').lean();
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  const postExists = await verifyHighlightPostExists(highlight.postId, highlight.postType);
+  if (!postExists) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
+  }
+
+  const alreadyExists = (university.highlightPosts || []).some(
+    (item) => item.postId.toString() === postObjectId.toString()
+  );
+  if (alreadyExists) {
+    throw new ApiError(httpStatus.CONFLICT, 'Post is already a highlight');
+  }
+
+  const updatedUniversity = await universityModal
+    .findByIdAndUpdate(
+      universityObjectId,
+      {
+        $push: {
+          highlightPosts: {
+            postId: postObjectId,
+            postType: highlight.postType,
+            position: highlight.position,
+          },
+        },
+      },
+      { new: true }
+    )
+    .lean();
+
+  if (!updatedUniversity) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  return updatedUniversity;
+};
+
+export const deleteUniversityHighlightPost = async (universityId: string, postId: string) => {
+  const universityObjectId = convertToObjectId(universityId);
+  const postObjectId = convertToObjectId(postId);
+
+  const university = await universityModal.findById(universityObjectId).select('highlightPosts').lean();
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  const highlightExists = (university.highlightPosts || []).some(
+    (item) => item.postId.toString() === postObjectId.toString()
+  );
+  if (!highlightExists) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Highlight post not found');
+  }
+
+  const updatedUniversity = await universityModal
+    .findByIdAndUpdate(
+      universityObjectId,
+      {
+        $pull: {
+          highlightPosts: { postId: postObjectId },
+        },
+      },
+      { new: true }
+    )
+    .lean();
+
+  if (!updatedUniversity) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  return updatedUniversity;
 };
 
 

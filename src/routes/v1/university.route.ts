@@ -1,7 +1,6 @@
 import express, { Router } from 'express';
 import { validate } from '../../modules/validate';
-import { universityController, universityValidation } from '../../modules/university';
-import { communityPostsController } from '../../modules/communityPosts';
+import { universityController, universityHighlightsController, universityValidation } from '../../modules/university';
 import { userIdAuth } from '../../modules/user';
 import { requireSuperAdmin } from '../../modules/superAdmins';
 
@@ -20,10 +19,22 @@ router
   .get(validate(universityValidation.searchUniversityByQuery), universityController.searchUniversityByQuery);
 
 
-  router
+router
   .route('/highlights/:universityId')
-  .get(
-    communityPostsController.getUniversityHighlights
+  .get(universityHighlightsController.getUniversityHighlights)
+  .post(
+    userIdAuth,
+    validate(universityValidation.addUniversityHighlightPost),
+    universityHighlightsController.addUniversityHighlightPost
+  );
+
+router
+  .route('/highlights/:universityId/:postId')
+  .delete(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(universityValidation.deleteUniversityHighlightPost),
+    universityHighlightsController.deleteUniversityHighlightPost
   );
 
 router

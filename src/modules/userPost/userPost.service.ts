@@ -37,6 +37,7 @@ import {
 } from '../communityPosts/communityPosts.pipeline';
 import { toIdString, toObjectId, withTransaction } from '../utils';
 import { ProfileFollowingFollowers } from './userPost.interface';
+import { partneredUniService } from '../partneredUni';
 
 function getFollowingFollowersAndMutualIds(profile: ProfileFollowingFollowers | null): {
   followingIds: string[];
@@ -199,10 +200,13 @@ function buildUserHighlightLookupStages(): PipelineStage[] {
 export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT, myUserId?: string) => {
   const skip = (page - 1) * limit;
 
-  const [myBlockedUserIds, viewerRole, visibilityMode] = await Promise.all([
+  const [myBlockedUserIds, viewerRole, visibilityMode, partneredAdminStatus] = await Promise.all([
     getBlockedUserIds(myUserId),
     myUserId ? getViewerProfileRole(myUserId) : Promise.resolve(undefined),
     resolveUserPostVisibilityMode(myUserId, userId),
+    myUserId
+      ? partneredUniService.isPartneredUniversityAdmin(myUserId)
+      : Promise.resolve({ isPartneredUniversityAdmin: false, universityId: null }),
   ]);
 
   const userObjectId = toObjectId(userId);
@@ -220,9 +224,12 @@ export const getAllUserPosts = async (userId: string, page: number = DEFAULT_PAG
     getUserPostListProjectStage({ profileAs: ALIAS_USER_PROFILE }),
   ];
 
-  const userPosts = maskPostProfilesForViewer(
-    await UserPostModel.aggregate(pipeline).exec(),
-    viewerRole
+  const userPosts = partneredUniService.attachPromoteToPosts(
+    maskPostProfilesForViewer(
+      await UserPostModel.aggregate(pipeline).exec(),
+      viewerRole
+    ),
+    partneredAdminStatus
   );
 
   const totalPosts = await countVisibleUserPosts(userId, visibilityMode);
@@ -340,11 +347,14 @@ export const getFollowingAndSelfUserIds = async (userId: string) => {
 
 export const getUserPost = async (postId: string, myUserId?: string) => {
   try {
-    const [myBlockedUserIds, userProfile] = await Promise.all([
+    const [myBlockedUserIds, userProfile, partneredAdminStatus] = await Promise.all([
       getBlockedUserIds(myUserId),
       myUserId
         ? UserProfile.findOne({ users_id: myUserId }).select('following university_id role').lean()
         : Promise.resolve(null),
+      myUserId
+        ? partneredUniService.isPartneredUniversityAdmin(myUserId)
+        : Promise.resolve({ isPartneredUniversityAdmin: false, universityId: null }),
     ]);
 
     const visibilityMode: UserPostVisibilityMode = myUserId
@@ -370,7 +380,8 @@ export const getUserPost = async (postId: string, myUserId?: string) => {
       getUserPostDetailProjectStage({ userFrom: ALIAS_POST_OWNER, profileFrom: ALIAS_PROFILE }),
     );
 
-    return await UserPostModel.aggregate(pipeline);
+    const posts = await UserPostModel.aggregate(pipeline);
+    return partneredUniService.attachPromoteToPosts(posts, partneredAdminStatus);
   } catch (error) {
     console.error('Error fetching getUserPost', error);
     if (error instanceof ApiError) throw error;
@@ -551,9 +562,14 @@ function getTimelineCommunityPostsPipeline(
  * @param limit - Page size (default 10)
  */
 export const getTimelinePostsFromRelationship = async (userId: string, page: number = DEFAULT_PAGE, limit: number = DEFAULT_LIMIT) => {
-  const userProfile = await UserProfile.findOne({ users_id: userId })
-    .select('following communities blockedUsers role university_id')
-    .lean() as TimelineProfileLean | null;
+  const [userProfile, partneredAdminStatus] = await Promise.all([
+    UserProfile.findOne({ users_id: userId })
+      .select('following communities blockedUsers role university_id')
+      .lean() as Promise<TimelineProfileLean | null>,
+    partneredUniService.isPartneredUniversityAdmin(userId),
+  ]);
+
+  
   if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
   const myBlockedUserIds = await getBlockedUserIds(userId);
@@ -626,9 +642,12 @@ export const getTimelinePostsFromRelationship = async (userId: string, page: num
 
   const totalPosts = allPosts.length;
   const totalPages = Math.ceil(totalPosts / limit);
-  const paginatedPosts = maskPostProfilesForViewer(
-    allPosts.slice((page - 1) * limit, page * limit),
-    userProfile.role
+  const paginatedPosts = partneredUniService.attachPromoteToPosts(
+    maskPostProfilesForViewer(
+      allPosts.slice((page - 1) * limit, page * limit),
+      userProfile.role
+    ),
+    partneredAdminStatus
   );
 
   return {

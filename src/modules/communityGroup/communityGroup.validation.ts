@@ -77,6 +77,7 @@ export const createCommunityGroup = {
         .optional(),
       communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
       isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+      requirePostApproval: Joi.boolean().optional(),
     })
     .unknown(true),
 };
@@ -98,6 +99,7 @@ const createCommunityGroupBySuperAdminItem = Joi.object()
       .optional(),
     communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
     isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+    requirePostApproval: Joi.boolean().optional(),
     communityGroupCategory: Joi.alternatives()
       .try(Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())), Joi.valid(null))
       .optional(),
@@ -181,6 +183,7 @@ export const updateCommunityGroup = {
       communityGroupCategory: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())).optional(),
       communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
       isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+      requirePostApproval: Joi.boolean().optional(),
       communityGroupLogoUrl: Joi.object()
         .keys({ imageUrl: Joi.string().uri(), publicId: Joi.string() })
         .optional(),

@@ -15,10 +15,10 @@ import { communityPostCommentsService } from '../communityPostsComments';
 import { validateCommunityMembership } from '../../utils/community';
 import { CommunityGroupType } from '../../config/community.type';
 import type { users as CommunityGroupUser } from '../communityGroup/communityGroup.interface';
+import { groupRequiresPostApproval } from '../communityGroup/communityGroup.access';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { queueSQSNotificationBatch } from '../../amazon-sqs/sqsBatchWrapperFunction';
 import catchAsync from '../utils/catchAsync';
-import { universityModal } from '../university';
 
 
 
@@ -48,7 +48,7 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
   const userId = req.userId as string;
   const { communityId, communityGroupId } = req.body;
   req.body.content = he.decode(req.body.content);
-  let isOfficialGroup = false;
+  let requiresPostApproval = false;
   let isPostLive = false;
 
 
@@ -71,11 +71,13 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
     }
 
-    isPostLive =
-      communityGroup.adminUserId.toString() === userId.toString() ||
-      communityGroup.communityGroupType === CommunityGroupType.CASUAL;
+    requiresPostApproval = groupRequiresPostApproval(communityGroup);
 
-    isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
+    const isGroupAdmin = communityGroup.adminUserId._id.toString() === userId.toString();
+    isPostLive =
+      isGroupAdmin ||
+      communityGroup.communityGroupType === CommunityGroupType.CASUAL ||
+      !requiresPostApproval;
 
     if (!communityGroup.isCommunityGroupLive) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group is not live');
@@ -90,11 +92,12 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
   }
 
 
+
   const post = await communityPostsService.createCommunityPost(
     req.body,
     new mongoose.Types.ObjectId(userId),
     isPostLive,
-    isOfficialGroup
+    requiresPostApproval
   );
 
   const verifiedNonAdmins =
@@ -369,67 +372,4 @@ export const getPostById = catchAsync(async (req: userIdExtend, res: Response) =
   }
 
   return res.status(httpStatus.OK).json({ post, comment });
-});
-
-
-
-
-export const getUniversityHighlights = catchAsync(async (req: Request, res: Response) => {
-  const { universityId } = req.params;
-
-  if (!universityId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'University ID is required');
-  }
-
-  const university = await universityModal.findById(new mongoose.Types.ObjectId(universityId)).lean()
-
-  if (!university) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
-  }
-
-  const sortedHighlights = [...(university.highlightPosts || [])].sort(
-    (a, b) => a.position - b.position
-  );
-
-
-  const posts = await Promise.all(
-    sortedHighlights.map(async (highlight) => {
-      try {
-        if (highlight.postType === 'CommunityPost') {
-          const result = await communityPostsService.getCommunityPostForHighlight(
-            highlight.postId.toString(),
-          );
-
-          return result
-            ? {
-                ...result,
-                postType: POST_TYPE_COMMUNITY,
-                position: highlight.position,
-              }
-            : null;
-        }
-
-        if (highlight.postType === 'UserPost') {
-          const result = await userPostService.getUserHighlightPost(
-            highlight.postId.toString(),
-          );
-
-          return result
-            ? {
-                ...result,
-                postType: POST_TYPE_TIMELINE,
-                position: highlight.position,
-              }
-            : null;
-        }
-
-        return null;
-      } catch {
-        return null;
-      }
-    })
-  );
-  
-  return res.status(httpStatus.OK).json(posts.filter(Boolean));
-
 });
