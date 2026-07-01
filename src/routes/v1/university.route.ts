@@ -26,6 +26,11 @@ router
     userIdAuth,
     validate(universityValidation.addUniversityHighlightPost),
     universityHighlightsController.addUniversityHighlightPost
+  )
+  .put(
+    userIdAuth,
+    validate(universityValidation.updateUniversityHighlightPostPositions),
+    universityHighlightsController.updateUniversityHighlightPostPositions
   );
 
 router
@@ -35,6 +40,14 @@ router
     requireSuperAdmin,
     validate(universityValidation.deleteUniversityHighlightPost),
     universityHighlightsController.deleteUniversityHighlightPost
+  );
+
+
+  router
+  .route('/id/:universityId')
+  .get(
+    validate(universityValidation.getUniversityByUniversityId),
+    universityController.getUniversityByUniversityId
   );
 
 router
@@ -53,12 +66,20 @@ router
     universityController.setSemesterStart
   );
 
+router
+  .route('/:universityId/profile')
+  .put(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(universityValidation.updateUniversityProfile),
+    universityController.updateUniversityProfile
+  );
 
-  
+
 
 router
   .route('/:university_name')
-  .get(validate(universityValidation.getUniversityById), universityController.getUniversityById);
+  .get(validate(universityValidation.getUniversityByName), universityController.getUniversityByName);
 
 export default router;
 

@@ -5,9 +5,42 @@ interface ISemesterStart {
   month: number;
 }
 
+interface IUniversityContactsUpdate {
+  email?: string;
+  phone?: string;
+  address?: string;
+  office_hours?: string;
+}
+
+interface IUniversityProfileUpdate {
+  name?: string;
+  description?: string;
+  long_description?: string;
+  short_overview?: string;
+  shortOverview?: string;
+  logo?: string;
+  campus?: string;
+  contacts?: IUniversityContactsUpdate;
+  email?: string;
+  phone?: string;
+  address?: string;
+  office_hours?: string;
+}
+
+type IUniversityProfileUpdateData = Pick<
+  IUniversity,
+  'name' | 'long_description' | 'short_overview' | 'logo' | 'campus' | 'email' | 'phone' | 'address' | 'office_hours'
+>;
+
 export type HighlightPost = {
   postId: Types.ObjectId;
   postType: "CommunityPost" | "UserPost";
+  position: number;
+};
+
+export type HighlightPostPositionUpdate = {
+  postId: string;
+  postType: HighlightPost['postType'];
   position: number;
 };
 
@@ -119,4 +152,14 @@ interface College extends Document {
 type UniversityPayload = Partial<IUniversity>;
 type UniversityFilter = Record<string, unknown>;
 
-export { College, ISemesterStart, SearchParamsType, UniversityPayload, UniversityFilter, IUniversity };
+export {
+  College,
+  ISemesterStart,
+  SearchParamsType,
+  UniversityPayload,
+  UniversityFilter,
+  IUniversity,
+  IUniversityContactsUpdate,
+  IUniversityProfileUpdate,
+  IUniversityProfileUpdateData,
+};

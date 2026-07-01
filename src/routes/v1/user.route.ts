@@ -44,9 +44,13 @@ router
 
 
 
-  router
+router
   .route('/eligible')
   .get(userIdAuth, userController.isUserEligibleForRewards);
+
+router
+  .route('/community-admin')
+  .get(userIdAuth, userController.isUserCommunityAdmin);
 
 router
   .route('/rewards')

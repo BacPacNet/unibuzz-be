@@ -43,10 +43,16 @@ export const getPartneredUniversities = catchAsync(async (_: Request, res: Respo
   return res.status(httpStatus.OK).json(partneredUniversities);
 });
 
-// get one university
-export const getUniversityById = catchAsync(async (req: Request, res: Response) => {
+// get one university by name
+export const getUniversityByName = catchAsync(async (req: Request, res: Response) => {
   const { university_name } = req.params;
-  const university = await universityService.getUniversityById(decodeURIComponent(university_name as string));
+  const university = await universityService.getUniversityByName(decodeURIComponent(university_name as string));
+  return res.status(httpStatus.OK).json(university);
+});
+
+export const getUniversityByUniversityId = catchAsync(async (req: Request, res: Response) => {
+  const { universityId } = req.params;
+  const university = await universityService.getUniversityByUniversityId(universityId as string);
   return res.status(httpStatus.OK).json(university);
 });
 
@@ -77,6 +83,18 @@ export const setSemesterStart = catchAsync(async (req: Request, res: Response) =
     day,
     month,
   });
+
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  return res.status(httpStatus.OK).json(university);
+});
+
+export const updateUniversityProfile = catchAsync(async (req: Request, res: Response) => {
+  const { universityId } = req.params;
+
+  const university = await universityService.updateUniversityProfile(universityId as string, req.body);
 
   if (!university) {
     throw new ApiError(httpStatus.NOT_FOUND, 'University not found');

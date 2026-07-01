@@ -96,6 +96,17 @@ export const addUniversityHighlightPost = catchAsync(async (req: Request, res: R
   return res.status(httpStatus.CREATED).json(university);
 });
 
+export const updateUniversityHighlightPostPositions = catchAsync(async (req: Request, res: Response) => {
+  const { universityId } = req.params;
+
+  const university = await universityService.updateUniversityHighlightPostPositions(
+    universityId as string,
+    req.body
+  );
+
+  return res.status(httpStatus.OK).json(university);
+});
+
 export const deleteUniversityHighlightPost = catchAsync(async (req: Request, res: Response) => {
   const { universityId, postId } = req.params;
 

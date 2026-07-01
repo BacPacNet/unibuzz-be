@@ -634,3 +634,8 @@ export const getCommunityUsersService = async (communityId: string, options: Get
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, message);
   }
 };
+
+export const isUserCommunityAdmin = async (userId: mongoose.Types.ObjectId) => {
+  const community = await communityModel.findOne({ adminId: userId }).lean();
+  return community;
+};

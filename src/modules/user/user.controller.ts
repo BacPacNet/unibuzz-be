@@ -12,6 +12,8 @@ import { userProfileService } from '../userProfile';
 import { BlockedUserEntry } from '../userProfile/userProfile.interface';
 import { GetAllUserQuery } from './user.interfaces';
 import { whitelistRewardCommunityService } from '../whitelistRewardCommunity';
+import { communityService } from '../community';
+import { universityService } from '../university';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -190,4 +192,21 @@ export const isUserEligibleForRewards = catchAsync(async (req: userIdExtend, res
   const userId = parseUserIdOrThrow(req.userId);
   const eligible = await whitelistRewardCommunityService.isUserEligibleForRewards(userId);
   res.status(httpStatus.OK).json({ eligible });
+});
+
+export const isUserCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = parseUserIdOrThrow(req.userId);
+  const community = await communityService.isUserCommunityAdmin(userId);
+
+  if (!community) {
+    return res.status(httpStatus.OK).json({ isCommunityAdmin: false });
+  }
+
+  const university = await universityService.getUniversityByRealId(String(community.university_id));
+
+  res.status(httpStatus.OK).json({
+    isCommunityAdmin: true,
+    university_id: community.university_id,
+    universityName: university?.name ?? null,
+  });
 });
