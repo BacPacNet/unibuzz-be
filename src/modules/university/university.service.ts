@@ -1,7 +1,14 @@
 import mongoose from 'mongoose';
 import httpStatus from 'http-status';
 import universityModal from './university.model';
-import { HighlightPost, ISemesterStart, UniversityFilter } from './university.interface';
+import {
+  HighlightPost,
+  HighlightPostPositionUpdate,
+  ISemesterStart,
+  IUniversityProfileUpdate,
+  IUniversityProfileUpdateData,
+  UniversityFilter,
+} from './university.interface';
 import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
 import communityModel from '../community/community.model';
 import communityGroupModel from '../communityGroup/communityGroup.model';
@@ -13,7 +20,7 @@ import { convertToObjectId } from '../../utils/common';
 
 
 
-export const getUniversityById = async (university_name: string) => {
+export const getUniversityByName = async (university_name: string) => {
   const university = await universityModal.findOne({ name: university_name });
 
   if (!university) {
@@ -171,9 +178,80 @@ export const getUniversityByRealId = async (id: string) => {
   return await universityModal.findById(new mongoose.Types.ObjectId(id));
 };
 
+export const getUniversityByUniversityId = async (universityId: string) => {
+  const university = await universityModal.findById(convertToObjectId(universityId));
+
+  if (!university) {
+    return university;
+  }
+
+  const isAllowedToJoin = await partneredUniService.isPartneredUniversity(university._id);
+
+  return {
+    ...university.toObject(),
+    isAllowedToJoin,
+  };
+};
+
 export const setSemesterStart = async (university_name: string, semesterStart: ISemesterStart) => {
   return universityModal
     .findOneAndUpdate({ name: university_name }, { $set: { semesterStart } }, { new: true })
+    .lean();
+};
+
+export const updateUniversityProfile = async (universityId: string, payload: IUniversityProfileUpdate) => {
+  const updateData: Partial<IUniversityProfileUpdateData> = {};
+
+  if (payload.name !== undefined) {
+    const trimmedName = payload.name.trim();
+    if (!trimmedName) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'University name cannot be empty');
+    }
+    updateData.name = trimmedName;
+  }
+
+  const description = payload.long_description ?? payload.description;
+  if (description !== undefined) {
+    updateData.long_description = description;
+  }
+
+  const shortOverview = payload.short_overview ?? payload.shortOverview;
+  if (shortOverview !== undefined) {
+    updateData.short_overview = shortOverview;
+  }
+
+  if (payload.logo !== undefined) {
+    updateData.logo = payload.logo;
+  }
+
+  if (payload.campus !== undefined) {
+    updateData.campus = payload.campus;
+  }
+
+  const contacts = payload.contacts ?? {};
+
+  if (payload.email !== undefined || contacts.email !== undefined) {
+    updateData.email = payload.email ?? contacts.email ?? '';
+  }
+
+  if (payload.phone !== undefined || contacts.phone !== undefined) {
+    updateData.phone = payload.phone ?? contacts.phone ?? '';
+  }
+
+  if (payload.address !== undefined || contacts.address !== undefined) {
+    updateData.address = payload.address ?? contacts.address ?? '';
+  }
+
+  if (payload.office_hours !== undefined || contacts.office_hours !== undefined) {
+    updateData.office_hours = payload.office_hours ?? contacts.office_hours ?? '';
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'At least one valid university field is required for update');
+  }
+
+  return universityModal
+    .findByIdAndUpdate(convertToObjectId(universityId), { $set: updateData }, { new: true })
     .lean();
 };
 
@@ -257,6 +335,83 @@ export const deleteUniversityHighlightPost = async (universityId: string, postId
       {
         $pull: {
           highlightPosts: { postId: postObjectId },
+        },
+      },
+      { new: true }
+    )
+    .lean();
+
+  if (!updatedUniversity) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  return updatedUniversity;
+};
+
+export const updateUniversityHighlightPostPositions = async (
+  universityId: string,
+  highlights: HighlightPostPositionUpdate[]
+) => {
+  const universityObjectId = convertToObjectId(universityId);
+  const university = await universityModal.findById(universityObjectId).select('highlightPosts').lean();
+
+  if (!university) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
+  }
+
+  const existingHighlights = university.highlightPosts || [];
+  if (existingHighlights.length !== highlights.length) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'All highlight posts must be provided');
+  }
+
+  const seenPostIds = new Set<string>();
+  const seenPositions = new Set<number>();
+
+  for (const highlight of highlights) {
+    const normalizedPostId = convertToObjectId(highlight.postId).toString();
+
+    if (seenPostIds.has(normalizedPostId)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Duplicate postId found in highlight positions');
+    }
+    seenPostIds.add(normalizedPostId);
+
+    if (seenPositions.has(highlight.position)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Duplicate position found in highlight positions');
+    }
+    seenPositions.add(highlight.position);
+  }
+
+  const existingHighlightMap = new Map(
+    existingHighlights.map((item) => [item.postId.toString(), item.postType])
+  );
+
+  for (const highlight of highlights) {
+    const normalizedPostId = convertToObjectId(highlight.postId).toString();
+    const existingPostType = existingHighlightMap.get(normalizedPostId);
+
+    if (!existingPostType) {
+      throw new ApiError(httpStatus.NOT_FOUND, `Highlight post not found for postId ${highlight.postId}`);
+    }
+
+    if (existingPostType !== highlight.postType) {
+      throw new ApiError(httpStatus.BAD_REQUEST, `Invalid postType for postId ${highlight.postId}`);
+    }
+  }
+
+  const updatedHighlights = highlights
+    .map((highlight) => ({
+      postId: convertToObjectId(highlight.postId),
+      postType: highlight.postType,
+      position: highlight.position,
+    }))
+    .sort((a, b) => a.position - b.position);
+
+  const updatedUniversity = await universityModal
+    .findByIdAndUpdate(
+      universityObjectId,
+      {
+        $set: {
+          highlightPosts: updatedHighlights,
         },
       },
       { new: true }
