@@ -10,7 +10,7 @@ import * as userService from './user.service';
 import { userIdExtend } from '../../config/userIDType';
 import { userProfileService } from '../userProfile';
 import { BlockedUserEntry } from '../userProfile/userProfile.interface';
-import { GetAllUserQuery } from './user.interfaces';
+import { GetAllUserQuery, GetAllUsersDirectoryQuery, ExportAllUsersDirectoryQuery } from './user.interfaces';
 import { whitelistRewardCommunityService } from '../whitelistRewardCommunity';
 import { communityService } from '../community';
 import { universityService } from '../university';
@@ -64,7 +64,39 @@ export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) =>
   res.status(httpStatus.OK).json(allUsers);
 });
 
+export const getAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, studyYear, major, occupation, affiliation, role, universityId } =
+    req.query as GetAllUsersDirectoryQuery;
+  const allUsers = await userService.getAllUsersDirectory(
+    name ?? '',
+    Number(page),
+    Number(limit),
+    req.userId as string,
+    universityId ?? '',
+    studyYear ? studyYear.split(',') : [],
+    major ? major.split(',') : [],
+    occupation ? occupation.split(',') : [],
+    affiliation ? affiliation.split(',') : [],
+    role?.toLowerCase() ?? ''
+  );
+  res.status(httpStatus.OK).json(allUsers);
+});
 
+export const exportAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { name, studyYear, major, occupation, affiliation, role, universityId } =
+    req.query as ExportAllUsersDirectoryQuery;
+  const result = await userService.exportAllUsersDirectory(
+    name ?? '',
+    req.userId as string,
+    universityId ?? '',
+    studyYear ? studyYear.split(',') : [],
+    major ? major.split(',') : [],
+    occupation ? occupation.split(',') : [],
+    affiliation ? affiliation.split(',') : [],
+    role?.toLowerCase() ?? ''
+  );
+  res.status(httpStatus.OK).json(result);
+});
 
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   if (typeof req.params['userId'] === 'string') {

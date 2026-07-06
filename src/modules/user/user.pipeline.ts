@@ -452,6 +452,7 @@ export interface BuildGetAllUserMatchStageOptions {
   firstName: string;
   lastName: string;
   universityName: string;
+  communityId?: string;
   orConditions: GetAllUserOrCondition[];
 }
 
@@ -459,7 +460,7 @@ export interface BuildGetAllUserMatchStageOptions {
  * Build the $match stage for getAllUser aggregation (excluding chatId-based exclusion).
  */
 export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOptions): GetAllUserMatchStage {
-  const { userId, myBlockedUserIds, firstName, lastName, universityName, orConditions } = options;
+  const { userId, myBlockedUserIds, firstName, lastName, universityName, communityId, orConditions } = options;
 
   const matchStage: GetAllUserMatchStage = {
     _id: {
@@ -482,6 +483,17 @@ export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOpti
   if (lastName) {
     matchStage.lastName = { $regex: new RegExp(lastName, 'i') };
   }
+  if (communityId?.trim()) {
+    const normalizedCommunityId = communityId.trim();
+    matchStage.$and = [
+      {
+        $or: [
+          { 'profile.communities.communityId': new mongoose.Types.ObjectId(normalizedCommunityId) },
+          { 'profile.email.communityId': normalizedCommunityId },
+        ],
+      },
+    ];
+  }
   if (universityName.trim() !== '') {
     matchStage['profile.university_name'] = { $regex: new RegExp(universityName, 'i') };
   }
@@ -495,8 +507,8 @@ export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOpti
 export interface GetAllUserPipelineOptions {
   matchStage: GetAllUserMatchStage;
   followingIds: string[];
-  skip: number;
-  limit: number;
+  skip?: number;
+  limit?: number;
 }
 
 /**
@@ -538,8 +550,8 @@ export function getAllUserPipeline(options: GetAllUserPipelineOptions): Pipeline
               'profile.communities': 0,
             },
           },
-          { $skip: skip },
-          { $limit: limit },
+          ...(skip !== undefined ? [{ $skip: skip }] : []),
+          ...(limit !== undefined ? [{ $limit: limit }] : []),
         ],
         totalCount: [{ $count: 'total' }],
       },

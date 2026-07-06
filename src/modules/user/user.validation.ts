@@ -70,6 +70,28 @@ export const getAllUser = {
   }),
 };
 
+const usersDirectoryFilters = {
+  name: Joi.string().optional(),
+  universityName: Joi.string().optional(),
+  universityId: Joi.string().optional(),
+  studyYear: Joi.string().optional(),
+  major: Joi.string().optional(),
+  occupation: Joi.string().optional(),
+  affiliation: Joi.string().optional(),
+  role: Joi.string().optional(),
+};
+
+export const getAllUsersDirectory = {
+  query: Joi.object().keys({
+    ...paginationQuery,
+    ...usersDirectoryFilters,
+  }),
+};
+
+export const exportAllUsersDirectory = {
+  query: Joi.object().keys(usersDirectoryFilters),
+};
+
 export const checkUserEmailAndUserNameAvailability = {
   body: Joi.object().keys({
     email: Joi.string().required().email(),

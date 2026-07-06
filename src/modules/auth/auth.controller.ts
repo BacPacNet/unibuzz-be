@@ -184,17 +184,21 @@ export const bulkRegisterUsersBySuperAdmin = catchAsync(async (req: Request, res
         isPasswordSet: false,
       } as any;
       if (registerBody.uniqueId && universityId) {
+        const rawUniqueId = String(registerBody.uniqueId).trim();
+        const scopedUniqueId = `${String(universityId).trim()}_${rawUniqueId}`;
+
         const isUniqueIdAlreadyUsedInUniversity = await userService.isUniqueIdTakenInUniversity(
-          registerBody.uniqueId,
+          scopedUniqueId,
           universityId,
           universityName
         );
         if (isUniqueIdAlreadyUsedInUniversity) {
           throw new ApiError(
             httpStatus.CONFLICT,
-            `Unique ID ${registerBody.uniqueId} already exists for this university`
+            `Unique ID ${rawUniqueId} already exists for this university`
           );
         }
+        registerBody.uniqueId = scopedUniqueId;
       }
       // return console.log("registerBody",registerBody);
       const user = await userService.registerUser(registerBody);

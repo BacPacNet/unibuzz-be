@@ -267,15 +267,33 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
 
   if (normalizedUniqueIds.length === 0 || !normalizedCommunityId) return [];
 
+  const community = await communityModel.findById(normalizedCommunityId, { users: 1, university_id: 1 }).lean();
+  const universityId = community?.university_id?.toString() ?? '';
+
+  const rawUniqueIdByStoredUniqueId = new Map<string, string>();
+  const uniqueIdsToLookup = Array.from(
+    new Set(
+      normalizedUniqueIds.flatMap((rawUniqueId) => {
+        rawUniqueIdByStoredUniqueId.set(rawUniqueId, rawUniqueId);
+        const lookupIds = [rawUniqueId];
+        if (universityId) {
+          const scopedUniqueId = `${universityId}_${rawUniqueId}`;
+          lookupIds.push(scopedUniqueId);
+          rawUniqueIdByStoredUniqueId.set(scopedUniqueId, rawUniqueId);
+        }
+        return lookupIds;
+      })
+    )
+  );
+
   const users = await User.find(
     {
-      uniqueId: { $in: normalizedUniqueIds },
+      uniqueId: { $in: uniqueIdsToLookup },
       isDeleted: { $ne: true },
     },
     { _id: 1, uniqueId: 1 }
   ).lean();
 
-  const community = await communityModel.findById(normalizedCommunityId, { users: 1 }).lean();
   const membershipMap = new Map<string, boolean>();
 
   if (Array.isArray(community?.users)) {
@@ -292,6 +310,9 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
   }
 
   
+  const isScopedUniqueIdForUniversity = (storedUniqueId: string, rawUniqueId: string) =>
+    Boolean(universityId) && storedUniqueId === `${universityId}_${rawUniqueId}`;
+
   const selectedUsersByUniqueId = new Map<string, (typeof users)[number]>();
   const usersWithoutUniqueId: typeof users = [];
 
@@ -301,9 +322,23 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
       return;
     }
 
-    const existingUser = selectedUsersByUniqueId.get(user.uniqueId);
+    const storedUniqueId = user.uniqueId.trim();
+    const rawUniqueId = rawUniqueIdByStoredUniqueId.get(storedUniqueId) ?? storedUniqueId;
+    const existingUser = selectedUsersByUniqueId.get(rawUniqueId);
     if (!existingUser) {
-      selectedUsersByUniqueId.set(user.uniqueId, user);
+      selectedUsersByUniqueId.set(rawUniqueId, user);
+      return;
+    }
+
+    const existingStoredUniqueId = String(existingUser.uniqueId ?? '').trim();
+    const existingIsScoped = isScopedUniqueIdForUniversity(existingStoredUniqueId, rawUniqueId);
+    const currentIsScoped = isScopedUniqueIdForUniversity(storedUniqueId, rawUniqueId);
+
+    if (currentIsScoped && !existingIsScoped) {
+      selectedUsersByUniqueId.set(rawUniqueId, user);
+      return;
+    }
+    if (existingIsScoped && !currentIsScoped) {
       return;
     }
 
@@ -311,7 +346,7 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
     const currentIsMember = membershipMap.has(String(user._id));
 
     if (!existingIsMember && currentIsMember) {
-      selectedUsersByUniqueId.set(user.uniqueId, user);
+      selectedUsersByUniqueId.set(rawUniqueId, user);
     }
   });
 
@@ -334,7 +369,7 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
     };
 
     if (typeof user.uniqueId === 'string' || user.uniqueId === null) {
-      mappedUser.uniqueId = user.uniqueId;
+      mappedUser.uniqueId = rawUniqueIdByStoredUniqueId.get(String(user.uniqueId).trim()) ?? user.uniqueId;
     }
 
     return mappedUser;
@@ -457,6 +492,115 @@ export const getAllUser = async (
   const totalPages = computeTotalPages(totalUsers, limitPerPage);
 
   return { currentPage, totalPages, users };
+};
+
+const buildUsersDirectoryMatchStage = async (
+  userId: string,
+  name: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const [firstName = '', lastName = ''] = name.split(' ');
+
+  const normalizedUniversityId = decodeURI(universityId || '');
+  const communityId = normalizedUniversityId
+    ? (await communityModel.findOne({ university_id: convertToObjectId(normalizedUniversityId) }).select('_id').lean())?._id?.toString() ?? ''
+    : '';
+
+  const orConditions = buildGetAllUserOrConditions(studyYear, major, occupation, affiliation, role);
+  const matchStage = buildGetAllUserMatchStage({
+    userId,
+    myBlockedUserIds: [],
+    firstName,
+    lastName,
+    universityName: '',
+    communityId,
+    orConditions,
+  });
+
+  delete matchStage._id.$ne;
+  delete matchStage['profile.blockedUsers'];
+
+  return matchStage;
+};
+
+export const getAllUsersDirectory = async (
+  name: string = '',
+  page: number,
+  limit: number,
+  userId: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const currentPage = page || DEFAULT_PAGE;
+  const limitPerPage = limit || DEFAULT_LIMIT;
+  const startIndex = getPaginationSkip(currentPage, limitPerPage);
+
+  const matchStage = await buildUsersDirectoryMatchStage(
+    userId,
+    name,
+    universityId,
+    studyYear,
+    major,
+    occupation,
+    affiliation,
+    role
+  );
+
+  const pipeline = getAllUserPipeline({
+    matchStage,
+    followingIds: [],
+    skip: startIndex,
+    limit: limitPerPage,
+  });
+  const [result] = await User.aggregate(pipeline);
+
+  const users = result?.users ?? [];
+  const totalUsers = result?.totalCount?.[0]?.total ?? 0;
+  const totalPages = computeTotalPages(totalUsers, limitPerPage);
+
+  return { currentPage, totalPages, users };
+};
+
+export const exportAllUsersDirectory = async (
+  name: string = '',
+  userId: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const matchStage = await buildUsersDirectoryMatchStage(
+    userId,
+    name,
+    universityId,
+    studyYear,
+    major,
+    occupation,
+    affiliation,
+    role
+  );
+
+  const pipeline = getAllUserPipeline({
+    matchStage,
+    followingIds: [],
+  });
+  const [result] = await User.aggregate(pipeline);
+
+  const users = result?.users ?? [];
+  const totalCount = result?.totalCount?.[0]?.total ?? 0;
+
+  return { users, totalCount };
 };
 
 /**

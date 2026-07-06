@@ -64,4 +64,14 @@ export interface GetUserFilteredCommunitiesResult {
 interface CreateCommunityBody {
   university_id: string;
 }
-export { communityInterface, GetCommunityUsersOptions,CreateCommunityBody };
+
+/** Query params for exportFilteredSuperAdminCommunity (same filters as list, no pagination) */
+export interface ExportFilteredSuperAdminCommunityQuery {
+  sort?: string;
+  searchTerm?: string;
+  selectedType?: string;
+  selectedLabel?: string;
+  selectedFilters?: string;
+}
+
+export { communityInterface, GetCommunityUsersOptions, CreateCommunityBody };

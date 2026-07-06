@@ -2,7 +2,7 @@ import mongoose, { Types } from 'mongoose';
 import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { getUserById, getUsersByUniqueIds } from '../user/user.service';
+import { getUserById, getUsersByUniqueIdsWithCommunityMembership } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
 import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupType, communityPostStatus } from '../../config/community.type';
 import {
@@ -746,15 +746,30 @@ export const createCommunityGroupBySuperAdmin = async (
     ? [normalizedAdminUniqueId, ...normalizedMemberUniqueIds]
     : [...normalizedMemberUniqueIds];
 
-  const resolvedUsers = await getUsersByUniqueIds(uniqueIdsToLookup);
+  const resolvedUsers = await getUsersByUniqueIdsWithCommunityMembership(uniqueIdsToLookup, communityId);
   const userByUniqueId = new Map<string, { _id: mongoose.Types.ObjectId; uniqueId?: string | null }>();
+  const communityMembershipByUniqueId = new Map<string, boolean>();
   for (const resolvedUser of resolvedUsers) {
     if (resolvedUser.uniqueId) {
-      userByUniqueId.set(resolvedUser.uniqueId.trim(), resolvedUser);
+      const normalizedUniqueId = resolvedUser.uniqueId.trim();
+      userByUniqueId.set(normalizedUniqueId, resolvedUser);
+      communityMembershipByUniqueId.set(normalizedUniqueId, resolvedUser.isCommunityMember);
     }
   }
 
+  const communityMemberUserIds = new Set(
+    (await communityModel.findById(communityId).select('users').lean())?.users?.map((communityUser) => {
+      const member = communityUser as { id?: mongoose.Types.ObjectId; _id?: mongoose.Types.ObjectId };
+      return String(member._id ?? member.id ?? '');
+    }).filter(Boolean) ?? []
+  );
+
   const missingMemberUniqueIds = normalizedMemberUniqueIds.filter((memberUniqueId) => !userByUniqueId.has(memberUniqueId));
+  const nonCommunityMemberAdminIds: string[] = [];
+  const nonCommunityMemberMemberIds = normalizedMemberUniqueIds.filter(
+    (memberUniqueId) =>
+      userByUniqueId.has(memberUniqueId) && communityMembershipByUniqueId.get(memberUniqueId) !== true
+  );
 
   let adminUserIdForGroup = userId;
   if (normalizedAdminUniqueId) {
@@ -771,20 +786,44 @@ export const createCommunityGroupBySuperAdmin = async (
       };
       throw adminError;
     }
+    if (communityMembershipByUniqueId.get(normalizedAdminUniqueId) !== true) {
+      nonCommunityMemberAdminIds.push(normalizedAdminUniqueId);
+      const adminError = new ApiError(
+        httpStatus.BAD_REQUEST,
+        `Admin with uniqueId "${normalizedAdminUniqueId}" is not a member of this university community`
+      );
+      (
+        adminError as ApiError & {
+          nonCommunityMemberUniqueIds?: { adminId: string[]; memberList: string[] };
+        }
+      ).nonCommunityMemberUniqueIds = {
+        adminId: nonCommunityMemberAdminIds,
+        memberList: nonCommunityMemberMemberIds,
+      };
+      throw adminError;
+    }
     adminUserIdForGroup = adminByUniqueId._id.toString();
   }
 
   const selectedUsersFromMemberList = normalizedMemberUniqueIds
-    .map((memberUniqueId) => userByUniqueId.get(memberUniqueId))
-    .filter((member): member is { _id: mongoose.Types.ObjectId; uniqueId?: string | null } => Boolean(member))
-    .map((member) => ({
-      users_id: member._id.toString(),
-    }));
+    .filter(
+      (memberUniqueId) =>
+        userByUniqueId.has(memberUniqueId) && communityMembershipByUniqueId.get(memberUniqueId) === true
+    )
+    .map((memberUniqueId) => {
+      const member = userByUniqueId.get(memberUniqueId)!;
+      return {
+        users_id: member._id.toString(),
+      };
+    });
 
   const existingSelectedUsers = Array.isArray(body.selectedUsers) ? body.selectedUsers : [];
   const existingSelectedIds = new Set(existingSelectedUsers.map((item) => String(item.users_id)));
+  const communityExistingSelectedUsers = existingSelectedUsers.filter((item) =>
+    communityMemberUserIds.has(String(item.users_id))
+  );
   const mergedSelectedUsers = [
-    ...existingSelectedUsers,
+    ...communityExistingSelectedUsers,
     ...selectedUsersFromMemberList.filter((item) => !existingSelectedIds.has(item.users_id)),
   ];
 
@@ -804,10 +843,6 @@ export const createCommunityGroupBySuperAdmin = async (
   if (!creatorProfile) {
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
   }
-
-  const inviteUsers = (normalizedBody.selectedUsers ?? []).map((user: SelectedUserItem) => ({
-    userId: user.users_id,
-  }));
 
   const normalizedType = String(normalizedBody.communityGroupType ?? '').toLowerCase();
   const isOfficial = normalizedType === CommunityGroupType.OFFICIAL;
@@ -833,6 +868,46 @@ export const createCommunityGroupBySuperAdmin = async (
     status: status.accepted,
   });
 
+  const selectedUserIds = Array.from(
+    new Set(
+      (normalizedBody.selectedUsers ?? [])
+        .map((user) => user.users_id?.toString())
+        .filter((selectedUserId): selectedUserId is string => Boolean(selectedUserId))
+        .filter((selectedUserId) => communityMemberUserIds.has(selectedUserId))
+    )
+  );
+
+  const selectedMembers = await Promise.all(
+    selectedUserIds.map(async (selectedUserId) => {
+      const [selectedUser, selectedUserProfile] = await Promise.all([
+        getUserById(new mongoose.Types.ObjectId(selectedUserId)),
+        userProfileService.getUserProfileById(selectedUserId),
+      ]);
+
+      if (!selectedUser) {
+        throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+
+      if (!selectedUserProfile) {
+        throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
+      }
+
+      return buildGroupMemberFromUserAndProfile(selectedUser, selectedUserProfile, {
+        isRequestAccepted: true,
+        status: status.accepted,
+      });
+    })
+  );
+
+  const groupUsers = [creatorAsMember];
+  const existingGroupUserIds = new Set(groupUsers.map((user) => user._id.toString()));
+  for (const member of selectedMembers) {
+    if (!existingGroupUserIds.has(member._id.toString())) {
+      groupUsers.push(member);
+      existingGroupUserIds.add(member._id.toString());
+    }
+  }
+
   const createdGroup = await communityGroupModel.create({
     ...normalizedBody,
     title: normalizedBody.title!.trim(),
@@ -841,8 +916,8 @@ export const createCommunityGroupBySuperAdmin = async (
     communityGroupType: isOfficial ? CommunityGroupType.OFFICIAL : CommunityGroupType.CASUAL,
     status: isOfficial ? status.accepted : status.default,
     isCommunityGroupLive: true,
-    inviteUsers,
-    users: [creatorAsMember],
+    inviteUsers: [],
+    users: groupUsers,
   });
 
   return {
@@ -850,6 +925,10 @@ export const createCommunityGroupBySuperAdmin = async (
     unresolvedUniqueIds: {
       adminId: [] as string[],
       memberList: missingMemberUniqueIds,
+      nonCommunityMemberUniqueIds: {
+        adminId: nonCommunityMemberAdminIds,
+        memberList: nonCommunityMemberMemberIds,
+      },
     },
   };
 };

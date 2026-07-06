@@ -41,6 +41,15 @@ router
   );
 
 router
+  .route('/super-admin/filtered/:universityId/export')
+  .get(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityValidation.exportFilteredSuperAdminCommunity),
+    communityController.exportFilteredCommunityForSuperAdmin
+  );
+
+router
   .route('/super-admin/filtered/:universityId')
   .post(
     userIdAuth,

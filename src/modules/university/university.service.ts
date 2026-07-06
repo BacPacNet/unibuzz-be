@@ -42,10 +42,15 @@ export const getUniversityDashboardStats = async (university_name: string) => {
     return null;
   }
 
-  const universityNameRegex = new RegExp(escapeRegex(university_name), 'i');
+  const community = await communityModel.findOne({ university_id: university._id }).select('_id').lean();
 
-  const [community, communityUserStats, profileUserStats] = await Promise.all([
-    communityModel.findOne({ university_id: university._id }).select('_id').lean(),
+  const profileMatchOr: Record<string, unknown>[] = [];
+  if (community?._id) {
+    profileMatchOr.push({ 'communities.communityId': community._id });
+    profileMatchOr.push({ 'email.communityId': community._id.toString() });
+  }
+
+  const [communityUserStats, profileUserStats] = await Promise.all([
     communityModel.aggregate([
       { $match: { university_id: university._id } },
       { $project: { users: { $ifNull: ['$users', []] } } },
@@ -82,18 +87,21 @@ export const getUniversityDashboardStats = async (university_name: string) => {
               ],
             },
           },
+          applicantUserIds: {
+            $addToSet: {
+              $cond: [
+                { $eq: [{ $toLower: { $ifNull: ['$users.role', ''] } }, 'applicant'] },
+                '$users.id',
+                null,
+              ],
+            },
+          },
         },
       },
     ]),
     mongoose.model('UserProfile').aggregate([
       {
-        $match: {
-          $or: [
-            { university_id: university._id },
-            { university_name: { $regex: universityNameRegex } },
-            { 'email.UniversityName': { $regex: universityNameRegex } },
-          ],
-        },
+        $match: profileMatchOr.length ? { $or: profileMatchOr } : { _id: { $exists: false } },
       },
       {
         $lookup: {
@@ -127,16 +135,35 @@ export const getUniversityDashboardStats = async (university_name: string) => {
               ],
             },
           },
+          applicantUserIds: {
+            $addToSet: {
+              $cond: [
+                { $eq: [{ $toLower: { $ifNull: ['$role', ''] } }, 'applicant'] },
+                '$users_id',
+                null,
+              ],
+            },
+          },
         },
       },
     ]),
   ]);
 
   const communityStats = communityUserStats[0] as
-    | { allUserIds?: mongoose.Types.ObjectId[]; studentUserIds?: mongoose.Types.ObjectId[]; facultyUserIds?: mongoose.Types.ObjectId[] }
+    | {
+        allUserIds?: mongoose.Types.ObjectId[];
+        studentUserIds?: mongoose.Types.ObjectId[];
+        facultyUserIds?: mongoose.Types.ObjectId[];
+        applicantUserIds?: mongoose.Types.ObjectId[];
+      }
     | undefined;
   const profileStats = profileUserStats[0] as
-    | { allUserIds?: mongoose.Types.ObjectId[]; studentUserIds?: mongoose.Types.ObjectId[]; facultyUserIds?: mongoose.Types.ObjectId[] }
+    | {
+        allUserIds?: mongoose.Types.ObjectId[];
+        studentUserIds?: mongoose.Types.ObjectId[];
+        facultyUserIds?: mongoose.Types.ObjectId[];
+        applicantUserIds?: mongoose.Types.ObjectId[];
+      }
     | undefined;
 
   const toIdSet = (ids?: mongoose.Types.ObjectId[]) =>
@@ -154,6 +181,10 @@ export const getUniversityDashboardStats = async (university_name: string) => {
     ...toIdSet(communityStats?.facultyUserIds),
     ...toIdSet(profileStats?.facultyUserIds),
   ]);
+  const totalApplicantUserIds = new Set([
+    ...toIdSet(communityStats?.applicantUserIds),
+    ...toIdSet(profileStats?.applicantUserIds),
+  ]);
 
   const [totalGroups, totalOfficialGroups, totalCasualGroups] = community?._id
     ? await Promise.all([
@@ -167,6 +198,7 @@ export const getUniversityDashboardStats = async (university_name: string) => {
     totalUsers: totalUserIds.size,
     totalStudentUsers: totalStudentUserIds.size,
     totalFacultyUsers: totalFacultyUserIds.size,
+    totalApplicantsUsers: totalApplicantUserIds.size,
     totalGroups,
     totalOfficialGroups,
     totalCasualGroups,

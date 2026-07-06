@@ -5,7 +5,13 @@ import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from '../../config/userIDType';
-import { CreateCommunityBody, GetCommunityUsersOptions, communityInterface } from './community.interface';
+import {
+  CreateCommunityBody,
+  ExportFilteredSuperAdminCommunityQuery,
+  GetCommunityUsersOptions,
+  communityInterface,
+} from './community.interface';
+import { CommunityGroupFilters } from './community.pipeline';
 import catchAsync from '../utils/catchAsync';
 import { IUniversity } from '../university/university.interface';
 
@@ -33,6 +39,37 @@ export const getFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdEx
   const communityId = await communityService.getCommunityIdByUniversityId(universityId);
   const communities = await communityService.getSuperAdminFilteredCommunities(communityId, req.body.sort, req.body);
   return res.status(httpStatus.OK).json(communities);
+});
+
+const parseSuperAdminCommunityExportFilters = (
+  query: ExportFilteredSuperAdminCommunityQuery
+): CommunityGroupFilters => {
+  const { searchTerm, selectedType, selectedLabel, selectedFilters } = query;
+  const filters: CommunityGroupFilters = {};
+
+  if (searchTerm) filters.searchTerm = searchTerm;
+  if (selectedType) filters.selectedType = selectedType.split(',').filter(Boolean);
+  if (selectedLabel) filters.selectedLabel = selectedLabel.split(',').filter(Boolean);
+  if (selectedFilters) {
+    filters.selectedFilters = JSON.parse(selectedFilters) as Record<string, string[]>;
+  }
+
+  return filters;
+};
+
+export const exportFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { universityId } = req.params;
+  if (!universityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'universityId not found');
+  }
+  const { sort, ...filterQuery } = req.query as ExportFilteredSuperAdminCommunityQuery;
+  const communityId = await communityService.getCommunityIdByUniversityId(universityId);
+  const result = await communityService.exportSuperAdminFilteredCommunities(
+    communityId,
+    sort ?? '',
+    parseSuperAdminCommunityExportFilters(filterQuery)
+  );
+  return res.status(httpStatus.OK).json(result);
 });
 
 //get community
