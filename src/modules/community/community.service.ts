@@ -339,10 +339,6 @@ export const getSuperAdminFilteredCommunities = async (
   try {
     const pipeline: PipelineStage[] = [...buildSuperAdminFilteredCommunitiesBasePipeline(communityId)];
 
-    // Super admins should be able to inspect all groups. The regular
-    // visibility stage hides groups based on the current member context.
-    // Keeping it here can lead to empty results for valid communities.
-
     const typeLabelStage = filters ? buildTypeAndLabelFilterStage(filters) : null;
     if (typeLabelStage) pipeline.push(typeLabelStage);
 
@@ -365,6 +361,16 @@ export const getSuperAdminFilteredCommunities = async (
     console.error('Error fetching super admin communities:', error);
     throw error;
   }
+};
+
+export const exportSuperAdminFilteredCommunities = async (
+  communityId: string = '',
+  sortBy: string,
+  filters?: CommunityGroupFilters
+) => {
+  const result = await getSuperAdminFilteredCommunities(communityId, sortBy, filters);
+  const communityGroups = result.communityGroups ?? [];
+  return { communityGroups, totalCount: communityGroups.length };
 };
 
 export const updateCommunity = async (id: string, community: Partial<communityInterface>) => {

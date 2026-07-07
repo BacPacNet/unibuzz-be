@@ -81,11 +81,11 @@ export interface IUserWithTokens {
 /** Match stage used in getAllUser aggregation ($match stage) */
 export interface GetAllUserMatchStage {
   _id: {
-    $ne: mongoose.Types.ObjectId;
+    $ne?: mongoose.Types.ObjectId;
     $nin?: mongoose.Types.ObjectId[];
   };
   isDeleted: { $ne: true };
-  'profile.blockedUsers': {
+  'profile.blockedUsers'?: {
     $not: {
       $elemMatch: {
         userId: mongoose.Types.ObjectId;
@@ -95,6 +95,12 @@ export interface GetAllUserMatchStage {
   firstName?: { $regex: RegExp };
   lastName?: { $regex: RegExp };
   'profile.university_name'?: { $regex: RegExp };
+  $and?: Array<{
+    $or: Array<
+      | { 'profile.communities.communityId': mongoose.Types.ObjectId }
+      | { 'profile.email.communityId': string }
+    >;
+  }>;
   $or?: GetAllUserOrCondition[];
 }
 
@@ -120,6 +126,32 @@ export interface GetAllUserQuery {
   occupation?: string;
   affiliation?: string;
   chatId?: string;
+  role?: string;
+}
+
+/** Query params for getAllUsersDirectory (list users without following/blocked/chat exclusions) */
+export interface GetAllUsersDirectoryQuery {
+  page?: string;
+  limit?: string;
+  name?: string;
+  universityName?: string;
+  universityId?: string;
+  studyYear?: string;
+  major?: string;
+  occupation?: string;
+  affiliation?: string;
+  role?: string;
+}
+
+/** Query params for exportAllUsersDirectory (same filters, no pagination) */
+export interface ExportAllUsersDirectoryQuery {
+  name?: string;
+  universityName?: string;
+  universityId?: string;
+  studyYear?: string;
+  major?: string;
+  occupation?: string;
+  affiliation?: string;
   role?: string;
 }
 

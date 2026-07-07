@@ -642,13 +642,13 @@ export function buildCommunityGroupsProjectStageForSuperAdmin(): PipelineStage[]
                       },
                     },
                   },
-                  users: {
-                    $filter: {
-                      input: { $ifNull: ['$$group.users', []] },
-                      as: 'u',
-                      cond: { $eq: ['$$u._id', '$$group.adminUserId'] },
-                    },
-                  },
+                  // users: {
+                  //   $filter: {
+                  //     input: { $ifNull: ['$$group.users', []] },
+                  //     as: 'u',
+                  //     cond: { $eq: ['$$u._id', '$$group.adminUserId'] },
+                  //   },
+                  // },
                 },
               ],
             },
