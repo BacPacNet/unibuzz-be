@@ -61,6 +61,14 @@ router
   .get(userIdAuth, userController.isUserCommunityAdmin);
 
 router
+  .route('/community-admin/deActivate')
+  .put(
+    userIdAuth,
+    validate(userValidation.deActivateUserAccountByCommunityAdmin),
+    userController.deActivateUserAccountByCommunityAdmin
+  );
+
+router
   .route('/rewards')
   .get(userIdAuth, validate(userValidation.getReferredUsers), userController.getRewards);
 

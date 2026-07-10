@@ -4,11 +4,14 @@ import {
   EditProfileRequest,
   CreateUserProfileBody,
   StatusChangeHistoryEntry,
+  StatusChangeHistoryUpdatedField,
   BlockedUserEntry,
   FollowingListItem,
   FollowListItem,
   UserProfileDocument,
   UserCommunities,
+  UserRole,
+  CommunityAdminBulkProfileUpdateResult,
 } from './userProfile.interface';
 import UserProfile from './userProfile.model';
 import mongoose, { HydratedDocument } from 'mongoose';
@@ -332,6 +335,107 @@ const validateAndApplyStatusChange = (
     updatedAt: new Date(),
     updatedFields,
   });
+};
+
+type CommunityAdminProfileField = 'study_year' | 'major' | 'occupation' | 'affiliation';
+
+const appendCommunityAdminStatusChangeHistory = (
+  profile: HydratedDocument<UserProfileDocument>,
+  updates: Partial<Pick<UserProfileDocument, CommunityAdminProfileField>>
+): void => {
+  const updatedFields: StatusChangeHistoryUpdatedField[] = [];
+
+  (Object.keys(updates) as CommunityAdminProfileField[]).forEach((field) => {
+    const newValue = updates[field];
+    if (newValue !== undefined && profile[field] !== newValue) {
+      updatedFields.push({
+        field,
+        oldValue: profile[field],
+        newValue,
+      });
+    }
+  });
+
+  if (updatedFields.length === 0) return;
+
+  profile.statusChangeHistory.push({
+    updatedAt: new Date(),
+    updatedFields,
+  });
+};
+
+const bulkUpdateProfilesByCommunityAdmin = async (
+  userIds: string[],
+  role: UserRole,
+  communityId: mongoose.Types.ObjectId,
+  updates: Partial<Pick<UserProfileDocument, CommunityAdminProfileField>>
+): Promise<CommunityAdminBulkProfileUpdateResult> => {
+  const normalizedUserIds = [...new Set(userIds.map((id) => id.trim()))];
+  const profiles = await UserProfile.find({
+    [FIELD_USERS_ID]: { $in: normalizedUserIds },
+    role,
+    communities: { $elemMatch: { communityId } },
+  });
+
+  const updatedProfiles: UserProfileDocument[] = [];
+
+  for (const profile of profiles) {
+    appendCommunityAdminStatusChangeHistory(profile, updates);
+    Object.assign(profile, updates);
+    await profile.save();
+    updatedProfiles.push(profile);
+  }
+
+  const updatedUserIds = new Set(profiles.map((profile) => profile[FIELD_USERS_ID].toString()));
+  const skippedUserIds = normalizedUserIds.filter((userId) => !updatedUserIds.has(userId));
+
+  return {
+    updatedCount: updatedProfiles.length,
+    skippedUserIds,
+    profiles: updatedProfiles,
+  };
+};
+
+export const bulkUpdateStudentProfilesByCommunityAdmin = async (
+  userIds: string[],
+  communityId: mongoose.Types.ObjectId,
+  updates: { study_year?: string; major?: string }
+): Promise<CommunityAdminBulkProfileUpdateResult> => {
+  const profileUpdates: Partial<Pick<UserProfileDocument, CommunityAdminProfileField>> = {};
+
+  if (updates.study_year !== undefined) {
+    profileUpdates.study_year = updates.study_year;
+  }
+  if (updates.major !== undefined) {
+    profileUpdates.major = updates.major;
+  }
+
+  if (Object.keys(profileUpdates).length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'No update data provided');
+  }
+
+  return bulkUpdateProfilesByCommunityAdmin(userIds, UserRole.STUDENT, communityId, profileUpdates);
+};
+
+export const bulkUpdateFacultyProfilesByCommunityAdmin = async (
+  userIds: string[],
+  communityId: mongoose.Types.ObjectId,
+  updates: { affiliation?: string; occupation?: string }
+): Promise<CommunityAdminBulkProfileUpdateResult> => {
+  const profileUpdates: Partial<Pick<UserProfileDocument, CommunityAdminProfileField>> = {};
+
+  if (updates.affiliation !== undefined) {
+    profileUpdates.affiliation = updates.affiliation;
+  }
+  if (updates.occupation !== undefined) {
+    profileUpdates.occupation = updates.occupation;
+  }
+
+  if (Object.keys(profileUpdates).length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'No update data provided');
+  }
+
+  return bulkUpdateProfilesByCommunityAdmin(userIds, UserRole.FACULTY, communityId, profileUpdates);
 };
 
 export const updateUserProfile = async (id: mongoose.Types.ObjectId, userProfileBody: EditProfileRequest) => {

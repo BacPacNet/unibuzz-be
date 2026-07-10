@@ -144,6 +144,12 @@ export const deActivateUserAccount = {
   }),
 };
 
+export const deActivateUserAccountByCommunityAdmin = {
+  body: Joi.object().keys({
+    userId: Joi.string().required().custom(objectId),
+  }),
+};
+
 export const getReferredUsers = {
   query: Joi.object().keys(paginationQuery),
 };
