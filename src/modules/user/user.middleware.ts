@@ -3,13 +3,14 @@ import { Request, Response, NextFunction } from 'express';
 import config from '../../config/config';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
+import User from './user.model';
 
 interface AuthenticatedRequest extends Request {
   userId?: string;
 }
 
 // Middleware function to verify JWT and extract userId
-export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const userIdAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1]; // Assuming JWT is passed in Authorization header
 
   if (!token) {
@@ -24,6 +25,11 @@ export const userIdAuth = (req: AuthenticatedRequest, res: Response, next: NextF
     }
 
     req.userId = decoded.sub;
+    const user = await User.findById(decoded.sub).select('isUserDeactive').lean();
+
+    if (user?.isUserDeactive) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'Expired Token');
+    }
 
     next();
   } catch (error: any) {

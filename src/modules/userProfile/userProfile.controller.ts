@@ -13,6 +13,8 @@ import {
   AddUniversityEmailBody,
   PaginationQueryWithUserId,
   CommunityUser,
+  CommunityAdminBulkUpdateStudentProfileBody,
+  CommunityAdminBulkUpdateFacultyProfileBody,
 } from './userProfile.interface';
 
 /** Message constants for API responses and errors */
@@ -25,6 +27,7 @@ const MESSAGES = {
   CANNOT_BLOCK_SELF: 'You cannot block yourself',
   MISSING_USER_OR_TARGET: (fields: string) => `Missing ${fields}`,
   ALREADY_VERIFIED_IN_COMMUNITY: 'User is already verified to this community',
+  COMMUNITY_ADMIN_ONLY: 'Only community admins can access this resource',
 } as const;
 
 
@@ -41,6 +44,55 @@ function requireUserId(
   }
   return userId;
 }
+
+async function requireCommunityAdmin(userId: string) {
+  const community = await communityService.isUserCommunityAdmin(new mongoose.Types.ObjectId(userId));
+
+  if (!community) {
+    throw new ApiError(httpStatus.FORBIDDEN, MESSAGES.COMMUNITY_ADMIN_ONLY);
+  }
+
+  return community;
+}
+
+export const bulkUpdateStudentProfileByCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = requireUserId(req);
+  const community = await requireCommunityAdmin(userId);
+  const { userIds, study_year, year, major } = req.body as CommunityAdminBulkUpdateStudentProfileBody;
+  const result = await userProfileService.bulkUpdateStudentProfilesByCommunityAdmin(
+    userIds,
+    new mongoose.Types.ObjectId(community._id),
+    {
+      ...(major !== undefined ? { major } : {}),
+      ...(study_year !== undefined ? { study_year } : year !== undefined ? { study_year: year } : {}),
+    }
+  );
+
+  return res.status(httpStatus.OK).json({
+    success: true,
+    data: result,
+  });
+});
+
+export const bulkUpdateFacultyProfileByCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = requireUserId(req);
+  const community = await requireCommunityAdmin(userId);
+  const { userIds, affiliation, occupation } = req.body as CommunityAdminBulkUpdateFacultyProfileBody;
+
+  const result = await userProfileService.bulkUpdateFacultyProfilesByCommunityAdmin(
+    userIds,
+    new mongoose.Types.ObjectId(community._id),
+    {
+      ...(affiliation !== undefined ? { affiliation } : {}),
+      ...(occupation !== undefined ? { occupation } : {}),
+    }
+  );
+
+  return res.status(httpStatus.OK).json({
+    success: true,
+    data: result,
+  });
+});
 
 // update userProfile
 export const updateUserProfile = catchAsync(async (req: Request, res: Response) => {

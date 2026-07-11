@@ -51,6 +51,7 @@ const USER_ERROR_MESSAGES = {
   EMAIL_ALREADY_TAKEN: 'Email is already taken',
   EMAIL_DOES_NOT_EXIST: 'Email does not exist',
   USER_ADMIN_CANNOT_BE_DELETED: 'User is admin of a community and cannot be deleted',
+  USER_NOT_IN_COMMUNITY: 'User not found in your community',
 } as const;
 
 /**
@@ -765,6 +766,33 @@ export const deActivateUserAccount = async (userID: string, userName: string, em
     },
     (user) => {
       user.isUserDeactive = true;
+    }
+  );
+};
+
+export const deActivateUserAccountByCommunityAdmin = async (
+  targetUserId: string,
+  communityId: mongoose.Types.ObjectId
+) => {
+  const userProfile = await UserProfile.findOne({
+    users_id: targetUserId,
+    communities: { $elemMatch: { communityId } },
+  });
+
+  if (!userProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, USER_ERROR_MESSAGES.USER_NOT_IN_COMMUNITY);
+  }
+
+  if (userProfile.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, USER_ERROR_MESSAGES.USER_ADMIN_CANNOT_BE_DELETED);
+  }
+
+  return updateUserAfterValidation(
+    targetUserId,
+    { status: httpStatus.NOT_FOUND, message: USER_ERROR_MESSAGES.USER_DOES_NOT_EXIST },
+    async () => {},
+    (user) => {
+      user.isUserDeactive = !user.isUserDeactive;
     }
   );
 };

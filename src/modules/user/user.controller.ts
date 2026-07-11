@@ -85,6 +85,7 @@ export const getAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Re
 export const exportAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Response) => {
   const { name, studyYear, major, occupation, affiliation, role, universityId } =
     req.query as ExportAllUsersDirectoryQuery;
+
   const result = await userService.exportAllUsersDirectory(
     name ?? '',
     req.userId as string,
@@ -95,6 +96,7 @@ export const exportAllUsersDirectory = catchAsync(async (req: userIdExtend, res:
     affiliation ? affiliation.split(',') : [],
     role?.toLowerCase() ?? ''
   );
+
   res.status(httpStatus.OK).json(result);
 });
 
@@ -155,6 +157,23 @@ export const deActivateUserAccount = catchAsync(async (req: userIdExtend, res: R
   const { userName, email, Password } = req.body;
   const userProfile = await userService.deActivateUserAccount(userID, userName, email, Password);
   res.status(httpStatus.OK).json(userProfile);
+});
+
+export const deActivateUserAccountByCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const adminUserId = requireAuthenticatedUserIdOrThrow(req);
+  const community = await communityService.isUserCommunityAdmin(new mongoose.Types.ObjectId(adminUserId));
+
+  if (!community) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const { userId } = req.body;
+  const user = await userService.deActivateUserAccountByCommunityAdmin(
+    userId,
+    new mongoose.Types.ObjectId(community._id)
+  );
+
+  res.status(httpStatus.OK).json(user);
 });
 
 export const IsNewUserToggle = catchAsync(async (req: userIdExtend, res: Response) => {
