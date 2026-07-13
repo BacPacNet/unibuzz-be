@@ -191,3 +191,49 @@ export const getCommunityUsersWithfilterController = catchAsync(async (req: user
   const users = await communityService.getCommunityUsersByFilterService(communityId, options);
   return res.status(httpStatus.OK).json({ success: true, ...users });
 });
+
+export const getCommunityAdmins = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.getCommunityAdmins(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const addCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const { userId } = req.body as { userId: string };
+  const requestingUserId = req.userId as string;
+console.log("requestingUserId",requestingUserId)
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.addCommunityAdmin(communityId, userId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const removeCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId, userId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId || !userId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId or userId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.removeCommunityAdmin(communityId, userId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});

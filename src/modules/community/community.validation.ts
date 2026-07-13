@@ -112,3 +112,25 @@ export const exportFilteredSuperAdminCommunity = {
   query: Joi.object().keys(superAdminCommunityExportQueryFilters),
 };
 
+export const getCommunityAdmins = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const addCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+  body: Joi.object().keys({
+    userId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const removeCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+    userId: Joi.string().required().custom(objectId),
+  }),
+};
+

@@ -59,6 +59,15 @@ router
   );
 
 router
+  .route('/:communityId/community-admin')
+  .get(userIdAuth, validate(communityValidation.getCommunityAdmins), communityController.getCommunityAdmins)
+  .post(userIdAuth, validate(communityValidation.addCommunityAdmin), communityController.addCommunityAdmin);
+
+router
+  .route('/:communityId/community-admin/:userId')
+  .delete(userIdAuth, validate(communityValidation.removeCommunityAdmin), communityController.removeCommunityAdmin);
+
+router
   .route('/:communityId')
   .get(noErrorUserIdAuth, validate(communityValidation.getCommunity), communityController.getCommunity);
 

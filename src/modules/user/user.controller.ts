@@ -259,5 +259,6 @@ export const isUserCommunityAdmin = catchAsync(async (req: userIdExtend, res: Re
     isCommunityAdmin: true,
     university_id: community.university_id,
     universityName: university?.name ?? null,
+    communityId: community._id
   });
 });
