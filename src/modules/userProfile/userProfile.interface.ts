@@ -116,6 +116,7 @@ interface UserProfileDocument {
   followers: FollowingEntry[];
   isCommunityAdmin?: boolean;
   adminCommunityId?: Schema.Types.ObjectId | null;
+  communityAdminAddedAt?: Date | null;
   statusChangeHistory: StatusChangeHistoryEntry[];
   blockedUsers: BlockedUserEntry[];
 }

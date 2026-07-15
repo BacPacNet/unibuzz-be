@@ -642,6 +642,167 @@ export const getCommunityUsersService = async (communityId: string, options: Get
 };
 
 export const isUserCommunityAdmin = async (userId: mongoose.Types.ObjectId) => {
+  console.log("userId",userId)
   const community = await communityModel.findOne({ adminId: userId }).lean();
   return community;
+};
+
+const assertRequestingUserIsCommunityAdmin = async (communityId: string, requestingUserId: string) => {
+  const community = await getCommunityOrThrow(communityId, { lean: true });
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  return community;
+};
+
+export const getCommunityAdmins = async (communityId: string, requestingUserId: string) => {
+  await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const [result] = await communityModel.aggregate([
+    { $match: { _id: convertToObjectId(communityId) } },
+    {
+      $project: {
+        adminId: { $ifNull: ['$adminId', []] },
+      },
+    },
+    {
+      $lookup: {
+        from: User.collection.name,
+        let: { adminIds: '$adminId' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ['$_id', '$$adminIds'] },
+            },
+          },
+          {
+            $project: {
+              password: 0,
+            },
+          },
+        ],
+        as: 'adminUsers',
+      },
+    },
+    {
+      $lookup: {
+        from: UserProfile.collection.name,
+        let: { adminIds: '$adminId' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ['$users_id', '$$adminIds'] },
+            },
+          },
+        ],
+        as: 'adminProfiles',
+      },
+    },
+    {
+      $project: {
+        admins: {
+          $filter: {
+            input: {
+              $map: {
+                input: '$adminId',
+                as: 'adminId',
+                in: {
+                  user: {
+                    $first: {
+                      $filter: {
+                        input: '$adminUsers',
+                        as: 'user',
+                        cond: { $eq: ['$$user._id', '$$adminId'] },
+                      },
+                    },
+                  },
+                  userProfile: {
+                    $first: {
+                      $filter: {
+                        input: '$adminProfiles',
+                        as: 'profile',
+                        cond: { $eq: ['$$profile.users_id', '$$adminId'] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            as: 'admin',
+            cond: {
+              $and: [{ $ne: ['$$admin.user', null] }, { $ne: ['$$admin.userProfile', null] }],
+            },
+          },
+        },
+      },
+    },
+  ]);
+
+  if (!result) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  return { admins: result.admins };
+};
+
+export const addCommunityAdmin = async (communityId: string, userIdToAdd: string, requestingUserId: string) => {
+  const community = await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const adminIdObj = convertToObjectId(userIdToAdd);
+
+  const isAlreadyAdmin = (community.adminId || []).some((id) => id.toString() === userIdToAdd);
+  if (isAlreadyAdmin) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a community admin');
+  }
+
+  const { userProfile } = await getUserAndProfileOrThrow(userIdToAdd);
+  const isMember = userProfile.communities.some((c) => c.communityId.toString() === communityId);
+  if (!isMember) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User must be a member of the community to become an admin');
+  }
+
+  if (userProfile.adminCommunityId && userProfile.adminCommunityId.toString() !== communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is already an admin of another community');
+  }
+
+  await communityModel.updateOne({ _id: communityId }, { $addToSet: { adminId: adminIdObj } });
+
+  await UserProfile.updateOne(
+    { users_id: adminIdObj },
+    {
+      $set: {
+        isCommunityAdmin: true,
+        adminCommunityId: convertToObjectId(communityId),
+        communityAdminAddedAt: new Date(),
+      },
+    }
+  );
+
+  return { message: 'Admin added successfully' };
+};
+
+export const removeCommunityAdmin = async (communityId: string, userIdToRemove: string, requestingUserId: string) => {
+  const community = await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const adminIds = (community.adminId || []).map((id) => id.toString());
+
+  if (!adminIds.includes(userIdToRemove)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a community admin');
+  }
+
+  if (adminIds.length <= 1) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot remove the last community admin');
+  }
+
+  await communityModel.updateOne(
+    { _id: communityId },
+    { $pull: { adminId: convertToObjectId(userIdToRemove) } }
+  );
+
+  await UserProfile.updateOne(
+    { users_id: convertToObjectId(userIdToRemove) },
+    { $set: { isCommunityAdmin: false, adminCommunityId: null, communityAdminAddedAt: null } }
+  );
+
+  return { message: 'Admin removed successfully' };
 };

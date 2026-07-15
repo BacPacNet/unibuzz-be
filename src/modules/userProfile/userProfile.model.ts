@@ -29,6 +29,7 @@ const userProfileSchema = new Schema<UserProfileDocument>({
   occupation: String,
   isCommunityAdmin: Boolean,
   adminCommunityId: { type: Schema.Types.ObjectId, ref: 'community', default: null, required: false },
+  communityAdminAddedAt: { type: Date, default: null, required: false },
   communities: [
     {
       communityId: { type: Schema.Types.ObjectId, ref: 'community' },
