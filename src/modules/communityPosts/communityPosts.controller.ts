@@ -150,6 +150,18 @@ export const deleteCommunityPost = catchAsync(async (req: Request, res: Response
   return res.status(httpStatus.OK).json({ message: MESSAGE_DELETED });
 });
 
+export const deleteCommunityPostForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
+  const userId = req.userId as string;
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  await communityPostsService.deleteCommunityPostForCommunityAdmin(postId, userId);
+  return res.status(httpStatus.OK).json({ message: MESSAGE_DELETED });
+});
+
 export const getAllCommunityPostV2 = async (req: userIdExtend, res: Response) => {
   try {
     const { page = '1', limit = '10', communityId } = req.query as unknown as CommunityPostQueryParams;
@@ -251,6 +263,56 @@ export const getAllCommunityGroupPostV2 = catchAsync(async (req: userIdExtend, r
     isAdminOfCommunityGroup,
     userId,
     filterPostBy?.toString() || ''
+  );
+
+  return res.status(httpStatus.OK).json(communityPosts);
+});
+
+// Get group posts for community admin (skips membership checks)
+export const getCommunityGroupPostsForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit } = req.query;
+  const { communityId, communityGroupId } = req.params as CommunityPostParams;
+  const userId = req.userId as string;
+
+  if (!communityId || !communityGroupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID and Community Group ID are required');
+  }
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const community = await communityService.getCommunity(communityId);
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isCommunityAdmin = (community.adminId || []).map(String).includes(userId);
+
+  if (!isCommunityAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityGroup = await communityGroupModel
+    .findOne({ _id: communityGroupId, communityId })
+    .select('_id')
+    .lean();
+
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+  }
+
+  // const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userId);
+
+  const communityPosts = await communityPostsService.getAllCommunityPost(
+    [],
+    communityId,
+    communityGroupId,
+    Number(page) || 1,
+    Number(limit) || 10,
+    userId,
+    { excludePendingPosts: true, showCommunities: true }
   );
 
   return res.status(httpStatus.OK).json(communityPosts);

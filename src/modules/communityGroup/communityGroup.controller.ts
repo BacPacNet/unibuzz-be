@@ -605,3 +605,52 @@ export const getCommunityGroupMembersForSuperAdmin = catchAsync(async (req: user
   );
   res.status(httpStatus.OK).json(communityGroup);
 });
+
+export const getOfficialGroupsStatsForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.getOfficialGroupsStatsForCommunityAdmin(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.getOfficialGroupsWithPostCountForCommunityAdmin(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const deleteCommunityGroupForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId, groupId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId || !groupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId or groupId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.deleteCommunityGroupForCommunityAdmin(
+    communityId,
+    groupId,
+    requestingUserId
+  );
+  return res.status(httpStatus.OK).json(result);
+});

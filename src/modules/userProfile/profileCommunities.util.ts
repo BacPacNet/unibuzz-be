@@ -20,11 +20,17 @@ type PostProfileFields = {
   profile?: { communities?: unknown[] };
 };
 
+export type MaskPostProfilesOptions = {
+  /** Bypass role-based hiding (e.g. community admin moderation endpoints). */
+  showCommunities?: boolean;
+};
+
 export function maskPostProfilesForViewer<T extends PostProfileFields>(
   posts: T[],
-  viewerRole?: string
+  viewerRole?: string,
+  options?: MaskPostProfilesOptions
 ): T[] {
-  if (shouldShowCommunitiesForViewer(viewerRole)) return posts;
+  if (options?.showCommunities || shouldShowCommunitiesForViewer(viewerRole)) return posts;
   return posts.map((post) => {
     if (post.userProfile) {
       return { ...post, userProfile: clearProfileCommunities(post.userProfile) };
