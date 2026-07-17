@@ -272,6 +272,31 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   });
 };
 
+export const deleteCommunityPostForCommunityAdmin = async (
+  postId: mongoose.Types.ObjectId,
+  requestingUserId: string
+) => {
+  const post = await communityPostsModel.findById(postId).select('communityId').lean();
+
+  if (!post) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
+  }
+
+  const community = await communityModel.findById(post.communityId).select('adminId').lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isCommunityAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isCommunityAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  return deleteCommunityPost(postId);
+};
+
 export const getCommunityPostsByCommunityId = async (
   communityId: string,
   page: number = 1,
@@ -401,7 +426,8 @@ export const getAllCommunityPost = async (
   communityGroupId?: string,
   page: number = 1,
   limit: number = 10,
-  userId: string = ''
+  userId: string = '',
+  options?: { excludePendingPosts?: boolean; showCommunities?: boolean }
 ) => {
   try {
     const [myBlockedUserIds, visibilityMode, viewerRole, partneredAdminStatus] = await Promise.all([
@@ -411,16 +437,19 @@ export const getAllCommunityPost = async (
       partneredUniService.isPartneredUniversityAdmin(userId, communityId),
     ]);
     const matchConditions: mongoose.FilterQuery<communityPostsInterface>[] = [];
+    const pendingFilter = options?.excludePendingPosts ? { isPostLive: true } : {};
 
     if (!communityGroupId) {
       matchConditions.push({
         communityId: convertToObjectId(communityId),
         communityGroupId: { $exists: false },
+        ...pendingFilter,
       });
     } else {
       matchConditions.push({
         communityId: convertToObjectId(communityId),
         communityGroupId: convertToObjectId(communityGroupId),
+        ...pendingFilter,
       });
     }
 
@@ -433,15 +462,14 @@ export const getAllCommunityPost = async (
     const totalPages = computeTotalPages(totalPost, limit);
     const skip = getPaginationSkip(page, limit);
 
-    const finalPost = partneredUniService.attachPromoteToPosts(
-      maskPostProfilesForViewer(
-        (await communityPostsModel.aggregate([
+    const posts =
+      (await communityPostsModel.aggregate([
         { $match: matchStage },
         ...visibilityStages,
         { $sort: { createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
-        ...buildUserLookupStages(),
+        ...buildUserLookupStages({ matchUserNotDeleted: true }),
         ...buildUserProfileLookupStages(true),
         ...buildCommunitiesEnrichmentStages('userProfile'),
         {
@@ -467,8 +495,13 @@ export const getAllCommunityPost = async (
           blockedMatchWithOrNull: true,
         }),
         buildPostListProjectStage(),
-      ]).exec()) || [],
-      viewerRole
+      ]).exec()) || [];
+
+    const finalPost = partneredUniService.attachPromoteToPosts(
+      maskPostProfilesForViewer(
+        posts,
+        viewerRole,
+        options?.showCommunities ? { showCommunities: true } : undefined
       ),
       partneredAdminStatus
     );

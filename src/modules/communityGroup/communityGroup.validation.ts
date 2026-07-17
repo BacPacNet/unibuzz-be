@@ -281,3 +281,22 @@ export const removeUserFromCommunityGroup = {
     userId: Joi.string().required().custom(objectId),
   }),
 };
+
+export const getOfficialGroupsStatsForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const deleteCommunityGroupForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+    groupId: Joi.string().required().custom(objectId),
+  }),
+};

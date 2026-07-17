@@ -54,6 +54,16 @@ export const getAllCommunityPost = {
   }),
 };
 
+export const getCommunityGroupPostsForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+    communityGroupId: Joi.string().required().custom(objectId),
+  }),
+  query: Joi.object().keys({
+    ...paginationQuery,
+  }),
+};
+
 
 
 const imageUrlItem = Joi.object().keys({
@@ -91,6 +101,12 @@ export const updateCommunityPost = {
 };
 
 export const deleteCommunityPost = {
+  params: Joi.object().keys({
+    postId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const deleteCommunityPostForCommunityAdmin = {
   params: Joi.object().keys({
     postId: Joi.string().required().custom(objectId),
   }),

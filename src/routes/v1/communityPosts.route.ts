@@ -28,6 +28,22 @@ router
   );
 
 router
+  .route('/community-admin/:communityId/:communityGroupId')
+  .get(
+    userIdAuth,
+    validate(communityPostsValidation.getCommunityGroupPostsForCommunityAdmin),
+    communityPostsController.getCommunityGroupPostsForCommunityAdmin
+  );
+
+router
+  .route('/community-admin/:postId')
+  .delete(
+    userIdAuth,
+    validate(communityPostsValidation.deleteCommunityPostForCommunityAdmin),
+    communityPostsController.deleteCommunityPostForCommunityAdmin
+  );
+
+router
   .route('/:communityId/:communityGroupId?')
   .get(
     userIdAuth,

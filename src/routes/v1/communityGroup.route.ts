@@ -40,6 +40,30 @@ router
   );
 
 router
+  .route('/:communityId/community-admin/official-groups-stats')
+  .get(
+    userIdAuth,
+    validate(communityGroupValidation.getOfficialGroupsStatsForCommunityAdmin),
+    communityGroupController.getOfficialGroupsStatsForCommunityAdmin
+  );
+
+router
+  .route('/:communityId/community-admin/official-groups')
+  .get(
+    userIdAuth,
+    validate(communityGroupValidation.getOfficialGroupsWithPostCountForCommunityAdmin),
+    communityGroupController.getOfficialGroupsWithPostCountForCommunityAdmin
+  );
+
+router
+  .route('/:communityId/community-admin/:groupId')
+  .delete(
+    userIdAuth,
+    validate(communityGroupValidation.deleteCommunityGroupForCommunityAdmin),
+    communityGroupController.deleteCommunityGroupForCommunityAdmin
+  );
+
+router
   .route('/:communityId')
   .get(
     userIdAuth,

@@ -1432,3 +1432,149 @@ export const getCommunityGroupMembersForSuperAdmin = async (
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_FETCHING_MEMBERS);
   }
 };
+
+type OfficialGroupWithPostCount = {
+  _id: Types.ObjectId;
+  title: string;
+  memberCount: number;
+  postCount: number;
+  communityGroupLogoUrl?: communityGroupInterface['communityGroupLogoUrl'];
+  status: string;
+  isCommunityGroupLive: boolean;
+  createdAt: Date;
+};
+
+export const getOfficialGroupsStatsForCommunityAdmin = async (
+  communityId: string,
+  requestingUserId: string
+): Promise<{ officialGroupsCount: number; totalPostsInOfficialGroups: number }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityObjectId = convertToObjectId(communityId);
+  const officialGroupIds = await communityGroupModel.distinct('_id', {
+    communityId: communityObjectId,
+    communityGroupType: CommunityGroupType.OFFICIAL,
+  });
+
+  const totalPostsInOfficialGroups =
+    officialGroupIds.length > 0
+      ? await CommunityPostModel.countDocuments({  isPostLive: true,communityGroupId: { $in: officialGroupIds } })
+      : 0;
+
+  return {
+    officialGroupsCount: officialGroupIds.length,
+    totalPostsInOfficialGroups,
+  };
+};
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = async (
+  communityId: string,
+  requestingUserId: string
+): Promise<{ officialGroups: OfficialGroupWithPostCount[] }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityObjectId = convertToObjectId(communityId);
+  const officialGroups = await communityGroupModel.aggregate<OfficialGroupWithPostCount>([
+    {
+      $match: {
+        communityId: communityObjectId,
+        communityGroupType: CommunityGroupType.OFFICIAL,
+      },
+    },
+    {
+      $lookup: {
+        from: 'communityposts',
+        let: { groupId: '$_id' },
+        pipeline: [
+          { $match: { isPostLive: true, $expr: { $eq: ['$communityGroupId', '$$groupId'] } } },
+          { $count: 'count' },
+        ],
+        as: 'postCountResult',
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        // Stored memberCount is never updated; count accepted members from users[].
+        memberCount: {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$users', []] },
+              as: 'u',
+              cond: {
+                $or: [
+                  { $eq: ['$$u.isRequestAccepted', true] },
+                  { $eq: ['$$u.status', status.accepted] },
+                  { $eq: ['$$u.status', status.default] },
+                ],
+              },
+            },
+          },
+        },
+        postCount: {
+          $let: {
+            vars: { postCountDoc: { $arrayElemAt: ['$postCountResult', 0] } },
+            in: { $ifNull: ['$$postCountDoc.count', 0] },
+          },
+        },
+        communityGroupLogoUrl: 1,
+        status: 1,
+        isCommunityGroupLive: 1,
+        createdAt: 1,
+      },
+    },
+    { $sort: { createdAt: -1 } },
+  ]);
+
+  return { officialGroups };
+};
+
+export const deleteCommunityGroupForCommunityAdmin = async (
+  communityId: string,
+  groupId: string,
+  requestingUserId: string
+): Promise<{ success: boolean }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityGroup = await communityGroupModel
+    .findOne({ _id: convertToObjectId(groupId), communityId: convertToObjectId(communityId) })
+    .select('_id')
+    .lean();
+
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+  }
+
+  return deleteCommunityGroup(convertToObjectId(groupId));
+};
