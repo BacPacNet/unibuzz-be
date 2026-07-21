@@ -1,5 +1,6 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import { GetAllUserMatchStage, GetAllUserOrCondition } from './user.interfaces';
+import { UserRole } from '../userProfile/userProfile.interface';
 
 // ---------------------------------------------------------------------------
 // getUserProfileById — filter profile.following / profile.followers
@@ -454,13 +455,15 @@ export interface BuildGetAllUserMatchStageOptions {
   universityName: string;
   communityId?: string;
   orConditions: GetAllUserOrCondition[];
+  excludeApplicants?: boolean;
 }
 
 /**
  * Build the $match stage for getAllUser aggregation (excluding chatId-based exclusion).
  */
 export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOptions): GetAllUserMatchStage {
-  const { userId, myBlockedUserIds, firstName, lastName, universityName, communityId, orConditions } = options;
+  const { userId, myBlockedUserIds, firstName, lastName, universityName, communityId, orConditions, excludeApplicants } =
+    options;
 
   const matchStage: GetAllUserMatchStage = {
     _id: {
@@ -496,6 +499,9 @@ export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOpti
   }
   if (universityName.trim() !== '') {
     matchStage['profile.university_name'] = { $regex: new RegExp(universityName, 'i') };
+  }
+  if (excludeApplicants) {
+    matchStage['profile.role'] = { $ne: UserRole.APPLICANT };
   }
   if (orConditions.length) {
     matchStage.$or = orConditions;

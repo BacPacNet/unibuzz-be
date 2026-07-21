@@ -61,6 +61,8 @@ export const updateUniversityProfile = {
       shortOverview: Joi.string().trim().optional(),
       logo: Joi.string().trim().optional(),
       campus: Joi.string().trim().optional(),
+      total_students: Joi.string().trim().allow('').optional(),
+      web_pages: Joi.string().trim().uri().allow('').optional(),
       email: Joi.string().trim().email().allow('').optional(),
       phone: Joi.string().trim().allow('').optional(),
       address: Joi.string().trim().allow('').optional(),

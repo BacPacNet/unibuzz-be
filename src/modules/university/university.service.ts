@@ -233,6 +233,7 @@ export const setSemesterStart = async (university_name: string, semesterStart: I
 
 export const updateUniversityProfile = async (universityId: string, payload: IUniversityProfileUpdate) => {
   const updateData: Partial<IUniversityProfileUpdateData> = {};
+  const communityUpdateData: Record<string, string> = {};
 
   if (payload.name !== undefined) {
     const trimmedName = payload.name.trim();
@@ -250,14 +251,25 @@ export const updateUniversityProfile = async (universityId: string, payload: IUn
   const shortOverview = payload.short_overview ?? payload.shortOverview;
   if (shortOverview !== undefined) {
     updateData.short_overview = shortOverview;
+    communityUpdateData['about'] = shortOverview;
   }
 
   if (payload.logo !== undefined) {
     updateData.logo = payload.logo;
+    communityUpdateData['communityLogoUrl.imageUrl'] = payload.logo;
   }
 
   if (payload.campus !== undefined) {
     updateData.campus = payload.campus;
+    communityUpdateData['communityCoverUrl.imageUrl'] = payload.campus;
+  }
+
+  if (payload.total_students !== undefined) {
+    updateData.total_students = payload.total_students;
+  }
+
+  if (payload.web_pages !== undefined) {
+    updateData.web_pages = payload.web_pages ? [payload.web_pages] : [];
   }
 
   const contacts = payload.contacts ?? {};
@@ -282,9 +294,17 @@ export const updateUniversityProfile = async (universityId: string, payload: IUn
     throw new ApiError(httpStatus.BAD_REQUEST, 'At least one valid university field is required for update');
   }
 
-  return universityModal
-    .findByIdAndUpdate(convertToObjectId(universityId), { $set: updateData }, { new: true })
+  const universityObjectId = convertToObjectId(universityId);
+
+  const updatedUniversity = await universityModal
+    .findByIdAndUpdate(universityObjectId, { $set: updateData }, { new: true })
     .lean();
+
+  if (updatedUniversity && Object.keys(communityUpdateData).length > 0) {
+    await communityModel.updateOne({ university_id: universityObjectId }, { $set: communityUpdateData });
+  }
+
+  return updatedUniversity;
 };
 
 type HighlightPostInput = {

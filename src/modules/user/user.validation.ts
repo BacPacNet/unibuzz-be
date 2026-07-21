@@ -67,6 +67,7 @@ export const getAllUser = {
     affiliation: Joi.string().optional(),
     chatId: Joi.string().optional(),
     role: Joi.string().optional(),
+    showApplicant: Joi.boolean().optional(),
   }),
 };
 

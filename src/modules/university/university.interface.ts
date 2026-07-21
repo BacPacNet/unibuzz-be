@@ -20,6 +20,8 @@ interface IUniversityProfileUpdate {
   shortOverview?: string;
   logo?: string;
   campus?: string;
+  total_students?: string;
+  web_pages?: string;
   contacts?: IUniversityContactsUpdate;
   email?: string;
   phone?: string;
@@ -29,8 +31,19 @@ interface IUniversityProfileUpdate {
 
 type IUniversityProfileUpdateData = Pick<
   IUniversity,
-  'name' | 'long_description' | 'short_overview' | 'logo' | 'campus' | 'email' | 'phone' | 'address' | 'office_hours'
->;
+  | 'name'
+  | 'long_description'
+  | 'short_overview'
+  | 'logo'
+  | 'campus'
+  | 'web_pages'
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'office_hours'
+> & {
+  total_students?: string;
+};
 
 export type HighlightPost = {
   postId: Types.ObjectId;
