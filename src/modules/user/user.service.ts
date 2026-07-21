@@ -9,6 +9,7 @@ import {
   IUserDoc,
   NewRegisteredUser,
   IUserQueryFilter,
+  GetAllUserParams,
 } from './user.interfaces';
 import { UserProfile } from '../userProfile';
 import { UserRole } from '../userProfile/userProfile.interface';
@@ -436,19 +437,20 @@ export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: 
   return userProfile || null;
 };
 
-export const getAllUser = async (
-  name: string = '',
-  page: number,
-  limit: number,
-  userId: string,
-  universityName: string,
-  studyYear: string[],
-  major: string[],
-  occupation: string[],
-  affiliation: string[],
-  chatId: string,
-  role: string
-) => {
+export const getAllUser = async ({
+  name = '',
+  page,
+  limit,
+  userId,
+  universityName,
+  studyYear,
+  major,
+  occupation,
+  affiliation,
+  chatId,
+  role,
+  showApplicant = false,
+}: GetAllUserParams) => {
   const currentPage = page || DEFAULT_PAGE;
   const limitPerPage = limit || DEFAULT_LIMIT;
   const startIndex = getPaginationSkip(currentPage, limitPerPage);
@@ -467,6 +469,7 @@ export const getAllUser = async (
     lastName,
     universityName: decodedUniversityName,
     orConditions,
+    excludeApplicants: decodedUniversityName.trim() !== '' && !showApplicant,
   });
 
   if (chatId?.length) {

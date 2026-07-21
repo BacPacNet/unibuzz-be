@@ -47,20 +47,22 @@ export const getUser = catchAsync(async (req: userIdExtend, res: Response): Prom
 });
 
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId,role } = req.query as GetAllUserQuery;
-  const allUsers = await userService.getAllUser(
-    name ?? '',
-    Number(page),
-    Number(limit),
-    req.userId as string,
-    universityName ?? '',
-    studyYear ? studyYear.split(',') : [],
-    major ? major.split(',') : [],
-    occupation ? occupation.split(',') : [],
-    affiliation ? affiliation.split(',') : [],
-    chatId ?? '',
-    role?.toLowerCase() ?? ''
-  );
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId, role, showApplicant } =
+    req.query as GetAllUserQuery;
+  const allUsers = await userService.getAllUser({
+    name: name ?? '',
+    page: Number(page),
+    limit: Number(limit),
+    userId: req.userId as string,
+    universityName: universityName ?? '',
+    studyYear: studyYear ? studyYear.split(',') : [],
+    major: major ? major.split(',') : [],
+    occupation: occupation ? occupation.split(',') : [],
+    affiliation: affiliation ? affiliation.split(',') : [],
+    chatId: chatId ?? '',
+    role: role?.toLowerCase() ?? '',
+    showApplicant: showApplicant === true,
+  });
   res.status(httpStatus.OK).json(allUsers);
 });
 

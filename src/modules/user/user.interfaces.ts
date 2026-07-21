@@ -95,6 +95,7 @@ export interface GetAllUserMatchStage {
   firstName?: { $regex: RegExp };
   lastName?: { $regex: RegExp };
   'profile.university_name'?: { $regex: RegExp };
+  'profile.role'?: { $ne: string };
   $and?: Array<{
     $or: Array<
       | { 'profile.communities.communityId': mongoose.Types.ObjectId }
@@ -127,6 +128,23 @@ export interface GetAllUserQuery {
   affiliation?: string;
   chatId?: string;
   role?: string;
+  showApplicant?: boolean;
+}
+
+/** Service params for getAllUser */
+export interface GetAllUserParams {
+  name?: string;
+  page: number;
+  limit: number;
+  userId: string;
+  universityName: string;
+  studyYear: string[];
+  major: string[];
+  occupation: string[];
+  affiliation: string[];
+  chatId: string;
+  role: string;
+  showApplicant?: boolean;
 }
 
 /** Query params for getAllUsersDirectory (list users without following/blocked/chat exclusions) */
