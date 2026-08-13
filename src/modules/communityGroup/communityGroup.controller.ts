@@ -208,6 +208,39 @@ export const createCommunityGroupBySuperAdmin = catchAsync(async (req: userIdExt
   });
 });
 
+type CommunityGroupUniqueIdValidationIssue = {
+  unresolvedUniqueIds: { adminId: string[]; memberList: string[] };
+  nonCommunityMemberUniqueIds: { adminId: string[]; memberList: string[] };
+  nonVerifiedUniqueIds: { adminId: string[]; memberList: string[] };
+};
+
+const buildCommunityGroupUniqueIdValidationError = (issue: CommunityGroupUniqueIdValidationIssue): string => {
+  const messages: string[] = [];
+
+  const { unresolvedUniqueIds, nonCommunityMemberUniqueIds, nonVerifiedUniqueIds } = issue;
+
+  if (unresolvedUniqueIds.adminId.length > 0) {
+    messages.push(`Admin not found: ${unresolvedUniqueIds.adminId.join(', ')}`);
+  }
+  if (unresolvedUniqueIds.memberList.length > 0) {
+    messages.push(`Members not found: ${unresolvedUniqueIds.memberList.join(', ')}`);
+  }
+  if (nonCommunityMemberUniqueIds.adminId.length > 0) {
+    messages.push(`Admin not in community: ${nonCommunityMemberUniqueIds.adminId.join(', ')}`);
+  }
+  if (nonCommunityMemberUniqueIds.memberList.length > 0) {
+    messages.push(`Members not in community: ${nonCommunityMemberUniqueIds.memberList.join(', ')}`);
+  }
+  if (nonVerifiedUniqueIds.adminId.length > 0) {
+    messages.push(`Admin not verified: ${nonVerifiedUniqueIds.adminId.join(', ')}`);
+  }
+  if (nonVerifiedUniqueIds.memberList.length > 0) {
+    messages.push(`Members not verified: ${nonVerifiedUniqueIds.memberList.join(', ')}`);
+  }
+
+  return messages.join('; ') || 'Unique ID validation failed';
+};
+
 export const validateCommunityGroupUsersByUniqueId = catchAsync(async (req: userIdExtend, res: Response) => {
   const { communityId } = req.params as { communityId?: string };
   if (!communityId) {
@@ -240,71 +273,94 @@ export const validateCommunityGroupUsersByUniqueId = catchAsync(async (req: user
     )
   );
 
-  const users = await userService.getUsersByUniqueIdsWithCommunityMembership(allUniqueIds, communityId);
-  const existingUniqueIds = new Set(users.map((user) => user.uniqueId).filter((id): id is string => typeof id === 'string'));
-  const nonMemberUniqueIds = new Set(
-    users
-      .filter((user) => !user.isCommunityMember && typeof user.uniqueId === 'string')
-      .map((user) => user.uniqueId as string)
-  );
-  const nonVerifiedUniqueIds = new Set(
-    users
-      .filter((user) => user.isCommunityMember && !user.isCommunityVerified && typeof user.uniqueId === 'string')
-      .map((user) => user.uniqueId as string)
-  );
+  const resolvedUsers = await userService.getUsersByUniqueIdsWithCommunityMembership(allUniqueIds, communityId);
+  const userByUniqueId = new Map<
+    string,
+    { isCommunityMember: boolean; isCommunityVerified: boolean }
+  >();
+  for (const resolvedUser of resolvedUsers) {
+    if (typeof resolvedUser.uniqueId === 'string' && resolvedUser.uniqueId.trim()) {
+      userByUniqueId.set(resolvedUser.uniqueId.trim(), resolvedUser);
+    }
+  }
 
-  const results = normalizedPayloads.map((item, index) => {
-    const missingAdminIds = item.adminId && !existingUniqueIds.has(item.adminId) ? [item.adminId] : [];
-    const missingMemberIds = item.memberList.filter((memberId) => !existingUniqueIds.has(memberId));
-    const adminNotInCommunityIds =
-      item.adminId && existingUniqueIds.has(item.adminId) && nonMemberUniqueIds.has(item.adminId) ? [item.adminId] : [];
-    const membersNotInCommunityIds = item.memberList.filter(
-      (memberId) => existingUniqueIds.has(memberId) && nonMemberUniqueIds.has(memberId)
-    );
-    const adminNotVerifiedIds =
-      item.adminId && existingUniqueIds.has(item.adminId) && nonVerifiedUniqueIds.has(item.adminId) ? [item.adminId] : [];
-    const membersNotVerifiedIds = item.memberList.filter(
-      (memberId) => existingUniqueIds.has(memberId) && nonVerifiedUniqueIds.has(memberId)
-    );
+  const validationResults = normalizedPayloads.map((item, index) => {
+    const unresolvedUniqueIds = {
+      adminId: item.adminId && !userByUniqueId.has(item.adminId) ? [item.adminId] : [],
+      memberList: item.memberList.filter((memberId) => !userByUniqueId.has(memberId)),
+    };
+    const nonCommunityMemberUniqueIds = {
+      adminId:
+        item.adminId && userByUniqueId.has(item.adminId) && !userByUniqueId.get(item.adminId)!.isCommunityMember
+          ? [item.adminId]
+          : [],
+      memberList: item.memberList.filter(
+        (memberId) => userByUniqueId.has(memberId) && !userByUniqueId.get(memberId)!.isCommunityMember
+      ),
+    };
+    const nonVerifiedUniqueIds = {
+      adminId:
+        item.adminId &&
+        userByUniqueId.has(item.adminId) &&
+        userByUniqueId.get(item.adminId)!.isCommunityMember &&
+        !userByUniqueId.get(item.adminId)!.isCommunityVerified
+          ? [item.adminId]
+          : [],
+      memberList: item.memberList.filter((memberId) => {
+        const user = userByUniqueId.get(memberId);
+        return Boolean(user?.isCommunityMember && !user.isCommunityVerified);
+      }),
+    };
+
+    const isValid =
+      unresolvedUniqueIds.adminId.length === 0 &&
+      unresolvedUniqueIds.memberList.length === 0 &&
+      nonCommunityMemberUniqueIds.adminId.length === 0 &&
+      nonCommunityMemberUniqueIds.memberList.length === 0 &&
+      nonVerifiedUniqueIds.adminId.length === 0 &&
+      nonVerifiedUniqueIds.memberList.length === 0;
 
     return {
       index,
       title: item.title,
-      unresolvedUniqueIds: {
-        adminId: missingAdminIds,
-        memberList: missingMemberIds,
-      },
-      nonCommunityMemberUniqueIds: {
-        adminId: adminNotInCommunityIds,
-        memberList: membersNotInCommunityIds,
-      },
-      nonVerifiedUniqueIds: {
-        adminId: adminNotVerifiedIds,
-        memberList: membersNotVerifiedIds,
-      },
-      isValid:
-        missingAdminIds.length === 0 &&
-        missingMemberIds.length === 0 &&
-        adminNotInCommunityIds.length === 0 &&
-        membersNotInCommunityIds.length === 0 &&
-        adminNotVerifiedIds.length === 0 &&
-        membersNotVerifiedIds.length === 0,
+      unresolvedUniqueIds,
+      nonCommunityMemberUniqueIds,
+      nonVerifiedUniqueIds,
+      isValid,
     };
   });
 
-  const invalidItems = results.filter((item) => !item.isValid);
+  const successResults = validationResults
+    .filter((item) => item.isValid)
+    .map(({ index, title }) => ({
+      index,
+      title,
+      status: 'success' as const,
+    }));
 
-  res.status(200).json({
+  const failedResults = validationResults
+    .filter((item) => !item.isValid)
+    .map((item) => ({
+      index: item.index,
+      title: item.title,
+      status: 'failed' as const,
+      err: buildCommunityGroupUniqueIdValidationError(item),
+      unresolvedUniqueIds: item.unresolvedUniqueIds,
+      nonCommunityMemberUniqueIds: item.nonCommunityMemberUniqueIds,
+      nonVerifiedUniqueIds: item.nonVerifiedUniqueIds,
+    }));
+
+  res.status(httpStatus.OK).json({
     success: true,
     message: 'Unique ID validation completed',
     summary: {
-      total: results.length,
-      valid: results.length - invalidItems.length,
-      invalid: invalidItems.length,
+      total: validationResults.length,
+      valid: successResults.length,
+      invalid: failedResults.length,
     },
     data: {
-      results,
-      failed: invalidItems,
+      results: successResults,
+      failed: failedResults,
     },
   });
 });
@@ -548,4 +604,53 @@ export const getCommunityGroupMembersForSuperAdmin = catchAsync(async (req: user
     Number(limit)
   );
   res.status(httpStatus.OK).json(communityGroup);
+});
+
+export const getOfficialGroupsStatsForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.getOfficialGroupsStatsForCommunityAdmin(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.getOfficialGroupsWithPostCountForCommunityAdmin(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const deleteCommunityGroupForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId, groupId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId || !groupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId or groupId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityGroupService.deleteCommunityGroupForCommunityAdmin(
+    communityId,
+    groupId,
+    requestingUserId
+  );
+  return res.status(httpStatus.OK).json(result);
 });

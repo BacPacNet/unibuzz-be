@@ -116,6 +116,7 @@ interface UserProfileDocument {
   followers: FollowingEntry[];
   isCommunityAdmin?: boolean;
   adminCommunityId?: Schema.Types.ObjectId | null;
+  communityAdminAddedAt?: Date | null;
   statusChangeHistory: StatusChangeHistoryEntry[];
   blockedUsers: BlockedUserEntry[];
 }
@@ -169,5 +170,23 @@ interface PaginationQueryWithUserId extends PaginationQuery {
 
 type CommunityUser = communityInterface['users'][number];
 
+export interface CommunityAdminBulkUpdateStudentProfileBody {
+  userIds: string[];
+  study_year?: string;
+  year?: string;
+  major?: string;
+}
+
+export interface CommunityAdminBulkUpdateFacultyProfileBody {
+  userIds: string[];
+  affiliation?: string;
+  occupation?: string;
+}
+
+export interface CommunityAdminBulkProfileUpdateResult {
+  updatedCount: number;
+  skippedUserIds: string[];
+  profiles: UserProfileDocument[];
+}
 
 export { UserProfileDocument, EditProfileRequest,  PaginationQueryWithUserId, CommunityUser };

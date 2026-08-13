@@ -1,4 +1,92 @@
 import mongoose, { PipelineStage } from 'mongoose';
+import { userPostType } from '../../config/community.type';
+
+export interface UserPostVisibilityContext {
+  viewerObjectId: mongoose.Types.ObjectId;
+  followingObjectIds: mongoose.Types.ObjectId[];
+  viewerUniversityId: mongoose.Types.ObjectId | null;
+  viewerIsUniversityMember: boolean;
+}
+
+export type UserPostVisibilityMode = 'publicOnly' | 'skip' | UserPostVisibilityContext;
+
+/**
+ * Filters user posts by PostType visibility (PUBLIC, FOLLOWER_ONLY, UNIVERSITY_WIDE).
+ * Use 'publicOnly' for unauthenticated viewers, 'skip' when viewing own posts.
+ */
+export function getUserPostVisibilityStages(mode: UserPostVisibilityMode): PipelineStage[] {
+  if (mode === 'skip') {
+    return [];
+  }
+
+  if (mode === 'publicOnly') {
+    return [{ $match: { PostType: userPostType.PUBLIC } }];
+  }
+
+  const { viewerObjectId, followingObjectIds, viewerUniversityId, viewerIsUniversityMember } = mode;
+
+  const visibleWithoutAuthorLookup: Record<string, unknown>[] = [
+    { PostType: userPostType.PUBLIC },
+    { PostType: userPostType.FOLLOWER_ONLY, user_id: viewerObjectId },
+    { PostType: userPostType.UNIVERSITY_WIDE, user_id: viewerObjectId },
+  ];
+
+  if (followingObjectIds.length > 0) {
+    visibleWithoutAuthorLookup.push({
+      PostType: userPostType.FOLLOWER_ONLY,
+      user_id: { $in: followingObjectIds },
+    });
+  }
+
+  if (!viewerIsUniversityMember || !viewerUniversityId) {
+    return [{ $match: { $or: visibleWithoutAuthorLookup } }];
+  }
+
+  return [
+    {
+      $match: {
+        $or: [...visibleWithoutAuthorLookup, { PostType: userPostType.UNIVERSITY_WIDE }],
+      },
+    },
+    {
+      $lookup: {
+        from: 'userprofiles',
+        let: { authorId: '$user_id', postType: '$PostType' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$users_id', '$$authorId'] },
+                  { $eq: ['$$postType', userPostType.UNIVERSITY_WIDE] },
+                ],
+              },
+            },
+          },
+          { $project: { university_id: 1 } },
+        ],
+        as: 'postAuthorProfile',
+      },
+    },
+    {
+      $match: {
+        $or: [
+          { PostType: userPostType.PUBLIC },
+          { PostType: userPostType.FOLLOWER_ONLY, user_id: viewerObjectId },
+          ...(followingObjectIds.length > 0
+            ? [{ PostType: userPostType.FOLLOWER_ONLY, user_id: { $in: followingObjectIds } }]
+            : []),
+          { PostType: userPostType.UNIVERSITY_WIDE, user_id: viewerObjectId },
+          {
+            PostType: userPostType.UNIVERSITY_WIDE,
+            'postAuthorProfile.university_id': viewerUniversityId,
+          },
+        ],
+      },
+    },
+    { $project: { postAuthorProfile: 0 } },
+  ];
+}
 
 /** Options for user lookup (alias 'user' or 'postOwner'). */
 export type UserAlias = 'user' | 'postOwner';

@@ -54,6 +54,16 @@ export const getAllCommunityPost = {
   }),
 };
 
+export const getCommunityGroupPostsForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+    communityGroupId: Joi.string().required().custom(objectId),
+  }),
+  query: Joi.object().keys({
+    ...paginationQuery,
+  }),
+};
+
 
 
 const imageUrlItem = Joi.object().keys({
@@ -71,9 +81,7 @@ export const createCommunityPost = {
       communityId: Joi.string().required().custom(objectId),
       communityGroupId: Joi.string().custom(objectId).optional().allow(null),
     
-      communityPostsType: Joi.string()
-        .valid(CommunityType.PUBLIC, CommunityType.FOLLOWER_ONLY)
-        .optional(),
+      communityPostsType:Joi.string().valid(CommunityType.PUBLIC, CommunityType.UNIVERSITY_WIDE).allow("").allow(null).optional(),
     })
     .unknown(true),
 };
@@ -86,13 +94,19 @@ export const updateCommunityPost = {
     .keys({
       content: Joi.string().trim().allow('').optional(),
       communityPostsType: Joi.string()
-        .valid(CommunityType.PUBLIC, CommunityType.FOLLOWER_ONLY)
+        .valid(CommunityType.PUBLIC, CommunityType.UNIVERSITY_WIDE)
         .optional(),
     })
     .unknown(true),
 };
 
 export const deleteCommunityPost = {
+  params: Joi.object().keys({
+    postId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const deleteCommunityPostForCommunityAdmin = {
   params: Joi.object().keys({
     postId: Joi.string().required().custom(objectId),
   }),

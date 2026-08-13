@@ -2,6 +2,8 @@ import Joi from 'joi';
 import { objectId } from '../validate/custom.validation';
 import { CommunityGroupAccess, CommunityGroupLabel, CommunityGroupType } from '../../config/community.type';
 
+const communityGroupAccessValues = Object.values(CommunityGroupAccess);
+
 const paginationQuery = {
   page: Joi.number().integer().min(1).optional(),
   limit: Joi.number().integer().min(1).optional(),
@@ -41,7 +43,7 @@ export const createCommunityGroup = {
             .keys({
               users_id: Joi.string().custom(objectId),
               _id: Joi.string().custom(objectId).optional(),
-              displayEmail: Joi.string().allow('').optional(),
+              displayEmail: Joi.string().allow('').allow(null).optional(),
               adminCommunityId: Joi.valid(null).optional(),
               affiliation: Joi.string().allow('').optional(),
               bio: Joi.string().allow('').optional(),
@@ -54,15 +56,15 @@ export const createCommunityGroup = {
               firstName: Joi.string().optional(),
               isVerified: Joi.boolean().optional(),
               lastName: Joi.string().optional(),
-              major: Joi.string().optional(),
+              major: Joi.string().allow('').optional(),
               occupation: Joi.string().allow('').optional(),
               phone_number: Joi.string().allow('').optional(),
               profile_dp: Joi.object().optional(),
               role: Joi.string().optional(),
-              study_year: Joi.string().optional(),
+              study_year: Joi.string().allow('').optional(),
               universityLogo: Joi.string().uri().allow('').optional(),
-              university_id: Joi.string().optional(),
-              university_name: Joi.string().optional(),
+              university_id: Joi.string().allow('').allow(null).optional(),
+              university_name: Joi.string().allow('').optional(),
             })
             .unknown(true)
         )
@@ -73,6 +75,9 @@ export const createCommunityGroup = {
       communityGroupLogoCoverUrl: Joi.object()
         .keys({ imageUrl: Joi.string().uri(), publicId: Joi.string() })
         .optional(),
+      communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
+      isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+      requirePostApproval: Joi.boolean().optional(),
     })
     .unknown(true),
 };
@@ -92,9 +97,9 @@ const createCommunityGroupBySuperAdminItem = Joi.object()
         CommunityGroupLabel.Other
       )
       .optional(),
-    communityGroupAccess: Joi.string()
-      .valid(CommunityGroupAccess.Public, CommunityGroupAccess.Private, 'Public', 'Private')
-      .optional(),
+    communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
+    isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+    requirePostApproval: Joi.boolean().optional(),
     communityGroupCategory: Joi.alternatives()
       .try(Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())), Joi.valid(null))
       .optional(),
@@ -104,7 +109,7 @@ const createCommunityGroupBySuperAdminItem = Joi.object()
           .keys({
             users_id: Joi.string().custom(objectId),
             _id: Joi.string().custom(objectId).optional(),
-            displayEmail: Joi.string().allow('').optional(),
+            displayEmail: Joi.string().allow('').allow(null).optional(),
             adminCommunityId: Joi.valid(null).optional(),
             affiliation: Joi.string().allow('').optional(),
             bio: Joi.string().allow('').optional(),
@@ -117,15 +122,15 @@ const createCommunityGroupBySuperAdminItem = Joi.object()
             firstName: Joi.string().optional(),
             isVerified: Joi.boolean().optional(),
             lastName: Joi.string().optional(),
-            major: Joi.string().optional(),
+            major: Joi.string().allow('').optional(),
             occupation: Joi.string().allow('').optional(),
             phone_number: Joi.string().allow('').optional(),
             profile_dp: Joi.object().optional(),
             role: Joi.string().optional(),
-            study_year: Joi.string().optional(),
+            study_year: Joi.string().allow('').optional(),
             universityLogo: Joi.string().uri().allow('').optional(),
-            university_id: Joi.string().optional(),
-            university_name: Joi.string().optional(),
+            university_id: Joi.string().allow('').allow(null).optional(),
+            university_name: Joi.string().allow('').optional(),
           })
           .unknown(true)
       )
@@ -176,7 +181,9 @@ export const updateCommunityGroup = {
       title: Joi.string().trim().optional(),
       description: Joi.string().trim().allow('').optional(),
       communityGroupCategory: Joi.object().pattern(Joi.string(), Joi.array().items(Joi.string())).optional(),
-      communityGroupAccess: Joi.string().valid(CommunityGroupAccess.Public, CommunityGroupAccess.Private).optional(),
+      communityGroupAccess: Joi.string().valid(...communityGroupAccessValues).optional(),
+      isRequestRequiredToJoinGroup: Joi.boolean().optional(),
+      requirePostApproval: Joi.boolean().optional(),
       communityGroupLogoUrl: Joi.object()
         .keys({ imageUrl: Joi.string().uri(), publicId: Joi.string() })
         .optional(),
@@ -189,7 +196,7 @@ export const updateCommunityGroup = {
             .keys({
               users_id: Joi.string().custom(objectId),
               _id: Joi.string().custom(objectId).optional(),
-              displayEmail: Joi.string().allow('').optional(),
+              displayEmail: Joi.string().allow('').allow(null).optional(),
               adminCommunityId: Joi.valid(null).optional(),
               affiliation: Joi.string().allow('').optional(),
               bio: Joi.string().allow('').optional(),
@@ -202,15 +209,15 @@ export const updateCommunityGroup = {
               firstName: Joi.string().optional(),
               isVerified: Joi.boolean().optional(),
               lastName: Joi.string().optional(),
-              major: Joi.string().optional(),
+              major: Joi.string().allow('').optional(),
               occupation: Joi.string().allow('').optional(),
               phone_number: Joi.string().allow('').optional(),
               profile_dp: Joi.object().optional(),
               role: Joi.string().optional(),
-              study_year: Joi.string().optional(),
+              study_year: Joi.string().allow('').optional(),
               universityLogo: Joi.string().uri().allow('').optional(),
-              university_id: Joi.string().optional(),
-              university_name: Joi.string().optional(),
+              university_id: Joi.string().allow('').allow(null).optional(),
+              university_name: Joi.string().allow('').optional(),
             })
             .unknown(true)
         )
@@ -272,5 +279,24 @@ export const removeUserFromCommunityGroup = {
   params: Joi.object().keys({
     groupId: Joi.string().required().custom(objectId),
     userId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const getOfficialGroupsStatsForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const deleteCommunityGroupForCommunityAdmin = {
+  params: Joi.object().keys({
+    communityId: Joi.string().required().custom(objectId),
+    groupId: Joi.string().required().custom(objectId),
   }),
 };

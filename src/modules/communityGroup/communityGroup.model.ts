@@ -29,8 +29,16 @@ const communityGroupSchema = new Schema<communityGroupInterface>(
     },
     communityGroupAccess: {
       type: String,
-      enum: ['Private', 'Public'],
+      enum: Object.values(CommunityGroupAccess),
       default: CommunityGroupAccess.Public,
+    },
+    isRequestRequiredToJoinGroup: {
+      type: Boolean,
+      default: false,
+    },
+    requirePostApproval: {
+      type: Boolean,
+      default: false,
     },
     communityGroupType: {
       type: String,

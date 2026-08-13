@@ -1,9 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { IUniversity } from './university.interface';
 
-
-
-
 const UniversitySchema = new Schema(
   {
     name: { type: String, required: true },
@@ -25,6 +22,27 @@ const UniversitySchema = new Schema(
     state_province: { type: String, default: null },
     web_pages: { type: [String], required: true },
     communityId: { type: String, required: false },
+    semesterStart: {
+      day: { type: Number, required: false },
+      month: { type: Number, required: false },
+    },
+    highlightPosts: [
+      {
+        postId: {
+          type: Schema.Types.ObjectId,
+          required: true,
+        },
+        postType: {
+          type: String,
+          enum: ["CommunityPost", "UserPost"],
+          required: true,
+        },
+        position: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

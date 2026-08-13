@@ -1,7 +1,63 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
+interface ISemesterStart {
+  day: number;
+  month: number;
+}
 
- interface IUniversity extends Document {
+interface IUniversityContactsUpdate {
+  email?: string;
+  phone?: string;
+  address?: string;
+  office_hours?: string;
+}
+
+interface IUniversityProfileUpdate {
+  name?: string;
+  description?: string;
+  long_description?: string;
+  short_overview?: string;
+  shortOverview?: string;
+  logo?: string;
+  campus?: string;
+  total_students?: string;
+  web_pages?: string;
+  contacts?: IUniversityContactsUpdate;
+  email?: string;
+  phone?: string;
+  address?: string;
+  office_hours?: string;
+}
+
+type IUniversityProfileUpdateData = Pick<
+  IUniversity,
+  | 'name'
+  | 'long_description'
+  | 'short_overview'
+  | 'logo'
+  | 'campus'
+  | 'web_pages'
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'office_hours'
+> & {
+  total_students?: string;
+};
+
+export type HighlightPost = {
+  postId: Types.ObjectId;
+  postType: "CommunityPost" | "UserPost";
+  position: number;
+};
+
+export type HighlightPostPositionUpdate = {
+  postId: string;
+  postType: HighlightPost['postType'];
+  position: number;
+};
+
+interface IUniversity extends Document {
   _id: string;
   name: string;
   __v: string;
@@ -37,8 +93,9 @@ import { Document } from 'mongoose';
   type: string;
   web_pages: string[];
   communityId?: string;
+  semesterStart: ISemesterStart;
+  highlightPosts: HighlightPost[];
 }
-
 
 // Interface for WikiInfoBox
 interface WikiInfoBox {
@@ -107,6 +164,15 @@ interface College extends Document {
 
 type UniversityPayload = Partial<IUniversity>;
 type UniversityFilter = Record<string, unknown>;
- 
-export { College, SearchParamsType, UniversityPayload, UniversityFilter ,IUniversity};
 
+export {
+  College,
+  ISemesterStart,
+  SearchParamsType,
+  UniversityPayload,
+  UniversityFilter,
+  IUniversity,
+  IUniversityContactsUpdate,
+  IUniversityProfileUpdate,
+  IUniversityProfileUpdateData,
+};

@@ -67,7 +67,30 @@ export const getAllUser = {
     affiliation: Joi.string().optional(),
     chatId: Joi.string().optional(),
     role: Joi.string().optional(),
+    showApplicant: Joi.boolean().optional(),
   }),
+};
+
+const usersDirectoryFilters = {
+  name: Joi.string().optional(),
+  universityName: Joi.string().optional(),
+  universityId: Joi.string().optional(),
+  studyYear: Joi.string().optional(),
+  major: Joi.string().optional(),
+  occupation: Joi.string().optional(),
+  affiliation: Joi.string().optional(),
+  role: Joi.string().optional(),
+};
+
+export const getAllUsersDirectory = {
+  query: Joi.object().keys({
+    ...paginationQuery,
+    ...usersDirectoryFilters,
+  }),
+};
+
+export const exportAllUsersDirectory = {
+  query: Joi.object().keys(usersDirectoryFilters),
 };
 
 export const checkUserEmailAndUserNameAvailability = {
@@ -119,6 +142,12 @@ export const deActivateUserAccount = {
     userName: Joi.string().required(),
     email: Joi.string().required().email(),
     Password: Joi.string().required().custom(password),
+  }),
+};
+
+export const deActivateUserAccountByCommunityAdmin = {
+  body: Joi.object().keys({
+    userId: Joi.string().required().custom(objectId),
   }),
 };
 

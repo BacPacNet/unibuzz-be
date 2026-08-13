@@ -1,5 +1,5 @@
 import mongoose, { Document } from 'mongoose';
-import { CommunityGroupAccess, CommunityGroupLabel, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupLabel, CommunityGroupType } from '../../config/community.type';
 
 export const allowedCategories = new Set([
   'Academic',
@@ -141,6 +141,8 @@ interface communityGroupInterface {
   memberCount: number;
   communityGroupType: CommunityGroupType;
   communityGroupAccess: CommunityGroupAccess;
+  isRequestRequiredToJoinGroup: boolean;
+  requirePostApproval: boolean;
   communityGroupLabel: CommunityGroupLabel;
   communityGroupCategory: Map<string, string[]>;
   users: users[];
@@ -174,6 +176,8 @@ interface CommunityGroupWithNotification extends Omit<communityGroupInterface, '
   notificationId?: mongoose.Types.ObjectId | undefined;
   notificationTypes?: string | undefined;
   notificationStatus?: string | undefined;
+  joinGroupActionKey?: CommunityGroupJoinActionKey | null;
+  isOfficialTypeDisabled?: boolean;
 }
 
 interface CommunityGroupNotificationPayload {
@@ -218,6 +222,8 @@ export interface UpdateCommunityGroupBody {
   selectedUsers?: SelectedUserItem[];
   communityGroupCategory?: Record<string, string[]>;
   communityGroupAccess?: CommunityGroupAccess;
+  isRequestRequiredToJoinGroup?: boolean;
+  requirePostApproval?: boolean;
   title?: string;
   description?: string;
   communityGroupLogoUrl?: { imageUrl: string; publicId: string };
@@ -233,6 +239,7 @@ export interface CreateCommunityGroupBody {
   memberList?: string[];
   communityGroupType?: string;
   communityGroupLabel?: CommunityGroupLabel;
+  requirePostApproval?: boolean;
   title?: string;
   description?: string;
   communityGroupLogoUrl?: { imageUrl: string; publicId: string };

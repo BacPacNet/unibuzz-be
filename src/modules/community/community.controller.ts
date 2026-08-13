@@ -5,28 +5,31 @@ import { communityService } from '.';
 import mongoose from 'mongoose';
 import { universityService } from '../university';
 import { userIdExtend } from '../../config/userIDType';
-import { CreateCommunityBody, GetCommunityUsersOptions, communityInterface } from './community.interface';
+import {
+  CreateCommunityBody,
+  ExportFilteredSuperAdminCommunityQuery,
+  GetCommunityUsersOptions,
+  communityInterface,
+} from './community.interface';
+import { CommunityGroupFilters } from './community.pipeline';
 import catchAsync from '../utils/catchAsync';
 import { IUniversity } from '../university/university.interface';
 
-
-
 // get all userCommunity
 export const getAllUserCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
-    const userID = req.userId as string;
-    const communities = await communityService.getUserCommunities(userID);
-    return res.status(httpStatus.OK).json(communities);
+  const userID = req.userId as string;
+  const communities = await communityService.getUserCommunities(userID);
+  return res.status(httpStatus.OK).json(communities);
 });
 export const getFilteredUserCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const userID = req.userId as string;
   const { communityId } = req.params;
-    if (!communityId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'communityId not found');
-    }
-    const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body.sort, req.body);
-   return res.status(httpStatus.OK).json(communities);
-
-})
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'communityId not found');
+  }
+  const communities = await communityService.getUserFilteredCommunities(userID, communityId, req.body.sort, req.body);
+  return res.status(httpStatus.OK).json(communities);
+});
 
 export const getFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
   const { universityId } = req.params;
@@ -36,7 +39,38 @@ export const getFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdEx
   const communityId = await communityService.getCommunityIdByUniversityId(universityId);
   const communities = await communityService.getSuperAdminFilteredCommunities(communityId, req.body.sort, req.body);
   return res.status(httpStatus.OK).json(communities);
-})
+});
+
+const parseSuperAdminCommunityExportFilters = (
+  query: ExportFilteredSuperAdminCommunityQuery
+): CommunityGroupFilters => {
+  const { searchTerm, selectedType, selectedLabel, selectedFilters } = query;
+  const filters: CommunityGroupFilters = {};
+
+  if (searchTerm) filters.searchTerm = searchTerm;
+  if (selectedType) filters.selectedType = selectedType.split(',').filter(Boolean);
+  if (selectedLabel) filters.selectedLabel = selectedLabel.split(',').filter(Boolean);
+  if (selectedFilters) {
+    filters.selectedFilters = JSON.parse(selectedFilters) as Record<string, string[]>;
+  }
+
+  return filters;
+};
+
+export const exportFilteredCommunityForSuperAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { universityId } = req.params;
+  if (!universityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'universityId not found');
+  }
+  const { sort, ...filterQuery } = req.query as ExportFilteredSuperAdminCommunityQuery;
+  const communityId = await communityService.getCommunityIdByUniversityId(universityId);
+  const result = await communityService.exportSuperAdminFilteredCommunities(
+    communityId,
+    sort ?? '',
+    parseSuperAdminCommunityExportFilters(filterQuery)
+  );
+  return res.status(httpStatus.OK).json(result);
+});
 
 //get community
 export const getCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
@@ -44,25 +78,20 @@ export const getCommunity = catchAsync(async (req: userIdExtend, res: Response) 
   if (!communityId || !mongoose.Types.ObjectId.isValid(communityId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID');
   }
-
-  const options =
-    req.userId != null && req.userId.length > 0 ? { currentUserId: String(req.userId) } : undefined;
+  const options = req.userId != null && req.userId.length > 0 ? { currentUserId: String(req.userId) } : undefined;
   const community = await communityService.getCommunity(communityId, options);
   return res.status(httpStatus.OK).json(community);
 });
 
-
 export const updateCommunity = catchAsync(async (req: Request<{ communityId: string }>, res: Response) => {
   let community;
 
-
-    if (!mongoose.Types.ObjectId.isValid(req.params.communityId)) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID')
-    }
-    community = await communityService.updateCommunity(req.params.communityId, req.body);
-    return res.status(httpStatus.OK).json({ community });
-
-})
+  if (!mongoose.Types.ObjectId.isValid(req.params.communityId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid group ID');
+  }
+  community = await communityService.updateCommunity(req.params.communityId, req.body);
+  return res.status(httpStatus.OK).json({ community });
+});
 
 export const CreateCommunity = catchAsync(async (req: Request<object, object, CreateCommunityBody>, res: Response) => {
   const { university_id } = req.body;
@@ -72,9 +101,10 @@ export const CreateCommunity = catchAsync(async (req: Request<object, object, Cr
     throw new ApiError(httpStatus.NOT_FOUND, 'University not found');
   }
 
-  const totalStudents = typeof college.total_students === 'object' && college.total_students?.$numberInt != null
-    ? Number(college.total_students.$numberInt)
-    : Number(college.total_students) || 0;
+  const totalStudents =
+    typeof college.total_students === 'object' && college.total_students?.$numberInt != null
+      ? Number(college.total_students.$numberInt)
+      : Number(college.total_students) || 0;
   const totalFaculty = Number((college as IUniversity & { total_faculty_staff?: number }).total_faculty_staff) || 0;
 
   const community: communityInterface = await communityService.createCommunity(
@@ -88,15 +118,15 @@ export const CreateCommunity = catchAsync(async (req: Request<object, object, Cr
   );
 
   return res.status(httpStatus.CREATED).json({ community });
-})
+});
 
 export const joinCommunityFromUniversity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { universityId } = req.query as any;
   const userId = req.userId as string;
 
-    const community = await communityService.joinCommunityFromUniversity(userId, universityId);
-    return res.status(httpStatus.OK).json(community);
-})
+  const community = await communityService.joinCommunityFromUniversity(userId, universityId);
+  return res.status(httpStatus.OK).json(community);
+});
 
 export const joinCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { communityId } = req.params as any;
@@ -105,63 +135,105 @@ export const joinCommunity = catchAsync(async (req: userIdExtend, res: Response)
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID');
   }
 
-    const user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-    return res.status(httpStatus.OK).json({ message: 'Joined Successfully', user });
-})
+  const user = await communityService.joinCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+  return res.status(httpStatus.OK).json({ message: 'Joined Successfully', user });
+});
 
 export const leaveCommunity = catchAsync(async (req: userIdExtend, res: Response) => {
   const { communityId } = req.params;
 
-    if (!communityId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID')
-    }
-    let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
-    return res.status(httpStatus.OK).json(user);
-})
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid community ID');
+  }
+  let user = await communityService.leaveCommunity(new mongoose.Types.ObjectId(req.userId), communityId);
+  return res.status(httpStatus.OK).json(user);
+});
 
 export const getCommunityUsersController = catchAsync(async (req: userIdExtend, res: Response) => {
-
-    const { communityId } = req.params;
-    const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
-    if (!communityId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
-    }
-    const options: GetCommunityUsersOptions = {
-      isVerified,
-      searchQuery,
-      page: Number(page),
-      limit: Number(limit),
-      userId: req.userId as string,
-    };
-    const users = await communityService.getCommunityUsersService(communityId, options);
-   return res.status(httpStatus.OK).json({ success: true, ...users });
-
-})
+  const { communityId } = req.params;
+  const { isVerified = false, searchQuery, page = 1, limit = 10 } = req.query as unknown as GetCommunityUsersOptions;
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  const options: GetCommunityUsersOptions = {
+    isVerified,
+    searchQuery,
+    page: Number(page),
+    limit: Number(limit),
+    userId: req.userId as string,
+  };
+  const users = await communityService.getCommunityUsersService(communityId, options);
+  return res.status(httpStatus.OK).json({ success: true, ...users });
+});
 
 export const getCommunityUsersWithfilterController = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const userId = req.userId;
+  const {
+    isVerified = false,
+    searchQuery,
+    page = 1,
+    limit = 10,
+    communityGroupId,
+  } = req.query as unknown as GetCommunityUsersOptions;
 
-    const { communityId } = req.params;
-    const userId = req.userId;
-    const {
-      isVerified = false,
-      searchQuery,
-      page = 1,
-      limit = 10,
-      communityGroupId,
-    } = req.query as unknown as GetCommunityUsersOptions;
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  const options: GetCommunityUsersOptions = {
+    isVerified,
+    searchQuery,
+    communityGroupId,
+    page: Number(page),
+    limit: Number(limit),
+    userId: userId as string,
+  };
+  const users = await communityService.getCommunityUsersByFilterService(communityId, options);
+  return res.status(httpStatus.OK).json({ success: true, ...users });
+});
 
-    if (!communityId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
-    }
-    const options: GetCommunityUsersOptions = {
-      isVerified,
-      searchQuery,
-      communityGroupId,
-      page: Number(page),
-      limit: Number(limit),
-      userId: userId as string,
-    };
-    const users = await communityService.getCommunityUsersByFilterService(communityId, options);
-    return res.status(httpStatus.OK).json({ success: true, ...users });
+export const getCommunityAdmins = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const requestingUserId = req.userId as string;
 
-})
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.getCommunityAdmins(communityId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const addCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId } = req.params;
+  const { userId } = req.body as { userId: string };
+  const requestingUserId = req.userId as string;
+console.log("requestingUserId",requestingUserId)
+  if (!communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.addCommunityAdmin(communityId, userId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});
+
+export const removeCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { communityId, userId } = req.params;
+  const requestingUserId = req.userId as string;
+
+  if (!communityId || !userId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid communityId or userId');
+  }
+  if (!requestingUserId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const result = await communityService.removeCommunityAdmin(communityId, userId, requestingUserId);
+  return res.status(httpStatus.OK).json({ success: true, ...result });
+});

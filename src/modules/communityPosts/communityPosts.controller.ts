@@ -3,20 +3,24 @@ import * as communityPostsService from './communityPosts.service';
 import httpStatus from 'http-status';
 import { ApiError } from '../errors';
 import { userPostService } from '../userPost';
-import { communityService } from '../community';
+import { communityModel, communityService } from '../community';
 import { communityGroupModel, communityGroupService } from '../communityGroup';
+import { status as communityGroupUserStatus } from '../communityGroup/communityGroup.interface';
 import he from 'he';
 import { userIdExtend } from '../../config/userIDType';
 import mongoose from 'mongoose';
 import { convertToObjectId, isValidObjectId, parsePostIdOrThrow } from '../../utils/common';
 import { userPostCommentsService } from '../userPostComments';
 import { communityPostCommentsService } from '../communityPostsComments';
-import { isUserCommunityGroupMember, validateCommunityMembership } from '../../utils/community';
+import { validateCommunityMembership } from '../../utils/community';
 import { CommunityGroupType } from '../../config/community.type';
 import type { users as CommunityGroupUser } from '../communityGroup/communityGroup.interface';
+import { groupRequiresPostApproval } from '../communityGroup/communityGroup.access';
 import { notificationRoleAccess } from '../Notification/notification.interface';
 import { queueSQSNotificationBatch } from '../../amazon-sqs/sqsBatchWrapperFunction';
 import catchAsync from '../utils/catchAsync';
+
+
 
 interface CommunityPostQueryParams {
   page?: string;
@@ -44,8 +48,9 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
   const userId = req.userId as string;
   const { communityId, communityGroupId } = req.body;
   req.body.content = he.decode(req.body.content);
-  let isOfficialGroup = false;
+  let requiresPostApproval = false;
   let isPostLive = false;
+
 
   const community = await communityService.getCommunity(req.body.communityId);
   if (communityId && !communityGroupId) {
@@ -66,11 +71,13 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
     }
 
-    isPostLive =
-      communityGroup.adminUserId.toString() === userId.toString() ||
-      communityGroup.communityGroupType === CommunityGroupType.CASUAL;
+    requiresPostApproval = groupRequiresPostApproval(communityGroup);
 
-    isOfficialGroup = communityGroup.communityGroupType === CommunityGroupType.OFFICIAL;
+    const isGroupAdmin = communityGroup.adminUserId._id.toString() === userId.toString();
+    isPostLive =
+      isGroupAdmin ||
+      communityGroup.communityGroupType === CommunityGroupType.CASUAL ||
+      !requiresPostApproval;
 
     if (!communityGroup.isCommunityGroupLive) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group is not live');
@@ -83,11 +90,14 @@ export const createCommunityPost = catchAsync(async (req: userIdExtend, res: Res
       throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not joined');
     }
   }
+
+
+
   const post = await communityPostsService.createCommunityPost(
     req.body,
     new mongoose.Types.ObjectId(userId),
     isPostLive,
-    isOfficialGroup
+    requiresPostApproval
   );
 
   const verifiedNonAdmins =
@@ -137,6 +147,18 @@ export const updateCommunityPostLive = catchAsync(async (req: userIdExtend, res:
 export const deleteCommunityPost = catchAsync(async (req: Request, res: Response) => {
   const postId = parsePostIdOrThrow(req.params['postId']);
   await communityPostsService.deleteCommunityPost(postId);
+  return res.status(httpStatus.OK).json({ message: MESSAGE_DELETED });
+});
+
+export const deleteCommunityPostForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const postId = parsePostIdOrThrow(req.params['postId']);
+  const userId = req.userId as string;
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  await communityPostsService.deleteCommunityPostForCommunityAdmin(postId, userId);
   return res.status(httpStatus.OK).json({ message: MESSAGE_DELETED });
 });
 
@@ -197,22 +219,40 @@ export const getAllCommunityGroupPostV2 = catchAsync(async (req: userIdExtend, r
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid Community ID or Community Group ID format');
   }
 
-  // Get community and validate
-  const community = await communityService.getCommunity(communityId as string);
-  if (!community) {
+  const communityObjectId = convertToObjectId(communityId as string);
+  const communityGroupObjectId = convertToObjectId(communityGroupId as string);
+  const userObjectId = convertToObjectId(userId);
+
+  const [communityExists, communityGroup] = await Promise.all([
+    communityModel.exists({ _id: communityObjectId }),
+    communityGroupModel
+      .findOne({
+        _id: communityGroupObjectId,
+        $or: [
+          { adminUserId: userObjectId },
+          {
+            users: {
+              $elemMatch: { _id: userObjectId, status: communityGroupUserStatus.accepted },
+            },
+          },
+        ],
+      })
+      .select('adminUserId')
+      .lean(),
+  ]);
+
+  if (!communityExists) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
 
-  // Get community group and validate
-  const communityGroup = await communityGroupModel.findById(convertToObjectId(communityGroupId as string));
   if (!communityGroup) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
-  }
-
-  // Check user membership
-  if (!isUserCommunityGroupMember(communityGroup, userId)) {
+    const groupExists = await communityGroupModel.exists({ _id: communityGroupObjectId });
+    if (!groupExists) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+    }
     throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not a member of this community group');
   }
+
   const isAdminOfCommunityGroup = communityGroup.adminUserId.toString() === userId.toString();
   // Get posts with pagination
   const communityPosts = await communityPostsService.getCommunityGroupPostsByCommunityId(
@@ -223,6 +263,56 @@ export const getAllCommunityGroupPostV2 = catchAsync(async (req: userIdExtend, r
     isAdminOfCommunityGroup,
     userId,
     filterPostBy?.toString() || ''
+  );
+
+  return res.status(httpStatus.OK).json(communityPosts);
+});
+
+// Get group posts for community admin (skips membership checks)
+export const getCommunityGroupPostsForCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit } = req.query;
+  const { communityId, communityGroupId } = req.params as CommunityPostParams;
+  const userId = req.userId as string;
+
+  if (!communityId || !communityGroupId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Community ID and Community Group ID are required');
+  }
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'User ID not found');
+  }
+
+  const community = await communityService.getCommunity(communityId);
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isCommunityAdmin = (community.adminId || []).map(String).includes(userId);
+
+  if (!isCommunityAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityGroup = await communityGroupModel
+    .findOne({ _id: communityGroupId, communityId })
+    .select('_id')
+    .lean();
+
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community Group not found');
+  }
+
+  // const [followingAndSelfUserIds] = await userPostService.getFollowingAndSelfUserIds(userId);
+
+  const communityPosts = await communityPostsService.getAllCommunityPost(
+    [],
+    communityId,
+    communityGroupId,
+    Number(page) || 1,
+    Number(limit) || 10,
+    userId,
+    { excludePendingPosts: true, showCommunities: true }
   );
 
   return res.status(httpStatus.OK).json(communityPosts);

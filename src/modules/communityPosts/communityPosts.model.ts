@@ -16,7 +16,7 @@ const communityPostSchema = new Schema<communityPostsInterface>(
     content: { type: String },
     imageUrl: [{ imageUrl: String, publicId: String }],
     likeCount: [{ userId: String }],
-    communityPostsType: { type: String, enum: ['FOLLOWER_ONLY', 'PUBLIC'], default: CommunityType.PUBLIC },
+    communityPostsType: { type: String, enum: ['PUBLIC', 'UNIVERSITY_WIDE'], default: CommunityType.PUBLIC },
     isPostVerified: { type: Boolean },
     isPostLive: { type: Boolean, default: false },
     postStatus: { type: String, enum: ['PENDING', 'SUCCESS', 'REJECTED', 'DEFAULT'], default: communityPostStatus.PENDING },

@@ -67,6 +67,27 @@ const profileDpSchema = Joi.object().keys({
   publicId: Joi.string().allow(''),
 });
 
+export const bulkUpdateStudentProfileByCommunityAdmin = {
+  body: Joi.object()
+    .keys({
+      userIds: Joi.array().items(Joi.string().required().custom(objectId)).min(1).required(),
+      study_year: Joi.string().allow('').optional(),
+      year: Joi.string().allow('').optional(),
+      major: Joi.string().allow('').optional(),
+    })
+    .or('study_year', 'year', 'major'),
+};
+
+export const bulkUpdateFacultyProfileByCommunityAdmin = {
+  body: Joi.object()
+    .keys({
+      userIds: Joi.array().items(Joi.string().required().custom(objectId)).min(1).required(),
+      affiliation: Joi.string().allow('').optional(),
+      occupation: Joi.string().allow('').optional(),
+    })
+    .or('affiliation', 'occupation'),
+};
+
 export const updateUserProfile = {
   params: Joi.object().keys(userProfileIdParam),
   body: Joi.object()

@@ -9,10 +9,12 @@ import UniversityModel from '../university/university.model';
 import { IUniversity } from '../university/university.interface';
 import cleanUpUserFromCommunityGroups from '../../utils/leftCommunity';
 import { convertToObjectId, buildPaginationResponse } from '../../utils/common';
-import { GetCommunityUsersOptions, GetUserFilteredCommunitiesResult, communityInterface } from './community.interface';
+import { GetCommunityUsersOptions, GetUserFilteredCommunitiesResult, FilteredCommunityGroup, communityInterface } from './community.interface';
 import type { HydratedDocument } from 'mongoose';
 import config from '../../config/config';
+import { CommunityGroupAccess } from '../../config/community.type';
 import { communityGroupService } from '../communityGroup';
+import { getJoinGroupActionKey, isHiddenGroupAccess, isJoinRequestRequired } from '../communityGroup/communityGroup.access';
 import {
   CommunityGroupFilters,
   buildFilteredCommunitiesBasePipeline,
@@ -43,6 +45,8 @@ import {
   buildCommunityUsersServiceBaseStages,
   buildCommunityUsersServiceSearchStage,
 } from './community.pipeline';
+import { partneredUniService } from '../partneredUni';
+import { UserRole } from '../userProfile/userProfile.interface';
 
 export const createCommunity = async (
   name: string,
@@ -68,10 +72,7 @@ export const createCommunity = async (
   return await communityModel.create(data);
 };
 
-export const getCommunity = async (
-  communityId: string,
-  options?: { currentUserId?: string }
-) => {
+export const getCommunity = async (communityId: string, options?: { currentUserId?: string }) => {
   const id = convertToObjectId(communityId);
   if (options?.currentUserId) {
     const userId = convertToObjectId(options.currentUserId);
@@ -99,9 +100,38 @@ export const getCommunity = async (
         },
       },
     ]);
-    return community as communityInterface;
+    if (!community) {
+      return community as communityInterface;
+    }
+
+    return buildGetCommunityResponse(community, options.currentUserId);
   }
-  return await communityModel.findById(id).lean();
+  const community = await communityModel.findById(id).lean();
+  if (!community) {
+    return community;
+  }
+
+  return buildGetCommunityResponse(community);
+};
+
+const buildGetCommunityResponse = async (community: communityInterface, currentUserId?: string) => {
+  const isAllowedToJoin = await partneredUniService.isPartneredUniversity(community.university_id);
+  const response: communityInterface & { isAllowedToJoin: boolean; isUserAllowedToLeave?: boolean } = {
+    ...community,
+    isAllowedToJoin,
+  };
+  if (currentUserId) {
+    const userProfile = await userProfileService.getUserProfile(currentUserId);
+    if (userProfile?.role == UserRole.APPLICANT) {
+      response.isUserAllowedToLeave = true;
+    } else {
+      response.isUserAllowedToLeave = false;
+    }
+  } else {
+    response.isUserAllowedToLeave = false;
+  }
+
+  return response;
 };
 
 export const getCommunityIdByUniversityId = async (universityId: string): Promise<string> => {
@@ -116,7 +146,6 @@ export const getCommunityIdByUniversityId = async (universityId: string): Promis
 
   return community._id.toString();
 };
-
 
 /**
  * Finds a community by ID. Throws ApiError if not found.
@@ -183,10 +212,7 @@ export const findOrCreateCommunityByUniversityName = async (
     adminId: config.DEFAULT_COMMUNITY_ADMIN_ID,
   });
 
-  await UniversityModel.updateOne(
-    { _id: university_id },
-    { $set: { communityId: community._id, isVerified: true } }
-  );
+  await UniversityModel.updateOne({ _id: university_id }, { $set: { communityId: community._id, isVerified: true } });
 
   return community;
 };
@@ -196,9 +222,10 @@ export const getUserCommunities = async (userID: string) => {
     const { userProfile } = await getUserAndProfileOrThrow(userID);
 
     const getAllUserCommunityIds = userProfile.communities.map((community) => {
-      const communityId = community.communityId instanceof mongoose.Types.ObjectId
-        ? community.communityId.toString()
-        : String(community.communityId);
+      const communityId =
+        community.communityId instanceof mongoose.Types.ObjectId
+          ? community.communityId.toString()
+          : String(community.communityId);
       return convertToObjectId(communityId);
     });
     const userObjectId = convertToObjectId(userID);
@@ -207,9 +234,7 @@ export const getUserCommunities = async (userID: string) => {
       ...buildUserCommunitiesBasePipeline(getAllUserCommunityIds),
       buildUserInCommunityCheckStage(userObjectId),
       // buildUserCommunitiesGroupFilterStage(userObjectId),
-      ...(buildUserCommunitiesUsersFilterStage(userObjectId)
-      ? [buildUserCommunitiesUsersFilterStage(userObjectId)!]
-      : []),
+      ...(buildUserCommunitiesUsersFilterStage(userObjectId) ? [buildUserCommunitiesUsersFilterStage(userObjectId)!] : []),
       buildUserCommunitiesProjectStage(),
     ];
 
@@ -266,7 +291,40 @@ export const getUserFilteredCommunities = async (
     pipeline.push(...buildCommunityGroupsProjectStage(userObjectId));
 
     const communities = await communityModel.aggregate(pipeline);
-    return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;
+    const result = (
+      communities.length ? communities[0] : { _id: communityId, communityGroups: [] }
+    ) as GetUserFilteredCommunitiesResult;
+
+    if (Array.isArray(result.communityGroups) && result.communityGroups.length > 0) {
+      result.communityGroups = result.communityGroups.map((group: FilteredCommunityGroup) => {
+        const adminUserId = group.adminUserId?.toString?.() ?? String(group.adminUserId);
+        const isAdmin = adminUserId === userID;
+        const isMember = Array.isArray(group.users)
+          ? group.users.some(
+              (user) => user._id?.toString?.() === userID && user.isRequestAccepted !== false
+            )
+          : false;
+        const isHidden = isHiddenGroupAccess(group.communityGroupAccess);
+        const isInvited = isHidden && !isAdmin && !isMember;
+
+        const requiresJoinRequest = isJoinRequestRequired(group);
+
+        return {
+          ...group,
+          isRequestRequiredToJoinGroup: requiresJoinRequest,
+          joinGroupActionKey: getJoinGroupActionKey({
+            communityGroupAccess: group.communityGroupAccess ?? CommunityGroupAccess.Public,
+            userRole: userProfile.role,
+            isMember,
+            isInvited,
+            isAdmin,
+          }),
+          isOfficialTypeDisabled: isHidden,
+        };
+      });
+    }
+
+    return result;
   } catch (error) {
     console.error('Error fetching user communities:', error);
     throw error;
@@ -279,13 +337,7 @@ export const getSuperAdminFilteredCommunities = async (
   filters?: CommunityGroupFilters
 ): Promise<GetUserFilteredCommunitiesResult> => {
   try {
-    const pipeline: PipelineStage[] = [
-      ...buildSuperAdminFilteredCommunitiesBasePipeline(communityId),
-    ];
-
-    // Super admins should be able to inspect all groups. The regular
-    // visibility stage hides groups based on the current member context.
-    // Keeping it here can lead to empty results for valid communities.
+    const pipeline: PipelineStage[] = [...buildSuperAdminFilteredCommunitiesBasePipeline(communityId)];
 
     const typeLabelStage = filters ? buildTypeAndLabelFilterStage(filters) : null;
     if (typeLabelStage) pipeline.push(typeLabelStage);
@@ -302,11 +354,23 @@ export const getSuperAdminFilteredCommunities = async (
     pipeline.push(...buildCommunityGroupsSortStages(sortBy));
     pipeline.push(...buildCommunityGroupsProjectStageForSuperAdmin());
     const communities = await communityModel.aggregate(pipeline);
-    return (communities.length ? communities[0] : { _id: communityId, communityGroups: [] }) as GetUserFilteredCommunitiesResult;
+    return (
+      communities.length ? communities[0] : { _id: communityId, communityGroups: [] }
+    ) as GetUserFilteredCommunitiesResult;
   } catch (error) {
     console.error('Error fetching super admin communities:', error);
     throw error;
   }
+};
+
+export const exportSuperAdminFilteredCommunities = async (
+  communityId: string = '',
+  sortBy: string,
+  filters?: CommunityGroupFilters
+) => {
+  const result = await getSuperAdminFilteredCommunities(communityId, sortBy, filters);
+  const communityGroups = result.communityGroups ?? [];
+  return { communityGroups, totalCount: communityGroups.length };
 };
 
 export const updateCommunity = async (id: string, community: Partial<communityInterface>) => {
@@ -335,9 +399,7 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     (userCommunity) => userCommunity.communityId.toString() === communityToJoin._id.toString()
   );
 
-  const isAlreadyJoined = userProfile.communities.some(
-    (c) => c.communityId.toString() === communityId.toString()
-  );
+  const isAlreadyJoined = userProfile.communities.some((c) => c.communityId.toString() === communityId.toString());
 
   if (!isAlreadyJoined) {
     userProfile.communities.push({ communityId, isVerified: isCommunityVerified || isVerified, communityGroups: [] });
@@ -382,10 +444,10 @@ export const joinCommunity = async (userId: mongoose.Types.ObjectId, communityId
     );
   }
 
-  userProfile.followers =[]
-  userProfile.following =[]
-  userProfile.blockedUsers =[]
-  userProfile.statusChangeHistory =[]
+  userProfile.followers = [];
+  userProfile.following = [];
+  userProfile.blockedUsers = [];
+  userProfile.statusChangeHistory = [];
 
   return userProfile;
 };
@@ -398,15 +460,15 @@ export const joinCommunityFromUniversity = async (userId: string, universityId: 
   try {
     let community = await communityModel.findOne({ university_id: universityId });
     let userProfile = await userProfileService.getUserProfileById(userId);
-    let numberOfUnverifiedJoinCommunity =
-      userProfile?.communities?.reduce((acc, c) => (c?.isVerified === false ? acc + 1 : acc), 0) || 0;
+    // let numberOfUnverifiedJoinCommunity =
+    //   userProfile?.communities?.reduce((acc, c) => (c?.isVerified === false ? acc + 1 : acc), 0) || 0;
 
     let isCommunityVerified = userProfile?.email.some(
       (userCommunity) => userCommunity.communityId.toString() === community?._id.toString()
     );
-    if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
-      throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
-    }
+    // if (numberOfUnverifiedJoinCommunity >= 1 && !isCommunityVerified) {
+    //   throw new ApiError(httpStatus.NOT_ACCEPTABLE, 'You can only join 1 community that is not verified');
+    // }
     if (!community) {
       const { _id: universityId, logo, campus, total_students, short_overview, name } = fetchUniversity as IUniversity;
 
@@ -446,7 +508,7 @@ export const leaveCommunity = async (userId: mongoose.Types.ObjectId, communityI
     if (communityIndex === -1) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a member of this community');
     }
-  
+
     userProfile.communities.splice(communityIndex, 1);
     await userProfile.save();
 
@@ -473,7 +535,8 @@ export const getCommunityUsersByFilterService = async (communityId: string, opti
 
     const myProfile = await UserProfile.findOne({ users_id: userId }, { blockedUsers: 1 }).lean();
 
-    const myBlockedUserIds = myProfile?.blockedUsers?.map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString())) || [];
+    const myBlockedUserIds =
+      myProfile?.blockedUsers?.map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString())) || [];
 
     const currentUserObjectId = convertToObjectId(options.userId);
 
@@ -544,7 +607,9 @@ export const getCommunityUsersService = async (communityId: string, options: Get
       ...(searchStage ? [searchStage] : []),
       { $skip: (page - 1) * limit },
       { $limit: limit },
-      { $project: { user: 0,email:0,communities:0,following:0,followers:0,blockedUsers:0,statusChangeHistory:0 } },
+      {
+        $project: { user: 0, email: 0, communities: 0, following: 0, followers: 0, blockedUsers: 0, statusChangeHistory: 0 },
+      },
     ];
     const countPipeline: PipelineStage[] = [
       ...baseStages,
@@ -576,3 +641,168 @@ export const getCommunityUsersService = async (communityId: string, options: Get
   }
 };
 
+export const isUserCommunityAdmin = async (userId: mongoose.Types.ObjectId) => {
+  console.log("userId",userId)
+  const community = await communityModel.findOne({ adminId: userId }).lean();
+  return community;
+};
+
+const assertRequestingUserIsCommunityAdmin = async (communityId: string, requestingUserId: string) => {
+  const community = await getCommunityOrThrow(communityId, { lean: true });
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  return community;
+};
+
+export const getCommunityAdmins = async (communityId: string, requestingUserId: string) => {
+  await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const [result] = await communityModel.aggregate([
+    { $match: { _id: convertToObjectId(communityId) } },
+    {
+      $project: {
+        adminId: { $ifNull: ['$adminId', []] },
+      },
+    },
+    {
+      $lookup: {
+        from: User.collection.name,
+        let: { adminIds: '$adminId' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ['$_id', '$$adminIds'] },
+            },
+          },
+          {
+            $project: {
+              password: 0,
+            },
+          },
+        ],
+        as: 'adminUsers',
+      },
+    },
+    {
+      $lookup: {
+        from: UserProfile.collection.name,
+        let: { adminIds: '$adminId' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ['$users_id', '$$adminIds'] },
+            },
+          },
+        ],
+        as: 'adminProfiles',
+      },
+    },
+    {
+      $project: {
+        admins: {
+          $filter: {
+            input: {
+              $map: {
+                input: '$adminId',
+                as: 'adminId',
+                in: {
+                  user: {
+                    $first: {
+                      $filter: {
+                        input: '$adminUsers',
+                        as: 'user',
+                        cond: { $eq: ['$$user._id', '$$adminId'] },
+                      },
+                    },
+                  },
+                  userProfile: {
+                    $first: {
+                      $filter: {
+                        input: '$adminProfiles',
+                        as: 'profile',
+                        cond: { $eq: ['$$profile.users_id', '$$adminId'] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            as: 'admin',
+            cond: {
+              $and: [{ $ne: ['$$admin.user', null] }, { $ne: ['$$admin.userProfile', null] }],
+            },
+          },
+        },
+      },
+    },
+  ]);
+
+  if (!result) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  return { admins: result.admins };
+};
+
+export const addCommunityAdmin = async (communityId: string, userIdToAdd: string, requestingUserId: string) => {
+  const community = await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const adminIdObj = convertToObjectId(userIdToAdd);
+
+  const isAlreadyAdmin = (community.adminId || []).some((id) => id.toString() === userIdToAdd);
+  if (isAlreadyAdmin) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is already a community admin');
+  }
+
+  const { userProfile } = await getUserAndProfileOrThrow(userIdToAdd);
+  const isMember = userProfile.communities.some((c) => c.communityId.toString() === communityId);
+  if (!isMember) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User must be a member of the community to become an admin');
+  }
+
+  if (userProfile.adminCommunityId && userProfile.adminCommunityId.toString() !== communityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is already an admin of another community');
+  }
+
+  await communityModel.updateOne({ _id: communityId }, { $addToSet: { adminId: adminIdObj } });
+
+  await UserProfile.updateOne(
+    { users_id: adminIdObj },
+    {
+      $set: {
+        isCommunityAdmin: true,
+        adminCommunityId: convertToObjectId(communityId),
+        communityAdminAddedAt: new Date(),
+      },
+    }
+  );
+
+  return { message: 'Admin added successfully' };
+};
+
+export const removeCommunityAdmin = async (communityId: string, userIdToRemove: string, requestingUserId: string) => {
+  const community = await assertRequestingUserIsCommunityAdmin(communityId, requestingUserId);
+  const adminIds = (community.adminId || []).map((id) => id.toString());
+
+  if (!adminIds.includes(userIdToRemove)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a community admin');
+  }
+
+  if (adminIds.length <= 1) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot remove the last community admin');
+  }
+
+  await communityModel.updateOne(
+    { _id: communityId },
+    { $pull: { adminId: convertToObjectId(userIdToRemove) } }
+  );
+
+  await UserProfile.updateOne(
+    { users_id: convertToObjectId(userIdToRemove) },
+    { $set: { isCommunityAdmin: false, adminCommunityId: null, communityAdminAddedAt: null } }
+  );
+
+  return { message: 'Admin removed successfully' };
+};

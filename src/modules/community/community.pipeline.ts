@@ -232,13 +232,39 @@ export function buildGroupVisibilityFilterStage(
       },
     ],
   });
+  const hiddenGroupVisibilityCondition = {
+    $or: [
+      { $ne: ['$$group.communityGroupAccess', CommunityGroupAccess.Hidden] },
+      { $eq: ['$$group.adminUserId', userObjectId] },
+      {
+        $anyElementTrue: {
+          $map: {
+            input: { $ifNull: ['$$group.inviteUsers', []] },
+            as: 'inv',
+            in: { $eq: ['$$inv.userId', userObjectId] },
+          },
+        },
+      },
+      {
+        $anyElementTrue: {
+          $map: {
+            input: { $ifNull: ['$$group.users', []] },
+            as: 'u',
+            in: { $eq: ['$$u._id', userObjectId] },
+          },
+        },
+      },
+    ],
+  };
   return {
     $addFields: {
       communityGroups: {
         $filter: {
           input: '$communityGroups',
           as: 'group',
-          cond: { $or: groupFilterConditions },
+          cond: {
+            $and: [{ $or: groupFilterConditions }, hiddenGroupVisibilityCondition],
+          },
         },
       },
     },
@@ -247,7 +273,14 @@ export function buildGroupVisibilityFilterStage(
 
 export function buildTypeAndLabelFilterStage(filters: CommunityGroupFilters): PipelineStage | null {
   const selectedType = (filters.selectedType || []).filter((type) =>
-    [CommunityGroupAccess.Private, CommunityGroupAccess.Public, 'Official', 'Casual'].includes(type)
+    [
+      CommunityGroupAccess.Private,
+      CommunityGroupAccess.Public,
+      CommunityGroupAccess.OpenCampus,
+      CommunityGroupAccess.UniversityWide,
+      'Official',
+      'Casual',
+    ].includes(type)
   );
   const selectedLabel = (filters.selectedLabel || []).filter((label) =>
     [CommunityGroupLabel.Course, CommunityGroupLabel.Club, CommunityGroupLabel.Circle, CommunityGroupLabel.Other].includes(
@@ -256,7 +289,9 @@ export function buildTypeAndLabelFilterStage(filters: CommunityGroupFilters): Pi
   );
   if (!selectedType.length && !selectedLabel.length) return null;
 
-  const filterConditions: any[] = [];
+  const filterConditions: any[] = [
+    { $ne: ['$$group.communityGroupAccess', CommunityGroupAccess.Hidden] },
+  ];
 
   if (selectedType?.length) {
     const accessConditions: any[] = [];
@@ -266,6 +301,12 @@ export function buildTypeAndLabelFilterStage(filters: CommunityGroupFilters): Pi
     }
     if (selectedType.includes(CommunityGroupAccess.Public)) {
       accessConditions.push({ $eq: ['$$group.communityGroupAccess', CommunityGroupAccess.Public] });
+    }
+    if (selectedType.includes(CommunityGroupAccess.OpenCampus)) {
+      accessConditions.push({ $eq: ['$$group.communityGroupAccess', CommunityGroupAccess.OpenCampus] });
+    }
+    if (selectedType.includes(CommunityGroupAccess.UniversityWide)) {
+      accessConditions.push({ $eq: ['$$group.communityGroupAccess', CommunityGroupAccess.UniversityWide] });
     }
     if (selectedType.includes('Official')) {
       typeConditions.push({ $eq: ['$$group.communityGroupType', CommunityGroupType.OFFICIAL] });
@@ -313,39 +354,44 @@ export function buildSelectedFiltersStage(selectedFilters: Record<string, string
           input: '$communityGroups',
           as: 'group',
           cond: {
-            $anyElementTrue: {
-              $map: {
-                input: {
-                  $ifNull: [
-                    {
-                      $filter: {
-                        input: { $objectToArray: '$$group.communityGroupCategory' },
-                        as: 'category',
-                        cond: {
-                          $or: Object.entries(selectedFilters).map(([key, subcategories]) => ({
-                            $and: [
-                              { $eq: ['$$category.k', key] },
-                              {
-                                $anyElementTrue: {
-                                  $map: {
-                                    input: subcategories,
-                                    as: 'sub',
-                                    in: { $in: ['$$sub', '$$category.v'] },
+            $and: [
+              { $ne: ['$$group.communityGroupAccess', CommunityGroupAccess.Hidden] },
+              {
+                $anyElementTrue: {
+                  $map: {
+                    input: {
+                      $ifNull: [
+                        {
+                          $filter: {
+                            input: { $objectToArray: '$$group.communityGroupCategory' },
+                            as: 'category',
+                            cond: {
+                              $or: Object.entries(selectedFilters).map(([key, subcategories]) => ({
+                                $and: [
+                                  { $eq: ['$$category.k', key] },
+                                  {
+                                    $anyElementTrue: {
+                                      $map: {
+                                        input: subcategories,
+                                        as: 'sub',
+                                        in: { $in: ['$$sub', '$$category.v'] },
+                                      },
+                                    },
                                   },
-                                },
-                              },
-                            ],
-                          })),
+                                ],
+                              })),
+                            },
+                          },
                         },
-                      },
+                        [],
+                      ],
                     },
-                    [],
-                  ],
+                    as: 'matchedCategory',
+                    in: { $ne: ['$$matchedCategory', null] },
+                  },
                 },
-                as: 'matchedCategory',
-                in: { $ne: ['$$matchedCategory', null] },
               },
-            },
+            ],
           },
         },
       },
@@ -596,13 +642,13 @@ export function buildCommunityGroupsProjectStageForSuperAdmin(): PipelineStage[]
                       },
                     },
                   },
-                  users: {
-                    $filter: {
-                      input: { $ifNull: ['$$group.users', []] },
-                      as: 'u',
-                      cond: { $eq: ['$$u._id', '$$group.adminUserId'] },
-                    },
-                  },
+                  // users: {
+                  //   $filter: {
+                  //     input: { $ifNull: ['$$group.users', []] },
+                  //     as: 'u',
+                  //     cond: { $eq: ['$$u._id', '$$group.adminUserId'] },
+                  //   },
+                  // },
                 },
               ],
             },

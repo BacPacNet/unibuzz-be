@@ -9,8 +9,10 @@ import {
   IUserDoc,
   NewRegisteredUser,
   IUserQueryFilter,
+  GetAllUserParams,
 } from './user.interfaces';
 import { UserProfile } from '../userProfile';
+import { UserRole } from '../userProfile/userProfile.interface';
 import { chatModel } from '../chat';
 import {
   getProfileByIdPipeline,
@@ -50,6 +52,7 @@ const USER_ERROR_MESSAGES = {
   EMAIL_ALREADY_TAKEN: 'Email is already taken',
   EMAIL_DOES_NOT_EXIST: 'Email does not exist',
   USER_ADMIN_CANNOT_BE_DELETED: 'User is admin of a community and cannot be deleted',
+  USER_NOT_IN_COMMUNITY: 'User not found in your community',
 } as const;
 
 /**
@@ -266,15 +269,33 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
 
   if (normalizedUniqueIds.length === 0 || !normalizedCommunityId) return [];
 
+  const community = await communityModel.findById(normalizedCommunityId, { users: 1, university_id: 1 }).lean();
+  const universityId = community?.university_id?.toString() ?? '';
+
+  const rawUniqueIdByStoredUniqueId = new Map<string, string>();
+  const uniqueIdsToLookup = Array.from(
+    new Set(
+      normalizedUniqueIds.flatMap((rawUniqueId) => {
+        rawUniqueIdByStoredUniqueId.set(rawUniqueId, rawUniqueId);
+        const lookupIds = [rawUniqueId];
+        if (universityId) {
+          const scopedUniqueId = `${universityId}_${rawUniqueId}`;
+          lookupIds.push(scopedUniqueId);
+          rawUniqueIdByStoredUniqueId.set(scopedUniqueId, rawUniqueId);
+        }
+        return lookupIds;
+      })
+    )
+  );
+
   const users = await User.find(
     {
-      uniqueId: { $in: normalizedUniqueIds },
+      uniqueId: { $in: uniqueIdsToLookup },
       isDeleted: { $ne: true },
     },
     { _id: 1, uniqueId: 1 }
   ).lean();
 
-  const community = await communityModel.findById(normalizedCommunityId, { users: 1 }).lean();
   const membershipMap = new Map<string, boolean>();
 
   if (Array.isArray(community?.users)) {
@@ -291,6 +312,9 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
   }
 
   
+  const isScopedUniqueIdForUniversity = (storedUniqueId: string, rawUniqueId: string) =>
+    Boolean(universityId) && storedUniqueId === `${universityId}_${rawUniqueId}`;
+
   const selectedUsersByUniqueId = new Map<string, (typeof users)[number]>();
   const usersWithoutUniqueId: typeof users = [];
 
@@ -300,9 +324,23 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
       return;
     }
 
-    const existingUser = selectedUsersByUniqueId.get(user.uniqueId);
+    const storedUniqueId = user.uniqueId.trim();
+    const rawUniqueId = rawUniqueIdByStoredUniqueId.get(storedUniqueId) ?? storedUniqueId;
+    const existingUser = selectedUsersByUniqueId.get(rawUniqueId);
     if (!existingUser) {
-      selectedUsersByUniqueId.set(user.uniqueId, user);
+      selectedUsersByUniqueId.set(rawUniqueId, user);
+      return;
+    }
+
+    const existingStoredUniqueId = String(existingUser.uniqueId ?? '').trim();
+    const existingIsScoped = isScopedUniqueIdForUniversity(existingStoredUniqueId, rawUniqueId);
+    const currentIsScoped = isScopedUniqueIdForUniversity(storedUniqueId, rawUniqueId);
+
+    if (currentIsScoped && !existingIsScoped) {
+      selectedUsersByUniqueId.set(rawUniqueId, user);
+      return;
+    }
+    if (existingIsScoped && !currentIsScoped) {
       return;
     }
 
@@ -310,7 +348,7 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
     const currentIsMember = membershipMap.has(String(user._id));
 
     if (!existingIsMember && currentIsMember) {
-      selectedUsersByUniqueId.set(user.uniqueId, user);
+      selectedUsersByUniqueId.set(rawUniqueId, user);
     }
   });
 
@@ -333,7 +371,7 @@ export const getUsersByUniqueIdsWithCommunityMembership = async (
     };
 
     if (typeof user.uniqueId === 'string' || user.uniqueId === null) {
-      mappedUser.uniqueId = user.uniqueId;
+      mappedUser.uniqueId = rawUniqueIdByStoredUniqueId.get(String(user.uniqueId).trim()) ?? user.uniqueId;
     }
 
     return mappedUser;
@@ -381,35 +419,38 @@ const updateUserAfterValidation = async (
 };
 
 export const getUserProfileById = async (id: mongoose.Types.ObjectId, myUserId: string) => {
-  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1 }).lean();
+  const myProfile = await UserProfile.findOne({ users_id: myUserId }, { blockedUsers: 1, role: 1 }).lean();
   const myUserObjectId = new mongoose.Types.ObjectId(myUserId);
   const myBlockedUserIds =
     myProfile?.blockedUsers?.map((b) => convertToObjectId(b.userId.toString())) || [];
+  const viewerIsApplicant = myProfile?.role === UserRole.APPLICANT;
 
   const pipeline = getProfileByIdPipeline({
     id,
     myUserId,
     myBlockedUserIds,
     myUserObjectId,
+    viewerIsApplicant,
   });
 
   const [userProfile] = await User.aggregate(pipeline);
   return userProfile || null;
 };
 
-export const getAllUser = async (
-  name: string = '',
-  page: number,
-  limit: number,
-  userId: string,
-  universityName: string,
-  studyYear: string[],
-  major: string[],
-  occupation: string[],
-  affiliation: string[],
-  chatId: string,
-  role: string
-) => {
+export const getAllUser = async ({
+  name = '',
+  page,
+  limit,
+  userId,
+  universityName,
+  studyYear,
+  major,
+  occupation,
+  affiliation,
+  chatId,
+  role,
+  showApplicant = false,
+}: GetAllUserParams) => {
   const currentPage = page || DEFAULT_PAGE;
   const limitPerPage = limit || DEFAULT_LIMIT;
   const startIndex = getPaginationSkip(currentPage, limitPerPage);
@@ -428,6 +469,7 @@ export const getAllUser = async (
     lastName,
     universityName: decodedUniversityName,
     orConditions,
+    excludeApplicants: decodedUniversityName.trim() !== '' && !showApplicant,
   });
 
   if (chatId?.length) {
@@ -454,6 +496,115 @@ export const getAllUser = async (
   const totalPages = computeTotalPages(totalUsers, limitPerPage);
 
   return { currentPage, totalPages, users };
+};
+
+const buildUsersDirectoryMatchStage = async (
+  userId: string,
+  name: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const [firstName = '', lastName = ''] = name.split(' ');
+
+  const normalizedUniversityId = decodeURI(universityId || '');
+  const communityId = normalizedUniversityId
+    ? (await communityModel.findOne({ university_id: convertToObjectId(normalizedUniversityId) }).select('_id').lean())?._id?.toString() ?? ''
+    : '';
+
+  const orConditions = buildGetAllUserOrConditions(studyYear, major, occupation, affiliation, role);
+  const matchStage = buildGetAllUserMatchStage({
+    userId,
+    myBlockedUserIds: [],
+    firstName,
+    lastName,
+    universityName: '',
+    communityId,
+    orConditions,
+  });
+
+  delete matchStage._id.$ne;
+  delete matchStage['profile.blockedUsers'];
+
+  return matchStage;
+};
+
+export const getAllUsersDirectory = async (
+  name: string = '',
+  page: number,
+  limit: number,
+  userId: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const currentPage = page || DEFAULT_PAGE;
+  const limitPerPage = limit || DEFAULT_LIMIT;
+  const startIndex = getPaginationSkip(currentPage, limitPerPage);
+
+  const matchStage = await buildUsersDirectoryMatchStage(
+    userId,
+    name,
+    universityId,
+    studyYear,
+    major,
+    occupation,
+    affiliation,
+    role
+  );
+
+  const pipeline = getAllUserPipeline({
+    matchStage,
+    followingIds: [],
+    skip: startIndex,
+    limit: limitPerPage,
+  });
+  const [result] = await User.aggregate(pipeline);
+
+  const users = result?.users ?? [];
+  const totalUsers = result?.totalCount?.[0]?.total ?? 0;
+  const totalPages = computeTotalPages(totalUsers, limitPerPage);
+
+  return { currentPage, totalPages, users };
+};
+
+export const exportAllUsersDirectory = async (
+  name: string = '',
+  userId: string,
+  universityId: string,
+  studyYear: string[],
+  major: string[],
+  occupation: string[],
+  affiliation: string[],
+  role: string
+) => {
+  const matchStage = await buildUsersDirectoryMatchStage(
+    userId,
+    name,
+    universityId,
+    studyYear,
+    major,
+    occupation,
+    affiliation,
+    role
+  );
+
+  const pipeline = getAllUserPipeline({
+    matchStage,
+    followingIds: [],
+  });
+  const [result] = await User.aggregate(pipeline);
+
+  const users = result?.users ?? [];
+  const totalCount = result?.totalCount?.[0]?.total ?? 0;
+
+  return { users, totalCount };
 };
 
 /**
@@ -618,6 +769,33 @@ export const deActivateUserAccount = async (userID: string, userName: string, em
     },
     (user) => {
       user.isUserDeactive = true;
+    }
+  );
+};
+
+export const deActivateUserAccountByCommunityAdmin = async (
+  targetUserId: string,
+  communityId: mongoose.Types.ObjectId
+) => {
+  const userProfile = await UserProfile.findOne({
+    users_id: targetUserId,
+    communities: { $elemMatch: { communityId } },
+  });
+
+  if (!userProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, USER_ERROR_MESSAGES.USER_NOT_IN_COMMUNITY);
+  }
+
+  if (userProfile.adminCommunityId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, USER_ERROR_MESSAGES.USER_ADMIN_CANNOT_BE_DELETED);
+  }
+
+  return updateUserAfterValidation(
+    targetUserId,
+    { status: httpStatus.NOT_FOUND, message: USER_ERROR_MESSAGES.USER_DOES_NOT_EXIST },
+    async () => {},
+    (user) => {
+      user.isUserDeactive = !user.isUserDeactive;
     }
   );
 };

@@ -10,8 +10,10 @@ import * as userService from './user.service';
 import { userIdExtend } from '../../config/userIDType';
 import { userProfileService } from '../userProfile';
 import { BlockedUserEntry } from '../userProfile/userProfile.interface';
-import { GetAllUserQuery } from './user.interfaces';
+import { GetAllUserQuery, GetAllUsersDirectoryQuery, ExportAllUsersDirectoryQuery } from './user.interfaces';
 import { whitelistRewardCommunityService } from '../whitelistRewardCommunity';
+import { communityService } from '../community';
+import { universityService } from '../university';
 
 export const createUser = catchAsync(async (req: Request, res: Response) => {
   const user = await userService.createUser(req.body);
@@ -45,24 +47,60 @@ export const getUser = catchAsync(async (req: userIdExtend, res: Response): Prom
 });
 
 export const getAllUser = catchAsync(async (req: userIdExtend, res: Response) => {
-  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId,role } = req.query as GetAllUserQuery;
-  const allUsers = await userService.getAllUser(
+  const { page, limit, name, universityName, studyYear, major, occupation, affiliation, chatId, role, showApplicant } =
+    req.query as GetAllUserQuery;
+  const allUsers = await userService.getAllUser({
+    name: name ?? '',
+    page: Number(page),
+    limit: Number(limit),
+    userId: req.userId as string,
+    universityName: universityName ?? '',
+    studyYear: studyYear ? studyYear.split(',') : [],
+    major: major ? major.split(',') : [],
+    occupation: occupation ? occupation.split(',') : [],
+    affiliation: affiliation ? affiliation.split(',') : [],
+    chatId: chatId ?? '',
+    role: role?.toLowerCase() ?? '',
+    showApplicant: showApplicant === true,
+  });
+  res.status(httpStatus.OK).json(allUsers);
+});
+
+export const getAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { page, limit, name, studyYear, major, occupation, affiliation, role, universityId } =
+    req.query as GetAllUsersDirectoryQuery;
+  const allUsers = await userService.getAllUsersDirectory(
     name ?? '',
     Number(page),
     Number(limit),
     req.userId as string,
-    universityName ?? '',
+    universityId ?? '',
     studyYear ? studyYear.split(',') : [],
     major ? major.split(',') : [],
     occupation ? occupation.split(',') : [],
     affiliation ? affiliation.split(',') : [],
-    chatId ?? '',
     role?.toLowerCase() ?? ''
   );
   res.status(httpStatus.OK).json(allUsers);
 });
 
+export const exportAllUsersDirectory = catchAsync(async (req: userIdExtend, res: Response) => {
+  const { name, studyYear, major, occupation, affiliation, role, universityId } =
+    req.query as ExportAllUsersDirectoryQuery;
 
+  const result = await userService.exportAllUsersDirectory(
+    name ?? '',
+    req.userId as string,
+    universityId ?? '',
+    studyYear ? studyYear.split(',') : [],
+    major ? major.split(',') : [],
+    occupation ? occupation.split(',') : [],
+    affiliation ? affiliation.split(',') : [],
+    role?.toLowerCase() ?? ''
+  );
+
+  res.status(httpStatus.OK).json(result);
+});
 
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   if (typeof req.params['userId'] === 'string') {
@@ -121,6 +159,23 @@ export const deActivateUserAccount = catchAsync(async (req: userIdExtend, res: R
   const { userName, email, Password } = req.body;
   const userProfile = await userService.deActivateUserAccount(userID, userName, email, Password);
   res.status(httpStatus.OK).json(userProfile);
+});
+
+export const deActivateUserAccountByCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const adminUserId = requireAuthenticatedUserIdOrThrow(req);
+  const community = await communityService.isUserCommunityAdmin(new mongoose.Types.ObjectId(adminUserId));
+
+  if (!community) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const { userId } = req.body;
+  const user = await userService.deActivateUserAccountByCommunityAdmin(
+    userId,
+    new mongoose.Types.ObjectId(community._id)
+  );
+
+  res.status(httpStatus.OK).json(user);
 });
 
 export const IsNewUserToggle = catchAsync(async (req: userIdExtend, res: Response) => {
@@ -190,4 +245,22 @@ export const isUserEligibleForRewards = catchAsync(async (req: userIdExtend, res
   const userId = parseUserIdOrThrow(req.userId);
   const eligible = await whitelistRewardCommunityService.isUserEligibleForRewards(userId);
   res.status(httpStatus.OK).json({ eligible });
+});
+
+export const isUserCommunityAdmin = catchAsync(async (req: userIdExtend, res: Response) => {
+  const userId = parseUserIdOrThrow(req.userId);
+  const community = await communityService.isUserCommunityAdmin(userId);
+
+  if (!community) {
+    return res.status(httpStatus.OK).json({ isCommunityAdmin: false });
+  }
+
+  const university = await universityService.getUniversityByRealId(String(community.university_id));
+
+  res.status(httpStatus.OK).json({
+    isCommunityAdmin: true,
+    university_id: community.university_id,
+    universityName: university?.name ?? null,
+    communityId: community._id
+  });
 });

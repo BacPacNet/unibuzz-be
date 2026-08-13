@@ -9,7 +9,9 @@ import {
   CommunityType,
 } from '../../config/community.type';
 import { UserProfile } from '../userProfile';
-import { BlockedUserEntry, FollowingEntry } from '../userProfile/userProfile.interface';
+import { BlockedUserEntry } from '../userProfile/userProfile.interface';
+import { getViewerProfileRole, maskPostProfilesForViewer } from '../userProfile/profileCommunities.util';
+import { isUniversityMemberRole } from '../communityGroup/communityGroup.access';
 import { communityGroupModel } from '../communityGroup';
 import { CommunityGroupTitleAdmin, NotificationWithPopulatedCommunityGroup, UserProfileBlockedUsers } from './communityPosts.interface';
 import { CreateNotificationPayload, notificationRoleAccess } from '../Notification/notification.interface';
@@ -30,7 +32,11 @@ import {
   buildPostListProjectStage,
   buildSinglePostPipeline,
   buildGroupPostsMatchStage,
+  buildCommunityHighlightPostPipeline,
+  getCommunityPostVisibilityStages,
+  CommunityPostVisibilityMode,
 } from './communityPosts.pipeline';
+import { partneredUniService } from '../partneredUni';
 
 
 /** App name used in push notifications */
@@ -48,10 +54,10 @@ const POST_MESSAGES = {
 
 /**
  * Resolves initial postStatus when creating a community post.
- * Official groups: SUCCESS if live, PENDING if not. Non-official: DEFAULT.
+ * Groups with post approval: SUCCESS if live, PENDING if not. Others: DEFAULT.
  */
-function getInitialPostStatus(isOfficialGroup: boolean, isPostLive: boolean): string {
-  if (!isOfficialGroup) return communityPostStatus.DEFAULT;
+function getInitialPostStatus(requiresPostApproval: boolean, isPostLive: boolean): string {
+  if (!requiresPostApproval) return communityPostStatus.DEFAULT;
   return isPostLive ? communityPostStatus.SUCCESS : communityPostStatus.PENDING;
 }
 
@@ -74,6 +80,37 @@ export function getBlockedUserIdsFromProfile(blockedUsers?: BlockedUserEntry[] |
   return (blockedUsers || []).map((b: BlockedUserEntry) => convertToObjectId(b.userId.toString()));
 }
 
+async function resolveCommunityPostVisibilityMode(
+  userId: string,
+  options?: { requireProfile?: boolean }
+): Promise<CommunityPostVisibilityMode> {
+  if (!userId) return 'publicOnly';
+
+  const profile = await UserProfile.findOne({ users_id: userId }).select('role university_id').lean();
+  if (!profile && options?.requireProfile) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
+  }
+  if (!profile) return 'publicOnly';
+
+  return {
+    viewerObjectId: convertToObjectId(userId),
+    viewerUniversityId: profile.university_id ? convertToObjectId(String(profile.university_id)) : null,
+    viewerIsUniversityMember: isUniversityMemberRole(profile.role),
+  };
+}
+
+async function countVisibleCommunityPosts(
+  match: mongoose.FilterQuery<communityPostsInterface>,
+  visibilityMode: CommunityPostVisibilityMode
+): Promise<number> {
+  const result = await communityPostsModel.aggregate([
+    { $match: match },
+    ...getCommunityPostVisibilityStages(visibilityMode),
+    { $count: 'total' },
+  ]);
+  return result[0]?.total ?? 0;
+}
+
 /**
  * Emits socket notification and sends push notification for post status updates.
  * Caller is responsible for creating the notification document first when needed.
@@ -94,7 +131,7 @@ export const createCommunityPost = async (
   post: communityPostsInterface,
   userId: mongoose.Types.ObjectId,
   isPostLive: boolean,
-  isOfficialGroup: boolean
+  requiresPostApproval: boolean
 ) => {
   const { communityId, communityGroupId } = post;
 
@@ -117,10 +154,11 @@ export const createCommunityPost = async (
       [
         {
           ...postData,
+          communityPostsType: post.communityPostsType ?? CommunityType.PUBLIC,
           communityName,
           communityGroupName: communityGroup?.title,
           isPostLive,
-          postStatus: getInitialPostStatus(isOfficialGroup, isPostLive),
+          postStatus: getInitialPostStatus(requiresPostApproval, isPostLive),
         },
       ],
       { session }
@@ -217,10 +255,11 @@ export const updateCommunityPost = async (id: mongoose.Types.ObjectId, community
   if (!communityToUpdate) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
   }
-  Object.assign(communityToUpdate, {
-    content: community.content,
-    communityPostsType: community.communityPostsType,
-  });
+  const updates: Partial<communityPostsInterface> = { content: community.content };
+  if (!communityToUpdate.communityGroupId && community.communityPostsType) {
+    updates.communityPostsType = community.communityPostsType;
+  }
+  Object.assign(communityToUpdate, updates);
   await communityToUpdate.save();
   return communityToUpdate;
 };
@@ -233,6 +272,31 @@ export const deleteCommunityPost = async (id: mongoose.Types.ObjectId) => {
   });
 };
 
+export const deleteCommunityPostForCommunityAdmin = async (
+  postId: mongoose.Types.ObjectId,
+  requestingUserId: string
+) => {
+  const post = await communityPostsModel.findById(postId).select('communityId').lean();
+
+  if (!post) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
+  }
+
+  const community = await communityModel.findById(post.communityId).select('adminId').lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isCommunityAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isCommunityAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  return deleteCommunityPost(postId);
+};
+
 export const getCommunityPostsByCommunityId = async (
   communityId: string,
   page: number = 1,
@@ -241,24 +305,35 @@ export const getCommunityPostsByCommunityId = async (
 ) => {
   try {
     const communityObjectId = convertToObjectId(communityId);
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
-
-    const finalPost = await communityPostsModel.aggregate([
-      { $match: { communityId: communityObjectId, communityGroupId: null } },
-      { $sort: { createdAt: -1 } },
-      { $skip: getPaginationSkip(page, limit) },
-      { $limit: limit },
-      ...buildUserLookupStages(),
-      ...buildUserProfileLookupStages(true),
-      ...buildCommunitiesEnrichmentStages('userProfile'),
-      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
-      buildPostListProjectStage(),
+    const [myBlockedUserIds, visibilityMode, viewerRole, partneredAdminStatus] = await Promise.all([
+      getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      resolveCommunityPostVisibilityMode(userId, { requireProfile: true }),
+      getViewerProfileRole(userId),
+      partneredUniService.isPartneredUniversityAdmin(userId, communityId),
     ]);
 
-    const total = await communityPostsModel.countDocuments({
-      communityId: communityObjectId,
-      communityGroupId: null,
-    });
+    const baseMatch = { communityId: communityObjectId, communityGroupId: null };
+
+    const finalPost = partneredUniService.attachPromoteToPosts(
+      maskPostProfilesForViewer(
+        await communityPostsModel.aggregate([
+        { $match: baseMatch },
+        ...getCommunityPostVisibilityStages(visibilityMode),
+        { $sort: { createdAt: -1 } },
+        { $skip: getPaginationSkip(page, limit) },
+        { $limit: limit },
+        ...buildUserLookupStages(),
+        ...buildUserProfileLookupStages(true),
+        ...buildCommunitiesEnrichmentStages('userProfile'),
+        ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+        buildPostListProjectStage(),
+      ]),
+      viewerRole
+      ),
+      partneredAdminStatus
+    );
+
+    const total = await countVisibleCommunityPosts(baseMatch, visibilityMode);
 
     return {
       finalPost,
@@ -284,31 +359,41 @@ export const getCommunityGroupPostsByCommunityId = async (
     const communityObjectId = convertToObjectId(communityId);
     const communityGroupObjectId = convertToObjectId(communityGroupId);
     const userObjectId = convertToObjectId(userId);
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId);
-
-    const finalPost = await communityPostsModel.aggregate([
-      buildGroupPostsMatchStage({
-        communityObjectId,
-        communityGroupObjectId,
-        filterPostBy,
-        isAdminOfCommunityGroup,
-        userObjectId,
-      }),
-      { $sort: { createdAt: -1 } },
-      { $skip: getPaginationSkip(page, limit) },
-      { $limit: limit },
-      ...buildUserLookupStages({ matchUserNotDeleted: true }),
-      ...buildUserProfileLookupStages(true),
-      ...buildCommunitiesEnrichmentStages('userProfile'),
-      {
-        $match: {
-          'userProfile.blockedUsers.userId': { $ne: convertToObjectId(userId) },
-        },
-      },
-      { $match: { 'user._id': { $nin: myBlockedUserIds } } },
-      ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
-      buildPostListProjectStage({ includeIsPostLive: true, includePostStatus: true }),
+    const [myBlockedUserIds, viewerRole, partneredAdminStatus] = await Promise.all([
+      getBlockedUserIdsForUser(userId),
+      getViewerProfileRole(userId),
+      partneredUniService.isPartneredUniversityAdmin(userId, communityId),
     ]);
+
+    const finalPost = partneredUniService.attachPromoteToPosts(
+      maskPostProfilesForViewer(
+        await communityPostsModel.aggregate([
+        buildGroupPostsMatchStage({
+          communityObjectId,
+          communityGroupObjectId,
+          filterPostBy,
+          isAdminOfCommunityGroup,
+          userObjectId,
+        }),
+        { $sort: { createdAt: -1 } },
+        { $skip: getPaginationSkip(page, limit) },
+        { $limit: limit },
+        ...buildUserLookupStages({ matchUserNotDeleted: true }),
+        ...buildUserProfileLookupStages(true),
+        ...buildCommunitiesEnrichmentStages('userProfile'),
+        {
+          $match: {
+            'userProfile.blockedUsers.userId': { $ne: convertToObjectId(userId) },
+          },
+        },
+        { $match: { 'user._id': { $nin: myBlockedUserIds } } },
+        ...buildCommentsLookupStages({ myBlockedUserIds, userId }),
+        buildPostListProjectStage({ includeIsPostLive: true, includePostStatus: true }),
+      ]),
+      viewerRole
+      ),
+      partneredAdminStatus
+    );
 
     const total = await communityPostsModel.countDocuments({
       communityId: communityObjectId,
@@ -336,62 +421,55 @@ export const getCommunityGroupPostsByCommunityId = async (
 };
 
 export const getAllCommunityPost = async (
-  FollowinguserIds: mongoose.Types.ObjectId[] = [],
+  _FollowinguserIds: mongoose.Types.ObjectId[] = [],
   communityId: string,
   communityGroupId?: string,
   page: number = 1,
   limit: number = 10,
-  userId: string = ''
+  userId: string = '',
+  options?: { excludePendingPosts?: boolean; showCommunities?: boolean }
 ) => {
   try {
-    const myBlockedUserIds = await getBlockedUserIdsForUser(userId, { requireProfile: true });
-    const FollowingIds = FollowinguserIds.map((id: mongoose.Types.ObjectId) => convertToObjectId(id.toString()));
-
+    const [myBlockedUserIds, visibilityMode, viewerRole, partneredAdminStatus] = await Promise.all([
+      getBlockedUserIdsForUser(userId, { requireProfile: true }),
+      resolveCommunityPostVisibilityMode(userId, { requireProfile: true }),
+      getViewerProfileRole(userId),
+      partneredUniService.isPartneredUniversityAdmin(userId, communityId),
+    ]);
     const matchConditions: mongoose.FilterQuery<communityPostsInterface>[] = [];
+    const pendingFilter = options?.excludePendingPosts ? { isPostLive: true } : {};
 
     if (!communityGroupId) {
-      matchConditions.push(
-        {
-          communityId: convertToObjectId(communityId),
-          communityPostsType: CommunityType.PUBLIC,
-          communityGroupId: { $exists: false },
-        },
-        {
-          communityId: convertToObjectId(communityId),
-          communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds },
-          communityGroupId: { $exists: false },
-        }
-      );
+      matchConditions.push({
+        communityId: convertToObjectId(communityId),
+        communityGroupId: { $exists: false },
+        ...pendingFilter,
+      });
     } else {
-      matchConditions.push(
-        {
-          communityId: convertToObjectId(communityId),
-          communityGroupId: convertToObjectId(communityGroupId),
-          communityPostsType: CommunityType.PUBLIC,
-        },
-        {
-          communityId: convertToObjectId(communityId),
-          communityGroupId: convertToObjectId(communityGroupId),
-          communityPostsType: CommunityType.FOLLOWER_ONLY,
-          user_id: { $in: FollowingIds },
-        }
-      );
+      matchConditions.push({
+        communityId: convertToObjectId(communityId),
+        communityGroupId: convertToObjectId(communityGroupId),
+        ...pendingFilter,
+      });
     }
 
     const matchStage = { $or: matchConditions };
+    const visibilityStages = communityGroupId ? [] : getCommunityPostVisibilityStages(visibilityMode);
 
-    const totalPost = await communityPostsModel.countDocuments(matchStage);
+    const totalPost = communityGroupId
+      ? await communityPostsModel.countDocuments(matchStage)
+      : await countVisibleCommunityPosts(matchStage, visibilityMode);
     const totalPages = computeTotalPages(totalPost, limit);
     const skip = getPaginationSkip(page, limit);
 
-    const finalPost =
+    const posts =
       (await communityPostsModel.aggregate([
         { $match: matchStage },
+        ...visibilityStages,
         { $sort: { createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
-        ...buildUserLookupStages(),
+        ...buildUserLookupStages({ matchUserNotDeleted: true }),
         ...buildUserProfileLookupStages(true),
         ...buildCommunitiesEnrichmentStages('userProfile'),
         {
@@ -419,6 +497,15 @@ export const getAllCommunityPost = async (
         buildPostListProjectStage(),
       ]).exec()) || [];
 
+    const finalPost = partneredUniService.attachPromoteToPosts(
+      maskPostProfilesForViewer(
+        posts,
+        viewerRole,
+        options?.showCommunities ? { showCommunities: true } : undefined
+      ),
+      partneredAdminStatus
+    );
+
     return {
       finalPost,
       currentPage: page,
@@ -433,53 +520,79 @@ export const getAllCommunityPost = async (
 export const getcommunityPost = async (postId: string, myUserId: string = '') => {
   try {
     const userProfile = (await UserProfile.findOne({ users_id: myUserId })
-      .select('following communities blockedUsers')
-      .lean()) as UserProfileBlockedUsers & {
-      following?: FollowingEntry[];
-      communities?: mongoose.Types.ObjectId[];
-    };
+      .select('blockedUsers role university_id')
+      .lean()) as
+      | (UserProfileBlockedUsers & {
+          role?: string;
+          university_id?: mongoose.Types.ObjectId;
+        })
+      | null;
     if (!userProfile) throw new ApiError(httpStatus.NOT_FOUND, 'User profile not found');
 
     const myBlockedUserIds = getBlockedUserIdsFromProfile(userProfile?.blockedUsers);
-
-    const followingIds =
-      userProfile?.following?.map((user: FollowingEntry) => user.userId.toString()) ||
-      [];
-    const followingObjectIds = followingIds.map((id: string) => convertToObjectId(id));
     const userId = convertToObjectId(myUserId);
     const postIdToGet = convertToObjectId(postId);
-
-    const allCommunityIds = userProfile?.communities;
 
     const post = await communityPostsModel.findOne({ _id: postIdToGet });
     if (!post) throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
 
-    let isCommunityGroupMember = false;
+    const partneredAdminStatus = myUserId
+      ? await partneredUniService.isPartneredUniversityAdmin(myUserId, String(post.communityId))
+      : { isPartneredUniversityAdmin: false, universityId: null };
+
     if (post.communityGroupId) {
       const communityGroup = await communityGroupModel.findOne({
         _id: post.communityGroupId,
         'users._id': myUserId,
       });
-      isCommunityGroupMember = !!communityGroup;
 
       if (!communityGroup) throw new ApiError(httpStatus.FORBIDDEN, 'You are not a member');
     }
+
+    const visibilityMode: CommunityPostVisibilityMode = {
+      viewerObjectId: userId,
+      viewerUniversityId: userProfile.university_id
+        ? convertToObjectId(String(userProfile.university_id))
+        : null,
+      viewerIsUniversityMember: isUniversityMemberRole(userProfile?.role),
+    };
 
     const pipeline = buildSinglePostPipeline({
       postIdToGet,
       myBlockedUserIds,
       myUserId,
       userId,
-      followingObjectIds,
-      ...(allCommunityIds !== undefined && { allCommunityIds }),
-      isCommunityGroupMember,
+      visibilityMode,
     });
 
-    return await communityPostsModel.aggregate(pipeline);
+    const posts = await communityPostsModel.aggregate(pipeline);
+    return partneredUniService.attachPromoteToPosts(
+      maskPostProfilesForViewer(posts, userProfile?.role),
+      partneredAdminStatus
+    );
   } catch (error: unknown) {
     console.error('Error fetching user posts:', error);
     throwApiError(error);
   }
+};
+
+
+export const getCommunityPostForHighlight = async (postId: string, userId?: string) => {
+  const postIdToGet = convertToObjectId(postId);
+
+  const posts = await communityPostsModel.aggregate(
+    buildCommunityHighlightPostPipeline(postIdToGet)
+  );
+
+  const post = posts[0] || null;
+  if (!post || !userId) return post;
+
+  const partneredAdminStatus = await partneredUniService.isPartneredUniversityAdmin(
+    userId,
+    String(post.communityId)
+  );
+
+  return partneredUniService.attachPromoteToPost(post, partneredAdminStatus);
 };
 
 export const updateCommunityPostLiveStatus = async (id: mongoose.Types.ObjectId, userId: string, status: string) => {

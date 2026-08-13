@@ -24,7 +24,7 @@ export const getAllUserPosts = {
 
 export const createUserPost = {
   body: Joi.object().keys({
-    PostType: Joi.string().valid('PUBLIC', 'FOLLOWER_ONLY', 'MUTUAL', 'ONLY_ME').optional(),
+    PostType: Joi.string().valid('PUBLIC', 'FOLLOWER_ONLY', 'UNIVERSITY_WIDE').optional(),
   })
   .keys({
     content: Joi.string().required().allow(''),
@@ -43,7 +43,7 @@ export const updateUserPost = {
     .keys({
       content: Joi.string().optional().allow(''),
       imageUrl: Joi.array().items(imageUrlItem).optional(),
-      PostType: Joi.string().valid('PUBLIC', 'FOLLOWER_ONLY', 'MUTUAL', 'ONLY_ME').optional(),
+      PostType: Joi.string().valid('PUBLIC', 'FOLLOWER_ONLY', 'UNIVERSITY_WIDE').optional(),
     })
     .min(1),
 };

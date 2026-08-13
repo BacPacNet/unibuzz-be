@@ -25,6 +25,9 @@ export const loginUserWithEmailAndPassword = async (email: string, password: str
   if (user.isDeleted) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'User does not exist Please contact support');
   }
+  if (user.isUserDeactive) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Your account has been deactivated. Please contact university support');
+  }
   return user;
 };
 

@@ -24,6 +24,23 @@ router
     userProfileController.manuallyVerifyUniversityUser
   );
 router.route('/verifiedUniversityEmails').get(userIdAuth, userProfileController.getUserProfileVerifiedUniversityEmails);
+
+router
+  .route('/community-admin/student-profile')
+  .put(
+    userIdAuth,
+    validate(userProfileValidation.bulkUpdateStudentProfileByCommunityAdmin),
+    userProfileController.bulkUpdateStudentProfileByCommunityAdmin
+  );
+
+router
+  .route('/community-admin/faculty-profile')
+  .put(
+    userIdAuth,
+    validate(userProfileValidation.bulkUpdateFacultyProfileByCommunityAdmin),
+    userProfileController.bulkUpdateFacultyProfileByCommunityAdmin
+  );
+
 router.route('/:userProfileId').put(validate(userProfileValidation.updateUserProfile), userProfileController.updateUserProfile);
 
 export default router;

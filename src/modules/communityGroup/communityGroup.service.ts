@@ -2,9 +2,20 @@ import mongoose, { Types } from 'mongoose';
 import communityGroupModel from './communityGroup.model';
 import { ApiError } from '../errors';
 import httpStatus from 'http-status';
-import { getUserById, getUsersByUniqueIds } from '../user/user.service';
+import { getUserById, getUsersByUniqueIdsWithCommunityMembership } from '../user/user.service';
 import { getUserProfileById, getUserProfiles } from '../userProfile/userProfile.service';
-import { CommunityGroupAccess, CommunityGroupType } from '../../config/community.type';
+import { CommunityGroupAccess, CommunityGroupJoinActionKey, CommunityGroupType, communityPostStatus } from '../../config/community.type';
+import {
+  assertOfficialTypeAllowed,
+  canViewHiddenGroup,
+  getJoinGroupActionKey,
+  isApplicantRole,
+  isHiddenGroupAccess,
+  isJoinRequestRequired,
+  isOpenJoinGroupAccess,
+  isUniversityWideGroupAccess,
+  groupRequiresPostApproval,
+} from './communityGroup.access';
 import {
   communityGroupInterface,
   status,
@@ -56,6 +67,10 @@ const ERROR_MESSAGES = {
   VERIFY_UNIVERSITY_EMAIL_FOR_PRIVATE: 'You need to verify your university email to join private groups',
   BLOCKED_FROM_GROUP: 'You are blocked from this community group',
   NOT_VERIFIED_TO_JOIN: 'You are not verified to join this community',
+  UNIVERSITY_MEMBERS_ONLY: 'University members only can join this group',
+  INVITE_ONLY: 'This group is invite only',
+  APPLICANTS_CANNOT_BE_INVITED: 'Applicants cannot be invited to university-wide groups',
+  HIDDEN_GROUPS_CANNOT_BE_OFFICIAL: 'Hidden groups cannot be official',
   ALREADY_A_MEMBER: 'User is already a member of this community',
   NOT_A_MEMBER: 'User is not a member of this community',
   COMMUNITY_REFERENCE_MISSING: 'Community reference missing in group',
@@ -106,6 +121,62 @@ function buildGroupMemberFromUserAndProfile(
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+async function assertNoApplicantInvitesForUniversityWideGroup(
+  communityGroupAccess: CommunityGroupAccess | string | undefined,
+  selectedUsers: SelectedUserItem[]
+): Promise<void> {
+  if (!isUniversityWideGroupAccess(communityGroupAccess) || selectedUsers.length === 0) {
+    return;
+  }
+
+  const userIds = selectedUsers
+    .map((user) => user.users_id?.toString())
+    .filter((userId): userId is string => Boolean(userId));
+
+  if (userIds.length === 0) {
+    return;
+  }
+
+  const profiles = await getUserProfiles(userIds.map((id) => new mongoose.Types.ObjectId(id)));
+  const hasApplicantInvite = profiles.some((profile) => isApplicantRole(profile.role));
+
+  if (hasApplicantInvite) {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.APPLICANTS_CANNOT_BE_INVITED);
+  }
+}
+
+function enrichGroupWithAccessMetadata<
+  T extends { communityGroupAccess?: CommunityGroupAccess | string; isRequestRequiredToJoinGroup?: boolean }
+>(
+  group: T,
+  params: {
+    userRole?: string | null | undefined;
+    userId: string;
+    adminUserId: string;
+    isInvited: boolean;
+    isMember: boolean;
+  }
+): T & {
+  joinGroupActionKey: CommunityGroupJoinActionKey | null;
+  isOfficialTypeDisabled: boolean;
+  isRequestRequiredToJoinGroup: boolean;
+} {
+  const requiresJoinRequest = isJoinRequestRequired(group);
+
+  return {
+    ...group,
+    isRequestRequiredToJoinGroup: requiresJoinRequest,
+    joinGroupActionKey: getJoinGroupActionKey({
+      communityGroupAccess: group.communityGroupAccess ?? CommunityGroupAccess.Public,
+      userRole: params.userRole,
+      isMember: params.isMember,
+      isInvited: params.isInvited,
+      isAdmin: params.userId === params.adminUserId,
+    }),
+    isOfficialTypeDisabled: isHiddenGroupAccess(group.communityGroupAccess),
+  };
+}
+
 /**
  * Updates a single member's request status in a community group (users subdocument).
  * Returns the updated group document or null if group or user in group not found.
@@ -127,12 +198,14 @@ async function updateGroupMemberStatus(
 }
 
 export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: UpdateCommunityGroupBody) => {
-  const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, ...restBody } = body;
+  const { selectedUsers = [], communityGroupCategory, communityGroupAccess, title, requirePostApproval, ...restBody } = body;
 
   const communityGroup = await communityGroupModel.findById(id);
   if (!communityGroup) {
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
   }
+
+  const wasRequiringPostApproval = groupRequiresPostApproval(communityGroup);
 
   const existingGroup = await communityGroupModel.findOne({
     communityId: communityGroup.communityId,
@@ -149,7 +222,7 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   if (
     communityGroupAccess &&
     communityGroupAccess === CommunityGroupAccess.Private &&
-    communityGroup.communityGroupAccess === CommunityGroupAccess.Public
+    isOpenJoinGroupAccess(communityGroup.communityGroupAccess)
   ) {
     const community = await communityModel.findById(communityGroup.communityId).select('users');
 
@@ -171,10 +244,27 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   if (communityGroupAccess) {
+    if (isHiddenGroupAccess(communityGroupAccess)) {
+      const nextGroupType = (restBody['communityGroupType'] as string | undefined) ?? communityGroup.communityGroupType;
+      try {
+        assertOfficialTypeAllowed(communityGroupAccess, nextGroupType);
+      } catch {
+        throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+      }
+    }
     communityGroup.communityGroupAccess = communityGroupAccess;
   }
   if (title !== undefined) {
     communityGroup.title = title;
+  }
+
+  if (requirePostApproval !== undefined) {
+    const nextGroupType =
+      (restBody['communityGroupType'] as string | undefined) ?? communityGroup.communityGroupType;
+    if (requirePostApproval && nextGroupType !== CommunityGroupType.OFFICIAL) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Post approval can only be enabled for official groups');
+    }
+    communityGroup.requirePostApproval = requirePostApproval;
   }
 
   Object.assign(communityGroup, restBody);
@@ -184,6 +274,11 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(
+      communityGroupAccess ?? communityGroup.communityGroupAccess,
+      selectedUsers
+    );
+
     const existingUserIds = new Set(
       communityGroup.users.filter((user) => user.isRequestAccepted).map((u) => u._id.toString())
     );
@@ -202,6 +297,13 @@ export const updateCommunityGroup = async (id: mongoose.Types.ObjectId, body: Up
   }
 
   await communityGroup.save();
+
+  if (wasRequiringPostApproval && requirePostApproval === false) {
+    await CommunityPostModel.updateMany(
+      { communityGroupId: id, isPostLive: false,postStatus: communityPostStatus.PENDING },
+      { $set: { isPostLive: true, postStatus: communityPostStatus.SUCCESS } }
+    );
+  }
 };
 
 export const acceptCommunityGroupJoinApproval = async (communityGroupId: mongoose.Types.ObjectId, userId: string) => {
@@ -486,8 +588,8 @@ export const deleteCommunityGroup = async (id: mongoose.Types.ObjectId) => {
 export const getAllCommunityGroup = async (communityId: string, access: string) => {
   const accessType =
     access === CommunityGroupAccess.Public
-      ? CommunityGroupAccess.Public
-      : [CommunityGroupAccess.Public, CommunityGroupAccess.Private];
+      ? [CommunityGroupAccess.Public, CommunityGroupAccess.OpenCampus]
+      : [CommunityGroupAccess.Public, CommunityGroupAccess.OpenCampus, CommunityGroupAccess.Private];
   return await communityGroupModel
     .find({ communityId, communityGroupType: accessType })
     .populate({ path: 'adminUserId', select: 'firstName lastName _id' });
@@ -541,7 +643,17 @@ export const createCommunityGroup = async (
   isOfficial: boolean,
   isAdminOfCommunity: boolean = false
 ) => {
-  const { communityGroupCategory, selectedUsers, communityGroupType, communityGroupLabel } = body;
+  const { communityGroupCategory, selectedUsers, communityGroupType, communityGroupLabel, communityGroupAccess } = body;
+
+  try {
+    assertOfficialTypeAllowed(communityGroupAccess as CommunityGroupAccess | undefined, communityGroupType);
+  } catch {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+  }
+
+  if (Array.isArray(selectedUsers) && selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(communityGroupAccess as CommunityGroupAccess | undefined, selectedUsers);
+  }
 
   const userProfile = await userProfileService.getUserProfileById(String(userId));
   if (!userProfile) {
@@ -551,6 +663,10 @@ export const createCommunityGroup = async (
 
   if (!isUserAllowtoCreateGroup) {
     throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.USER_NOT_ALLOWED_TO_CREATE_GROUP);
+  }
+
+  if (body['requirePostApproval'] && !isOfficial) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Post approval can only be enabled for official groups');
   }
 
   const inviteUsers = (selectedUsers ?? []).map((user: SelectedUserItem) => ({
@@ -630,15 +746,30 @@ export const createCommunityGroupBySuperAdmin = async (
     ? [normalizedAdminUniqueId, ...normalizedMemberUniqueIds]
     : [...normalizedMemberUniqueIds];
 
-  const resolvedUsers = await getUsersByUniqueIds(uniqueIdsToLookup);
+  const resolvedUsers = await getUsersByUniqueIdsWithCommunityMembership(uniqueIdsToLookup, communityId);
   const userByUniqueId = new Map<string, { _id: mongoose.Types.ObjectId; uniqueId?: string | null }>();
+  const communityMembershipByUniqueId = new Map<string, boolean>();
   for (const resolvedUser of resolvedUsers) {
     if (resolvedUser.uniqueId) {
-      userByUniqueId.set(resolvedUser.uniqueId.trim(), resolvedUser);
+      const normalizedUniqueId = resolvedUser.uniqueId.trim();
+      userByUniqueId.set(normalizedUniqueId, resolvedUser);
+      communityMembershipByUniqueId.set(normalizedUniqueId, resolvedUser.isCommunityMember);
     }
   }
 
+  const communityMemberUserIds = new Set(
+    (await communityModel.findById(communityId).select('users').lean())?.users?.map((communityUser) => {
+      const member = communityUser as { id?: mongoose.Types.ObjectId; _id?: mongoose.Types.ObjectId };
+      return String(member._id ?? member.id ?? '');
+    }).filter(Boolean) ?? []
+  );
+
   const missingMemberUniqueIds = normalizedMemberUniqueIds.filter((memberUniqueId) => !userByUniqueId.has(memberUniqueId));
+  const nonCommunityMemberAdminIds: string[] = [];
+  const nonCommunityMemberMemberIds = normalizedMemberUniqueIds.filter(
+    (memberUniqueId) =>
+      userByUniqueId.has(memberUniqueId) && communityMembershipByUniqueId.get(memberUniqueId) !== true
+  );
 
   let adminUserIdForGroup = userId;
   if (normalizedAdminUniqueId) {
@@ -655,20 +786,44 @@ export const createCommunityGroupBySuperAdmin = async (
       };
       throw adminError;
     }
+    if (communityMembershipByUniqueId.get(normalizedAdminUniqueId) !== true) {
+      nonCommunityMemberAdminIds.push(normalizedAdminUniqueId);
+      const adminError = new ApiError(
+        httpStatus.BAD_REQUEST,
+        `Admin with uniqueId "${normalizedAdminUniqueId}" is not a member of this university community`
+      );
+      (
+        adminError as ApiError & {
+          nonCommunityMemberUniqueIds?: { adminId: string[]; memberList: string[] };
+        }
+      ).nonCommunityMemberUniqueIds = {
+        adminId: nonCommunityMemberAdminIds,
+        memberList: nonCommunityMemberMemberIds,
+      };
+      throw adminError;
+    }
     adminUserIdForGroup = adminByUniqueId._id.toString();
   }
 
   const selectedUsersFromMemberList = normalizedMemberUniqueIds
-    .map((memberUniqueId) => userByUniqueId.get(memberUniqueId))
-    .filter((member): member is { _id: mongoose.Types.ObjectId; uniqueId?: string | null } => Boolean(member))
-    .map((member) => ({
-      users_id: member._id.toString(),
-    }));
+    .filter(
+      (memberUniqueId) =>
+        userByUniqueId.has(memberUniqueId) && communityMembershipByUniqueId.get(memberUniqueId) === true
+    )
+    .map((memberUniqueId) => {
+      const member = userByUniqueId.get(memberUniqueId)!;
+      return {
+        users_id: member._id.toString(),
+      };
+    });
 
   const existingSelectedUsers = Array.isArray(body.selectedUsers) ? body.selectedUsers : [];
   const existingSelectedIds = new Set(existingSelectedUsers.map((item) => String(item.users_id)));
+  const communityExistingSelectedUsers = existingSelectedUsers.filter((item) =>
+    communityMemberUserIds.has(String(item.users_id))
+  );
   const mergedSelectedUsers = [
-    ...existingSelectedUsers,
+    ...communityExistingSelectedUsers,
     ...selectedUsersFromMemberList.filter((item) => !existingSelectedIds.has(item.users_id)),
   ];
 
@@ -689,16 +844,69 @@ export const createCommunityGroupBySuperAdmin = async (
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
   }
 
-  const inviteUsers = (normalizedBody.selectedUsers ?? []).map((user: SelectedUserItem) => ({
-    userId: user.users_id,
-  }));
-
   const normalizedType = String(normalizedBody.communityGroupType ?? '').toLowerCase();
   const isOfficial = normalizedType === CommunityGroupType.OFFICIAL;
+
+  try {
+    assertOfficialTypeAllowed(
+      normalizedBody['communityGroupAccess'] as CommunityGroupAccess | undefined,
+      normalizedBody.communityGroupType
+    );
+  } catch {
+    throw new ApiError(httpStatus.BAD_REQUEST, ERROR_MESSAGES.HIDDEN_GROUPS_CANNOT_BE_OFFICIAL);
+  }
+
+  if (Array.isArray(normalizedBody.selectedUsers) && normalizedBody.selectedUsers.length > 0) {
+    await assertNoApplicantInvitesForUniversityWideGroup(
+      normalizedBody['communityGroupAccess'] as CommunityGroupAccess | undefined,
+      normalizedBody.selectedUsers
+    );
+  }
+
   const creatorAsMember = buildGroupMemberFromUserAndProfile(creator, creatorProfile, {
     isRequestAccepted: true,
     status: status.accepted,
   });
+
+  const selectedUserIds = Array.from(
+    new Set(
+      (normalizedBody.selectedUsers ?? [])
+        .map((user) => user.users_id?.toString())
+        .filter((selectedUserId): selectedUserId is string => Boolean(selectedUserId))
+        .filter((selectedUserId) => communityMemberUserIds.has(selectedUserId))
+    )
+  );
+
+  const selectedMembers = await Promise.all(
+    selectedUserIds.map(async (selectedUserId) => {
+      const [selectedUser, selectedUserProfile] = await Promise.all([
+        getUserById(new mongoose.Types.ObjectId(selectedUserId)),
+        userProfileService.getUserProfileById(selectedUserId),
+      ]);
+
+      if (!selectedUser) {
+        throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+
+      if (!selectedUserProfile) {
+        throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.USER_PROFILE_NOT_FOUND);
+      }
+
+      return buildGroupMemberFromUserAndProfile(selectedUser, selectedUserProfile, {
+        isRequestAccepted: true,
+        status: status.accepted,
+      });
+    })
+  );
+
+  const groupUsers = [creatorAsMember];
+  const existingGroupUserIds = new Set(groupUsers.map((user) => user._id.toString()));
+  for (const member of selectedMembers) {
+    if (!existingGroupUserIds.has(member._id.toString())) {
+      groupUsers.push(member);
+      existingGroupUserIds.add(member._id.toString());
+    }
+  }
 
   const createdGroup = await communityGroupModel.create({
     ...normalizedBody,
@@ -708,8 +916,8 @@ export const createCommunityGroupBySuperAdmin = async (
     communityGroupType: isOfficial ? CommunityGroupType.OFFICIAL : CommunityGroupType.CASUAL,
     status: isOfficial ? status.accepted : status.default,
     isCommunityGroupLive: true,
-    inviteUsers,
-    users: [creatorAsMember],
+    inviteUsers: [],
+    users: groupUsers,
   });
 
   return {
@@ -717,6 +925,10 @@ export const createCommunityGroupBySuperAdmin = async (
     unresolvedUniqueIds: {
       adminId: [] as string[],
       memberList: missingMemberUniqueIds,
+      nonCommunityMemberUniqueIds: {
+        adminId: nonCommunityMemberAdminIds,
+        memberList: nonCommunityMemberMemberIds,
+      },
     },
   };
 };
@@ -742,7 +954,7 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     { path: 'adminUserId', select: 'isDeleted  blockedUsers' },
   ]);
 
-  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers').lean();
+  const myBlockedUsers = await UserProfile.findOne({ users_id: userId }).select('blockedUsers role').lean();
 
   const userIds = (populatedGroup.users || []).map((u: UsersSchema) => u._id);
 
@@ -805,6 +1017,26 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
   }
 
+  const isMember = populatedGroup.users.some(
+    (user: UsersSchema) => user._id.toString() === userId && user.isRequestAccepted
+  );
+  const isInvited = (populatedGroup.inviteUsers || []).some(
+    (invite) => invite.userId?.toString() === userId
+  );
+
+  if (
+    isHiddenGroupAccess(populatedGroup.communityGroupAccess) &&
+    !canViewHiddenGroup({
+      userId,
+      adminUserId,
+      isCommunityAdmin: Boolean(communityAdminId),
+      isInvited,
+      isMember,
+    })
+  ) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+  }
+
   if (Array.isArray(populatedGroup.users)) {
     populatedGroup.users.sort((a: UsersSchema, b: UsersSchema) => {
       const isAAdmin = a._id.toString() === adminUserId;
@@ -817,7 +1049,13 @@ export const getCommunityGroupById = async (groupId: string, userId: string) => 
     });
   }
 
-  return populatedGroup;
+  return enrichGroupWithAccessMetadata(populatedGroup, {
+    userRole: myBlockedUsers?.role,
+    userId,
+    adminUserId,
+    isInvited,
+    isMember,
+  });
 };
 
 export const joinCommunityGroup = async (
@@ -848,14 +1086,28 @@ export const joinCommunityGroup = async (
       throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_IS_NOT_LIVE);
     }
 
-    //check if community is private and user is verified
-    const isCommunityPrivate = communityGroup?.communityGroupAccess === CommunityGroupAccess.Private;
+    const groupAccess = communityGroup.communityGroupAccess;
+    const isCommunityPrivate = groupAccess === CommunityGroupAccess.Private;
+    const requiresJoinRequest = isJoinRequestRequired(communityGroup);
     const isUserVerified = userProfile?.email.some(
       (community) => community.communityId.toString() === communityGroup.communityId?.toString()
     );
 
     if (!isUserVerified && isCommunityPrivate) {
       throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.NOT_VERIFIED_TO_JOIN);
+    }
+
+    if (isUniversityWideGroupAccess(groupAccess) && isApplicantRole(userProfile.role)) {
+      throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.UNIVERSITY_MEMBERS_ONLY);
+    }
+
+    if (isHiddenGroupAccess(groupAccess) && !isAdmin) {
+      const isInvited = (communityGroup.inviteUsers || []).some(
+        (invite) => invite.userId?.toString() === userID
+      );
+      if (!isInvited) {
+        throw new ApiError(httpStatus.FORBIDDEN, ERROR_MESSAGES.INVITE_ONLY);
+      }
     }
 
     const community = await communityService.getCommunity(String(communityGroup.communityId));
@@ -874,8 +1126,8 @@ export const joinCommunityGroup = async (
 
     communityGroup.users.push(
       buildGroupMemberFromUserAndProfile(user, userProfile, {
-        isRequestAccepted: isAdmin ? true : isCommunityPrivate ? false : true,
-        status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+        isRequestAccepted: isAdmin ? true : requiresJoinRequest ? false : true,
+        status: isAdmin ? status.accepted : requiresJoinRequest ? status.pending : status.accepted,
       }) as unknown as UsersSchema
     );
 
@@ -915,7 +1167,7 @@ export const joinCommunityGroup = async (
         $push: {
           'communities.$.communityGroups': {
             id: groupId,
-            status: isAdmin ? status.accepted : isCommunityPrivate ? status.pending : status.accepted,
+            status: isAdmin ? status.accepted : requiresJoinRequest ? status.pending : status.accepted,
           },
         },
       },
@@ -927,20 +1179,20 @@ export const joinCommunityGroup = async (
 
 
 
-    if (isCommunityPrivate && !isAdmin) {
+    if (requiresJoinRequest && !isAdmin) {
       const notificationPayload: CreateNotificationPayload = {
         sender_id: userID,
         receiverId: communityGroup.adminUserId,
         communityGroupId: communityGroup._id,
         type: notificationRoleAccess.PRIVATE_GROUP_REQUEST,
-        message: 'User has requested to join your private group',
+        message: 'User has requested to join your group',
       };
       await notificationService.createNotification(notificationPayload);
       io.emit(`notification_${communityGroup.adminUserId}`, { type: notificationRoleAccess.PRIVATE_GROUP_REQUEST });
       sendPushNotification(
         communityGroup.adminUserId.toString(),
-        'Private Group Request',
-        user.firstName + ' has requested to join your private group' + communityGroup.title,
+        'Group Join Request',
+        user.firstName + ' has requested to join your group ' + communityGroup.title,
         {
           sender_id: userID,
           receiverId: communityGroup.adminUserId.toString(),
@@ -1179,4 +1431,150 @@ export const getCommunityGroupMembersForSuperAdmin = async (
   } catch (error: any) {
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, error.message || ERROR_MESSAGES.ERROR_FETCHING_MEMBERS);
   }
+};
+
+type OfficialGroupWithPostCount = {
+  _id: Types.ObjectId;
+  title: string;
+  memberCount: number;
+  postCount: number;
+  communityGroupLogoUrl?: communityGroupInterface['communityGroupLogoUrl'];
+  status: string;
+  isCommunityGroupLive: boolean;
+  createdAt: Date;
+};
+
+export const getOfficialGroupsStatsForCommunityAdmin = async (
+  communityId: string,
+  requestingUserId: string
+): Promise<{ officialGroupsCount: number; totalPostsInOfficialGroups: number }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityObjectId = convertToObjectId(communityId);
+  const officialGroupIds = await communityGroupModel.distinct('_id', {
+    communityId: communityObjectId,
+    communityGroupType: CommunityGroupType.OFFICIAL,
+  });
+
+  const totalPostsInOfficialGroups =
+    officialGroupIds.length > 0
+      ? await CommunityPostModel.countDocuments({  isPostLive: true,communityGroupId: { $in: officialGroupIds } })
+      : 0;
+
+  return {
+    officialGroupsCount: officialGroupIds.length,
+    totalPostsInOfficialGroups,
+  };
+};
+
+export const getOfficialGroupsWithPostCountForCommunityAdmin = async (
+  communityId: string,
+  requestingUserId: string
+): Promise<{ officialGroups: OfficialGroupWithPostCount[] }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityObjectId = convertToObjectId(communityId);
+  const officialGroups = await communityGroupModel.aggregate<OfficialGroupWithPostCount>([
+    {
+      $match: {
+        communityId: communityObjectId,
+        communityGroupType: CommunityGroupType.OFFICIAL,
+      },
+    },
+    {
+      $lookup: {
+        from: 'communityposts',
+        let: { groupId: '$_id' },
+        pipeline: [
+          { $match: { isPostLive: true, $expr: { $eq: ['$communityGroupId', '$$groupId'] } } },
+          { $count: 'count' },
+        ],
+        as: 'postCountResult',
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        // Stored memberCount is never updated; count accepted members from users[].
+        memberCount: {
+          $size: {
+            $filter: {
+              input: { $ifNull: ['$users', []] },
+              as: 'u',
+              cond: {
+                $or: [
+                  { $eq: ['$$u.isRequestAccepted', true] },
+                  { $eq: ['$$u.status', status.accepted] },
+                  { $eq: ['$$u.status', status.default] },
+                ],
+              },
+            },
+          },
+        },
+        postCount: {
+          $let: {
+            vars: { postCountDoc: { $arrayElemAt: ['$postCountResult', 0] } },
+            in: { $ifNull: ['$$postCountDoc.count', 0] },
+          },
+        },
+        communityGroupLogoUrl: 1,
+        status: 1,
+        isCommunityGroupLive: 1,
+        createdAt: 1,
+      },
+    },
+    { $sort: { createdAt: -1 } },
+  ]);
+
+  return { officialGroups };
+};
+
+export const deleteCommunityGroupForCommunityAdmin = async (
+  communityId: string,
+  groupId: string,
+  requestingUserId: string
+): Promise<{ success: boolean }> => {
+  const community = await communityModel.findById(convertToObjectId(communityId)).lean();
+
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
+
+  const isAdmin = (community.adminId || []).map(String).includes(requestingUserId);
+
+  if (!isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only community admins can access this resource');
+  }
+
+  const communityGroup = await communityGroupModel
+    .findOne({ _id: convertToObjectId(groupId), communityId: convertToObjectId(communityId) })
+    .select('_id')
+    .lean();
+
+  if (!communityGroup) {
+    throw new ApiError(httpStatus.NOT_FOUND, ERROR_MESSAGES.COMMUNITY_GROUP_NOT_FOUND);
+  }
+
+  return deleteCommunityGroup(convertToObjectId(groupId));
 };

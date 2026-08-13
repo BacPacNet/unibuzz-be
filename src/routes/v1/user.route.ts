@@ -15,6 +15,14 @@ router
   .get(userIdAuth, validate(userValidation.getAllUser), userController.getAllUser);
 
 router
+  .route('/super-admin/connections')
+  .get(userIdAuth, validate(userValidation.getAllUsersDirectory), userController.getAllUsersDirectory);
+
+router
+  .route('/super-admin/connections/export')
+  .get(userIdAuth, validate(userValidation.exportAllUsersDirectory), userController.exportAllUsersDirectory);
+
+router
   .route('/checkAvailability')
   .post(validate(userValidation.checkUserEmailAndUserNameAvailability), userController.checkUserEmailAndUserNameAvailability);
 
@@ -44,9 +52,21 @@ router
 
 
 
-  router
+router
   .route('/eligible')
   .get(userIdAuth, userController.isUserEligibleForRewards);
+
+router
+  .route('/community-admin')
+  .get(userIdAuth, userController.isUserCommunityAdmin);
+
+router
+  .route('/community-admin/deActivate')
+  .put(
+    userIdAuth,
+    validate(userValidation.deActivateUserAccountByCommunityAdmin),
+    userController.deActivateUserAccountByCommunityAdmin
+  );
 
 router
   .route('/rewards')

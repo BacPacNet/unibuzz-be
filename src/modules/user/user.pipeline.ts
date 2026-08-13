@@ -1,5 +1,6 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import { GetAllUserMatchStage, GetAllUserOrCondition } from './user.interfaces';
+import { UserRole } from '../userProfile/userProfile.interface';
 
 // ---------------------------------------------------------------------------
 // getUserProfileById — filter profile.following / profile.followers
@@ -167,8 +168,49 @@ export function getProfileCommunitiesLookupStage(): PipelineStage {
  * populated community fields (name, logo, isVerifiedMember, isCommunityAdmin).
  * Depends on profile.communitiesData from getProfileCommunitiesLookupStage.
  * Uses root document _id for isVerifiedMember check.
+ * When viewerIsApplicant is false, isVerifiedMember and isCommunityAdmin are always false.
  */
-export function getProfileCommunitiesAddFieldsStage(): PipelineStage {
+export function getProfileCommunitiesAddFieldsStage(viewerIsApplicant: boolean): PipelineStage {
+  const verifiedMemberExpr = viewerIsApplicant
+    ? {
+        $cond: [
+          {
+            $gt: [
+              {
+                $size: {
+                  $filter: {
+                    input: { $ifNull: ['$$populated.users', []] },
+                    as: 'usr',
+                    cond: {
+                      $and: [
+                        { $eq: ['$$usr._id', '$_id'] },
+                        { $eq: ['$$usr.isVerified', true] },
+                      ],
+                    },
+                  },
+                },
+              },
+              0,
+            ],
+          },
+          true,
+          false,
+        ],
+      }
+    : false;
+
+  const communityAdminExpr = viewerIsApplicant
+    ? {
+        $cond: [
+          {
+            $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
+          },
+          true,
+          false,
+        ],
+      }
+    : false;
+
   return {
     $addFields: {
       'profile.communities': {
@@ -195,40 +237,8 @@ export function getProfileCommunitiesAddFieldsStage(): PipelineStage {
                 _id: '$$populated._id',
                 name: '$$populated.name',
                 logo: '$$populated.communityLogoUrl.imageUrl',
-                isVerifiedMember: {
-                  $cond: [
-                    {
-                      $gt: [
-                        {
-                          $size: {
-                            $filter: {
-                              input: { $ifNull: ['$$populated.users', []] },
-                              as: 'usr',
-                              cond: {
-                                $and: [
-                                  { $eq: ['$$usr._id', '$_id'] },
-                                  { $eq: ['$$usr.isVerified', true] },
-                                ],
-                              },
-                            },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                    true,
-                    false,
-                  ],
-                },
-                isCommunityAdmin: {
-                  $cond: [
-                    {
-                      $in: ['$_id', { $ifNull: ['$$populated.adminId', []] }],
-                    },
-                    true,
-                    false,
-                  ],
-                },
+                isVerifiedMember: verifiedMemberExpr,
+                isCommunityAdmin: communityAdminExpr,
               },
             },
           },
@@ -258,6 +268,7 @@ export interface GetProfileByIdPipelineOptions {
   myUserId: string;
   myBlockedUserIds: mongoose.Types.ObjectId[];
   myUserObjectId: mongoose.Types.ObjectId;
+  viewerIsApplicant: boolean;
 }
 
 /** Initial $match stages: by id and exclude viewer's blocked users. */
@@ -373,7 +384,7 @@ function getProfileByIdFinalProjectStage(): PipelineStage {
  * Use with User.aggregate(getProfileByIdPipeline(options)).
  */
 export function getProfileByIdPipeline(options: GetProfileByIdPipelineOptions): PipelineStage[] {
-  const { id, myUserId, myBlockedUserIds, myUserObjectId } = options;
+  const { id, myUserId, myBlockedUserIds, myUserObjectId, viewerIsApplicant } = options;
 
   return [
     ...getProfileByIdInitialMatchStages(id, myBlockedUserIds),
@@ -382,7 +393,7 @@ export function getProfileByIdPipeline(options: GetProfileByIdPipelineOptions): 
     getProfileFollowListsFilterStage({ myBlockedUserIds, myUserObjectId }),
     getProfileFollowListsProjectStage(),
     getProfileCommunitiesLookupStage(),
-    getProfileCommunitiesAddFieldsStage(),
+    getProfileCommunitiesAddFieldsStage(viewerIsApplicant),
     getProfileCommunitiesProjectStage(),
     ...getProfileByIdPostFilterStages(myUserId),
     getProfileByIdCommunityDetailsLookupStage(),
@@ -442,14 +453,17 @@ export interface BuildGetAllUserMatchStageOptions {
   firstName: string;
   lastName: string;
   universityName: string;
+  communityId?: string;
   orConditions: GetAllUserOrCondition[];
+  excludeApplicants?: boolean;
 }
 
 /**
  * Build the $match stage for getAllUser aggregation (excluding chatId-based exclusion).
  */
 export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOptions): GetAllUserMatchStage {
-  const { userId, myBlockedUserIds, firstName, lastName, universityName, orConditions } = options;
+  const { userId, myBlockedUserIds, firstName, lastName, universityName, communityId, orConditions, excludeApplicants } =
+    options;
 
   const matchStage: GetAllUserMatchStage = {
     _id: {
@@ -472,8 +486,22 @@ export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOpti
   if (lastName) {
     matchStage.lastName = { $regex: new RegExp(lastName, 'i') };
   }
+  if (communityId?.trim()) {
+    const normalizedCommunityId = communityId.trim();
+    matchStage.$and = [
+      {
+        $or: [
+          { 'profile.communities.communityId': new mongoose.Types.ObjectId(normalizedCommunityId) },
+          { 'profile.email.communityId': normalizedCommunityId },
+        ],
+      },
+    ];
+  }
   if (universityName.trim() !== '') {
     matchStage['profile.university_name'] = { $regex: new RegExp(universityName, 'i') };
+  }
+  if (excludeApplicants) {
+    matchStage['profile.role'] = { $ne: UserRole.APPLICANT };
   }
   if (orConditions.length) {
     matchStage.$or = orConditions;
@@ -485,8 +513,8 @@ export function buildGetAllUserMatchStage(options: BuildGetAllUserMatchStageOpti
 export interface GetAllUserPipelineOptions {
   matchStage: GetAllUserMatchStage;
   followingIds: string[];
-  skip: number;
-  limit: number;
+  skip?: number;
+  limit?: number;
 }
 
 /**
@@ -528,8 +556,8 @@ export function getAllUserPipeline(options: GetAllUserPipelineOptions): Pipeline
               'profile.communities': 0,
             },
           },
-          { $skip: skip },
-          { $limit: limit },
+          ...(skip !== undefined ? [{ $skip: skip }] : []),
+          ...(limit !== undefined ? [{ $limit: limit }] : []),
         ],
         totalCount: [{ $count: 'total' }],
       },

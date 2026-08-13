@@ -41,6 +41,15 @@ router
   );
 
 router
+  .route('/super-admin/filtered/:universityId/export')
+  .get(
+    userIdAuth,
+    requireSuperAdmin,
+    validate(communityValidation.exportFilteredSuperAdminCommunity),
+    communityController.exportFilteredCommunityForSuperAdmin
+  );
+
+router
   .route('/super-admin/filtered/:universityId')
   .post(
     userIdAuth,
@@ -48,6 +57,15 @@ router
     validate(communityValidation.getFilteredSuperAdminCommunity),
     communityController.getFilteredCommunityForSuperAdmin
   );
+
+router
+  .route('/:communityId/community-admin')
+  .get(userIdAuth, validate(communityValidation.getCommunityAdmins), communityController.getCommunityAdmins)
+  .post(userIdAuth, validate(communityValidation.addCommunityAdmin), communityController.addCommunityAdmin);
+
+router
+  .route('/:communityId/community-admin/:userId')
+  .delete(userIdAuth, validate(communityValidation.removeCommunityAdmin), communityController.removeCommunityAdmin);
 
 router
   .route('/:communityId')
