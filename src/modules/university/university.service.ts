@@ -9,7 +9,12 @@ import {
   IUniversityProfileUpdateData,
   UniversityFilter,
 } from './university.interface';
-import { buildNameMatchRankingStages, buildSearchTermOrFilter, escapeRegex } from './university.pipeline';
+import {
+  buildDiscoverHiddenUniversityFilter,
+  buildDiscoverRankingStages,
+  buildSearchTermOrFilter,
+  escapeRegex,
+} from './university.pipeline';
 import communityModel from '../community/community.model';
 import communityGroupModel from '../communityGroup/communityGroup.model';
 import { partneredUniService } from '../partneredUni';
@@ -512,15 +517,22 @@ export const getAllUniversity = async (
     });
   }
 
+  const partneredUniversityIds = await partneredUniService.getPartneredUniversityIds();
+  if (partneredUniversityIds.length > 0) {
+    searchConditions.push({ _id: { $nin: partneredUniversityIds } });
+  }
+  searchConditions.push(buildDiscoverHiddenUniversityFilter());
+
   const matchStage = searchConditions.length > 0 ? { $match: { $and: searchConditions } } : { $match: {} };
 
-  const aggregation: mongoose.PipelineStage[] = [matchStage];
-
-  if (normalizedName) {
-    aggregation.push(...buildNameMatchRankingStages(normalizedName));
-  }
-
-  aggregation.push({ $skip: startIndex }, { $limit: limit });
+  const aggregation: mongoose.PipelineStage[] = [
+    matchStage,
+    ...buildDiscoverRankingStages({
+      term: normalizedName,
+    }),
+    { $skip: startIndex },
+    { $limit: limit },
+  ];
 
   const Universities = await universityModal.aggregate(aggregation).option({ allowDiskUse: true });
 
@@ -536,10 +548,15 @@ export const getAllUniversity = async (
 };
 
 export const getPartneredUniversities = async () => {
-  const partneredUniversityIds = await partneredUniService.getPartneredUniversityIds();
+  const partneredUniversityIds = await partneredUniService.getDiscoverVisiblePartneredUniversityIds();
   const partneredUniversities =
     partneredUniversityIds.length > 0
-      ? await universityModal.find({ _id: { $in: partneredUniversityIds } }).lean()
+      ? await universityModal
+          .find({
+            _id: { $in: partneredUniversityIds },
+            ...buildDiscoverHiddenUniversityFilter(),
+          })
+          .lean()
       : [];
   return partneredUniversities;
 };
@@ -554,18 +571,25 @@ export const searchUniversityByQuery = async (
   const skip = (page - 1) * limit;
   const normalizedSearchTerm = searchTerm.trim();
 
+  const partneredUniversityIds = await partneredUniService.getPartneredUniversityIds();
   const aggregation: mongoose.PipelineStage[] = [];
 
   if (normalizedSearchTerm) {
     aggregation.push({
-      $match: buildSearchTermOrFilter(normalizedSearchTerm),
+      $match: {
+        $and: [buildSearchTermOrFilter(normalizedSearchTerm), buildDiscoverHiddenUniversityFilter()],
+      },
     });
-
-    aggregation.push(...buildNameMatchRankingStages(normalizedSearchTerm));
   } else {
-    aggregation.push({ $match: {} });
+    aggregation.push({ $match: buildDiscoverHiddenUniversityFilter() });
   }
 
+  aggregation.push(
+    ...buildDiscoverRankingStages({
+      term: normalizedSearchTerm,
+      partneredUniversityIds,
+    })
+  );
   aggregation.push({ $skip: skip }, { $limit: limit });
 
   const universities = await universityModal
@@ -574,8 +598,8 @@ export const searchUniversityByQuery = async (
 
   const totalCount = await universityModal.countDocuments(
     normalizedSearchTerm
-      ? buildSearchTermOrFilter(normalizedSearchTerm)
-      : {}
+      ? { $and: [buildSearchTermOrFilter(normalizedSearchTerm), buildDiscoverHiddenUniversityFilter()] }
+      : buildDiscoverHiddenUniversityFilter()
   );
 
   return {

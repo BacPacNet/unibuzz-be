@@ -46,6 +46,13 @@ export const getPartneredUniversityIds = async () => {
   return partneredUniversityIds;
 };
 
+export const getDiscoverVisiblePartneredUniversityIds = async () => {
+  return PartneredUniModel.distinct('universityId', {
+    isActive: true,
+    visibleOnDiscover: { $ne: false },
+  });
+};
+
 export const getPartneredUniversityAdminIds = async (
   communityId?: string | mongoose.Types.ObjectId
 ): Promise<string[]> => {
