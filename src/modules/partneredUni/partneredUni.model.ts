@@ -17,6 +17,10 @@ const partneredUniSchema = new Schema<IPartneredUni>(
       type: Boolean,
       default: true,
     },
+    visibleOnDiscover: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );
